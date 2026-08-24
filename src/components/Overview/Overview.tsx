@@ -16,7 +16,14 @@ import { IntegrationNode } from '../nodes/IntegrationNode';
 import { LaneNode } from '../nodes/LaneNode';
 import { StageNode } from '../nodes/StageNode';
 import { OverviewHeader } from './OverviewHeader';
-import { buildOverviewGraph } from './overviewGraph';
+import {
+  buildOverviewGraph,
+  FIT_VIEW_PADDING,
+  GRID_DOT_SIZE,
+  GRID_GAP,
+  MAX_ZOOM,
+  MIN_ZOOM,
+} from './overviewGraph';
 import styles from './Overview.module.css';
 
 // Объекты объявлены на уровне модуля: React Flow предупреждает, если nodeTypes
@@ -32,6 +39,8 @@ const edgeTypes = {
   integration: IntegrationEdge,
 } as unknown as EdgeTypes;
 
+const fitViewOptions = { padding: FIT_VIEW_PADDING };
+
 export function Overview() {
   const showIntegrations = useProcessStore((state) => state.showIntegrations);
 
@@ -46,24 +55,32 @@ export function Overview() {
   return (
     <div className={styles.root}>
       <OverviewHeader title={map.title} stagesCount={map.stages.length} updatedAt={map.updatedAt} />
-      <div className={styles.canvas} role="application" aria-label={ru.overview.canvasLabel}>
-        <EdgeMarkers />
-        <ReactFlow
-          nodes={nodes}
-          edges={edges}
-          nodeTypes={nodeTypes}
-          edgeTypes={edgeTypes}
-          nodesDraggable={false}
-          nodesConnectable={false}
-          elementsSelectable={false}
-          panOnScroll
-          fitView
-          fitViewOptions={{ padding: 0.06 }}
-          minZoom={0.3}
-          maxZoom={2}
-        >
-          <Background variant={BackgroundVariant.Dots} gap={16} size={1} />
-        </ReactFlow>
+      {/* role="region", а не "application": схема статична, а application
+          переводит скринридер в режим прямого прохода клавиш и глушит
+          навигацию по элементам. */}
+      <div className={styles.canvas} role="region" aria-label={ru.overview.canvasLabel}>
+        <EdgeMarkers>
+          <ReactFlow
+            nodes={nodes}
+            edges={edges}
+            nodeTypes={nodeTypes}
+            edgeTypes={edgeTypes}
+            nodesDraggable={false}
+            nodesConnectable={false}
+            elementsSelectable={false}
+            // Фокус несут <button> карточек этапов; собственные tabIndex узлов и
+            // рёбер React Flow добавляли 18 лишних остановок Tab до первой карточки.
+            nodesFocusable={false}
+            edgesFocusable={false}
+            panOnScroll
+            fitView
+            fitViewOptions={fitViewOptions}
+            minZoom={MIN_ZOOM}
+            maxZoom={MAX_ZOOM}
+          >
+            <Background variant={BackgroundVariant.Dots} gap={GRID_GAP} size={GRID_DOT_SIZE} />
+          </ReactFlow>
+        </EdgeMarkers>
       </div>
     </div>
   );

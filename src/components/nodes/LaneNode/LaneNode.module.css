@@ -9,7 +9,7 @@
   width: 100%;
   height: 100%;
   border: 1px dashed var(--scp-color-neutral-200);
-  border-radius: var(--scp-border-radius-lg);
+  border-radius: var(--pm-lane-radius);
   background: var(--pm-lane-bg);
 }
 

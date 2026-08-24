@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { ProcessMapSchema, validateIntegrity, type ProcessMap, type ProcessNode } from '../src/data/schema.ts';
+import {
+  ProcessMapSchema,
+  validateIntegrity,
+  type ProcessMap,
+  type ProcessNode,
+} from '../src/data/schema.ts';
 import { buildSampleProcessMap } from './fixtures/sample-process.ts';
 import processJson from '../src/data/process.json';
 import requiredNodeIds from './fixtures/required-nodes.json';

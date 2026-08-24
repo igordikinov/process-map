@@ -1,12 +1,11 @@
+import { afterEach, beforeEach } from 'vitest';
 import '@testing-library/jest-dom/vitest';
 
 // ── Полифиллы окружения для React Flow (@xyflow/react) в jsdom ──────────────
 //
-// React Flow измеряет контейнер полотна и узлы через ResizeObserver и
-// getBoundingClientRect. В jsdom первого нет вовсе, второй всегда возвращает
-// нули — без обоих моков падает любой тест, который монтирует <ReactFlow>.
-// Файл общий для всех тестов намеренно: полотно рендерится и в App.test.tsx,
-// и будет рендериться в тестах уровня 2 (M2).
+// React Flow измеряет контейнер полотна через ResizeObserver и
+// getBoundingClientRect, а jsdom не реализует layout: первого нет вовсе, второй
+// всегда возвращает нули, и <ReactFlow> не монтируется.
 
 class ResizeObserverMock implements ResizeObserver {
   observe(): void {}
@@ -17,26 +16,6 @@ class ResizeObserverMock implements ResizeObserver {
 if (typeof globalThis.ResizeObserver === 'undefined') {
   globalThis.ResizeObserver = ResizeObserverMock;
 }
-
-// jsdom не реализует layout, поэтому размеры задаются константой. Значения —
-// рабочая область артборда A1 (1280 × 720 минус шапка 52), чтобы fitView
-// считал осмысленный зум.
-const MOCK_WIDTH = 1280;
-const MOCK_HEIGHT = 668;
-
-Element.prototype.getBoundingClientRect = function getBoundingClientRect(): DOMRect {
-  return {
-    x: 0,
-    y: 0,
-    top: 0,
-    left: 0,
-    right: MOCK_WIDTH,
-    bottom: MOCK_HEIGHT,
-    width: MOCK_WIDTH,
-    height: MOCK_HEIGHT,
-    toJSON: () => ({}),
-  } as DOMRect;
-};
 
 // DOMMatrixReadOnly нужен React Flow для разбора transform панорамирования.
 if (typeof globalThis.DOMMatrixReadOnly === 'undefined') {
@@ -52,3 +31,37 @@ if (typeof globalThis.DOMMatrixReadOnly === 'undefined') {
   }
   globalThis.DOMMatrixReadOnly = DOMMatrixReadOnlyMock as unknown as typeof DOMMatrixReadOnly;
 }
+
+// Размер подменяется ТОЛЬКО контейнеру полотна (.react-flow) и только на время
+// теста. Глобальная безусловная подмена прототипа: (1) скрывала бы дефекты
+// вроде pointer-events, (2) сломала бы useFrameSize в M4 — порог compactHeight
+// (SPEC §4.5) никогда бы не сработал, потому что любой элемент отдавал бы 668.
+const CANVAS_SELECTOR = '.react-flow';
+const CANVAS_WIDTH = 1280;
+// Рабочая область артборда A1: 720 минус шапка 52.
+const CANVAS_HEIGHT = 668;
+
+const originalGetBoundingClientRect = Element.prototype.getBoundingClientRect;
+
+beforeEach(() => {
+  Element.prototype.getBoundingClientRect = function getBoundingClientRect(this: Element): DOMRect {
+    if (this.matches(CANVAS_SELECTOR)) {
+      return {
+        x: 0,
+        y: 0,
+        top: 0,
+        left: 0,
+        right: CANVAS_WIDTH,
+        bottom: CANVAS_HEIGHT,
+        width: CANVAS_WIDTH,
+        height: CANVAS_HEIGHT,
+        toJSON: () => ({}),
+      } as DOMRect;
+    }
+    return originalGetBoundingClientRect.call(this);
+  };
+});
+
+afterEach(() => {
+  Element.prototype.getBoundingClientRect = originalGetBoundingClientRect;
+});

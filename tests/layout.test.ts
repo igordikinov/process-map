@@ -34,14 +34,8 @@ describe('раскладка process.json', () => {
   it('у всех узлов есть position с конечными числами', () => {
     for (const stage of map.stages) {
       for (const node of stage.nodes) {
-        expect(
-          Number.isFinite(node.position.x),
-          `${node.id}: x = ${node.position.x}`,
-        ).toBe(true);
-        expect(
-          Number.isFinite(node.position.y),
-          `${node.id}: y = ${node.position.y}`,
-        ).toBe(true);
+        expect(Number.isFinite(node.position.x), `${node.id}: x = ${node.position.x}`).toBe(true);
+        expect(Number.isFinite(node.position.y), `${node.id}: y = ${node.position.y}`).toBe(true);
         expect(Number.isInteger(node.position.x)).toBe(true);
         expect(Number.isInteger(node.position.y)).toBe(true);
       }

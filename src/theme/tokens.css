@@ -454,6 +454,7 @@
   --pm-io-node-height: 40px;
   --pm-badge-height: 20px;
   --pm-radius-pill: 9999px;
+  --pm-lane-radius: 12px; /* в макете 12px; --scp-border-radius-lg = 16px */
 
   /* Рёбра — SPEC §4.1 задаёт толщины явно. */
   --pm-edge-process-width: 1.8;

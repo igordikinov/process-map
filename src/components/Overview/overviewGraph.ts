@@ -48,6 +48,27 @@ const IO_OFFSET_Y = 24;
 export const LANE_IN_ID = 'lane-in';
 export const LANE_OUT_ID = 'lane-out';
 
+/** Точечная сетка полотна — SPEC §4.1 задаёт gap=16 явно. */
+export const GRID_GAP = 16;
+export const GRID_DOT_SIZE = 1;
+/** Отступ fitView, чтобы свимлейны не упирались в края полотна. */
+export const FIT_VIEW_PADDING = 0.06;
+export const MIN_ZOOM = 0.3;
+export const MAX_ZOOM = 2;
+
+/**
+ * React Flow ставит обёртке узла `pointer-events: none`, когда выключены все
+ * флаги интерактивности (isSelectable || isDraggable || onClick || onMouseEnter
+ * || onMouseMove || onMouseLeave). У нас выключены все — узлы не перетаскиваются
+ * и не выделяются (CLAUDE.md, v1), — из-за чего до карточки этапа не доходил ни
+ * клик (SPEC §4.1 «Клик по StageNode → navigate»), ни hover, ни title-подсказка.
+ *
+ * `node.style` разворачивается ПОСЛЕ вычисленного pointerEvents
+ * (@xyflow/react/dist/esm/index.js: NodeWrapper), поэтому это корректный способ
+ * вернуть события мыши, не включая перетаскивание и выделение.
+ */
+const INTERACTIVE_NODE_STYLE = { pointerEvents: 'all' } as const;
+
 /** id узла внешней системы. Направление в id обязательно: одна и та же система
  *  может быть и входом, и выходом (DP, PS, ERP в текущих данных). */
 export function systemNodeId(direction: 'in' | 'out', system: SystemCode): string {
@@ -175,9 +196,13 @@ export function buildOverviewGraph(map: ProcessMap, showIntegrations: boolean): 
           },
           width: IO_WIDTH,
           height: IO_HEIGHT,
+          // Подписи систем в данных длиннее макетных и обрезаются, полный текст
+          // лежит в title — без pointer-events подсказка недостижима мышью.
+          style: INTERACTIVE_NODE_STYLE,
           draggable: false,
           selectable: false,
           connectable: false,
+          focusable: false,
         });
       });
     }
@@ -191,9 +216,13 @@ export function buildOverviewGraph(map: ProcessMap, showIntegrations: boolean): 
       data: { stage },
       width: STAGE_WIDTH,
       height: STAGE_HEIGHT,
+      style: INTERACTIVE_NODE_STYLE,
       draggable: false,
       selectable: false,
       connectable: false,
+      // Фокус несёт сам <button> внутри карточки, дублировать его обёрткой
+      // React Flow не нужно — иначе до карточки два Tab вместо одного.
+      focusable: false,
     });
   });
 

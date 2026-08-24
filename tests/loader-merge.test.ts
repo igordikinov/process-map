@@ -11,7 +11,12 @@ import {
   setNodeOverride,
   writeStoredOverrides,
 } from '../src/data/loader';
-import { OVERRIDES_STORAGE_KEY, type Overrides, type ProcessMap, type ScreenLink } from '../src/data/schema';
+import {
+  OVERRIDES_STORAGE_KEY,
+  type Overrides,
+  type ProcessMap,
+  type ScreenLink,
+} from '../src/data/schema';
 import { buildSampleProcessMap } from './fixtures/sample-process';
 
 const JSON_SCREEN: ScreenLink = { title: 'Из JSON', url: 'https://example.com/json' };
