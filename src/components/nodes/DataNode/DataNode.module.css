@@ -1,0 +1,70 @@
+/*
+ * Карточка данных колонок входов/выходов, уровень 2 (SPEC §4.2, артборд A2 200×56).
+ * Только var(...) из src/theme/tokens.css (CLAUDE.md «Кодовые правила»).
+ */
+
+.card {
+  display: flex;
+  overflow: hidden;
+  width: var(--pm-data-node-width);
+  height: var(--pm-data-node-height);
+  box-sizing: border-box;
+  flex-direction: column;
+  justify-content: center;
+  padding: 0 var(--scp-paddings-m);
+  border: 1px solid var(--scp-border-neutral-tertiary);
+  border-left: var(--pm-node-accent-bar) solid var(--pm-node-accent-neutral);
+  border-radius: var(--scp-border-radius-md);
+  margin: 0;
+  background: var(--scp-background-primary);
+  box-shadow: var(--pm-shadow-node-data);
+  cursor: pointer;
+  font-family: inherit;
+  gap: var(--pm-space-3);
+  text-align: left;
+  transition:
+    border-color 120ms ease,
+    box-shadow 120ms ease;
+}
+
+/* Полоска: нейтральная у данных платформы, синяя у данных внешней системы
+   (макет A2: #949598 vs #0d56e2). */
+.neutral {
+  border-left-color: var(--pm-node-accent-neutral);
+}
+
+.system {
+  border-left-color: var(--pm-integration);
+}
+
+.card:hover,
+.card:focus-visible {
+  border-color: var(--scp-color-brand-300);
+  box-shadow: var(--pm-shadow-stage-active);
+  outline: none;
+}
+
+.selected {
+  border-color: var(--scp-accent-primary);
+  box-shadow: 0 0 0 var(--scp-paddings-xs) var(--pm-node-focus-ring);
+}
+
+/* Формулировки в данных длиннее макетных — максимум 2 строки с многоточием,
+   полный текст в title карточки. */
+.label {
+  overflow: hidden;
+  color: var(--scp-content-primary);
+  font-size: var(--pm-font-size-12-5);
+  line-height: var(--pm-line-height-15);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  display: -webkit-box;
+}
+
+.source {
+  overflow: hidden;
+  color: var(--scp-content-secondary);
+  font-size: var(--pm-font-size-11);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

@@ -1,0 +1,47 @@
+/* Экран детализации этапа, уровень 2 (SPEC §4.2). Структура — как в
+   Overview.module.css, комментарии о причинах явных высот см. там. */
+
+.root {
+  display: flex;
+  width: 100%;
+  height: 100vh;
+  flex-direction: column;
+  background: var(--scp-background-primary);
+}
+
+/* Высота ЯВНАЯ, не flex:1 — иначе React Flow (width/height: 100% инлайном)
+   схлопывается в 0. Шапка уровня 2 — тот же Breadcrumbs высотой
+   --pm-header-height. */
+.canvas {
+  position: relative;
+  height: calc(100vh - var(--pm-header-height));
+  background: var(--pm-canvas-bg);
+}
+
+/* Цвет точек сетки Background: var() в атрибуте fill React Flow не
+   разворачивает — задаём через CSS. */
+.canvas :global(.react-flow__background) circle {
+  fill: var(--pm-grid-dot);
+}
+
+/* Узлы не перетаскиваются (CLAUDE.md, v1) — курсор не должен обещать обратное;
+   кликабельны сами карточки, они <button>. */
+.canvas :global(.react-flow__node) {
+  cursor: default;
+}
+
+/* Хэндлы нужны только как точки привязки рёбер — визуально их быть не должно. */
+.canvas :global(.react-flow__handle) {
+  width: 1px;
+  min-width: 0;
+  height: 1px;
+  min-height: 0;
+  border: 0;
+  background: transparent;
+  opacity: 0;
+}
+
+/* Контейнеры групп и колонок лежат под своими узлами. */
+.canvas :global(.react-flow__node-groupBox) {
+  z-index: 0 !important;
+}

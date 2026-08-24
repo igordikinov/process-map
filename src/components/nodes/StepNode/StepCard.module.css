@@ -1,0 +1,124 @@
+/*
+ * Карточка узла потока, уровень 2 (SPEC §4.2, артборд A2 318×52).
+ * Только var(...) из src/theme/tokens.css — ни цветов, ни размеров литералами
+ * (CLAUDE.md «Кодовые правила»). Значения, которых нет в шкале ДС, заведены
+ * там же как --pm-* с пометкой «из макета A2».
+ */
+
+.wrapper {
+  position: relative;
+  width: var(--pm-step-node-width);
+  height: var(--pm-step-node-height);
+}
+
+.card {
+  display: flex;
+  overflow: hidden;
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  align-items: center;
+  padding: 0 var(--scp-paddings-m);
+  border: 1px solid var(--scp-border-neutral-tertiary);
+  border-left: var(--pm-node-accent-bar) solid var(--pm-node-accent-neutral);
+  border-radius: var(--scp-border-radius-md);
+  margin: 0;
+  background: var(--scp-background-primary);
+  box-shadow: var(--pm-shadow-node);
+  cursor: pointer;
+  font-family: inherit;
+  gap: var(--pm-space-10);
+  text-align: left;
+  transition:
+    border-color 120ms ease,
+    box-shadow 120ms ease;
+}
+
+.step {
+  border-left-color: var(--scp-accent-primary);
+}
+
+.integration {
+  border-left-color: var(--pm-integration);
+}
+
+/* SPEC §4.2: фон --pm-warning-bg, полоска --pm-warning-stroke.
+   Рамка в макете --scp-color-warning-200. */
+.warning {
+  border-color: var(--scp-color-warning-200);
+  border-left-color: var(--pm-warning-stroke);
+  background: var(--pm-warning-bg);
+}
+
+.card:hover,
+.card:focus-visible {
+  border-color: var(--scp-color-brand-300);
+  box-shadow: var(--pm-shadow-stage-active);
+  outline: none;
+}
+
+/* Подсветка выбранного узла — SPEC §4.3 (Drawer открывает другая задача,
+   но состояние выбора живёт здесь). */
+.selected {
+  border-color: var(--scp-accent-primary);
+  box-shadow: 0 0 0 var(--scp-paddings-xs) var(--pm-node-focus-ring);
+}
+
+.icon {
+  width: var(--pm-node-icon-size);
+  height: var(--pm-node-icon-size);
+  flex: none;
+  opacity: var(--pm-node-icon-opacity);
+}
+
+/* Иконка предупреждения в макете идёт без приглушения. */
+.warning .icon {
+  opacity: 1;
+}
+
+/* Подписи в данных длиннее макетных, поэтому максимум 2 строки с многоточием;
+   полный текст (и description) — в title карточки. */
+.label {
+  overflow: hidden;
+  color: var(--scp-content-primary);
+  font-size: var(--pm-font-size-13);
+  line-height: var(--scp-line-height-16);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  display: -webkit-box;
+}
+
+/* Кнопка «Открыть экран» — сосед карточки, лежит поверх её правого края. */
+.linkButton {
+  position: absolute;
+  top: 50%;
+  right: var(--scp-paddings-s);
+  display: flex;
+  width: var(--scp-spacing-2xl);
+  height: var(--scp-spacing-2xl);
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: var(--scp-radius-button);
+  background: transparent;
+  cursor: pointer;
+  transform: translateY(-50%);
+}
+
+.linkButton:hover,
+.linkButton:focus-visible {
+  background: var(--scp-color-neutral-50);
+  outline: none;
+}
+
+.linkIcon {
+  width: var(--pm-node-icon-size);
+  height: var(--pm-node-icon-size);
+  opacity: var(--scp-opacity-high);
+}
+
+/* Место под кнопку ссылки, чтобы текст не уходил под иконку. */
+.wrapper:has(.linkButton) .label {
+  padding-right: var(--scp-spacing-xl);
+}

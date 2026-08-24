@@ -1,0 +1,51 @@
+/*
+ * Контейнеры уровня 2 (SPEC §4.2, артборд A2).
+ * Размер приходит из style узла React Flow, здесь только оформление.
+ * Только var(...) из src/theme/tokens.css.
+ */
+
+.group,
+.column {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+/* Рамка в макете #d4d5d6 = --scp-color-neutral-200, радиус 12px, фон .55. */
+.group {
+  border: 1px dashed var(--scp-color-neutral-200);
+  border-radius: var(--pm-group-radius);
+  background: var(--pm-group-bg);
+}
+
+/* Заголовок группы в макете — 16px от левого края контейнера, 12px от верха;
+   у колонки — по левому краю самих карточек (padding контейнера 0). */
+.group .title {
+  top: var(--scp-paddings-m);
+  left: var(--scp-paddings-l);
+  color: var(--scp-color-neutral-600);
+}
+
+.column .title {
+  top: 0;
+  left: 0;
+  color: var(--scp-color-neutral-500);
+}
+
+/* Обёртке контейнера React Flow ставит pointer-events: none (все флаги
+   интерактивности выключены) — подсказка с полным названием была бы
+   недостижима мышью. Возвращаем события ТОЛЬКО тексту заголовка: если вернуть
+   их всему контейнеру, его фон начнёт перехватывать панорамирование полотна. */
+.title {
+  position: absolute;
+  overflow: hidden;
+  pointer-events: auto;
+  max-width: calc(100% - var(--scp-paddings-xxl));
+  font-size: var(--pm-font-size-11);
+  font-weight: var(--scp-font-weight-semi-bold);
+  letter-spacing: var(--pm-tracking-eyebrow);
+  line-height: var(--pm-line-height-14);
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}

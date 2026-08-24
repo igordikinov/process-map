@@ -47,13 +47,22 @@ test('центр карточки этапа принимает события �
   expect(hit.insideCard).toBe(true);
 });
 
-test('настоящий клик мышью по карточке помечает этап активным', async ({ page }) => {
+// Проверка переписана в задаче process-map-1ts. До появления уровня 2 клик по
+// карточке только помечал этап активным (App всегда рендерил обзор), теперь
+// App по currentStageId переключает экран, и обзор вместе с карточкой
+// размонтируется — прежнее утверждение стало непроверяемым в принципе.
+// Смысл проверки прежний: настоящий клик мышью доходит до карточки
+// (регрессия pointer-events из M1), а не гаснет на полотне.
+test('настоящий клик мышью по карточке уводит на детализацию этапа', async ({ page }) => {
   const card = page.locator('.react-flow__node-stage button').nth(1);
-  await expect(card).not.toHaveAttribute('aria-current', 'step');
+  const label = await card.getAttribute('aria-label');
+  expect(label).toMatch(/^Этап 2: /);
 
   await card.click();
 
-  await expect(card).toHaveAttribute('aria-current', 'step');
+  await expect(page.locator('.react-flow__node-stage')).toHaveCount(0);
+  await expect(page.locator('.react-flow__node-step').first()).toBeVisible();
+  await expect(page.getByText('E2E-процесс')).toBeVisible();
 });
 
 test('до первой карточки этапа один Tab', async ({ page }) => {

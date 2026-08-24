@@ -1,0 +1,60 @@
+// Узел React Flow для карточки шага уровня 2 (SPEC §4.2).
+// Вся вёрстка — в StepCard; здесь только точки подключения рёбер.
+//
+// Этим же компонентом рисуются узлы типа `integration` (variant в data):
+// имя IntegrationNode уже занято карточкой внешней системы уровня 1
+// (свимлейны A1), а раскладка (scripts/layout.ts::NODE_SIZE) трактует
+// integration как карточку шага того же размера 318×52.
+import { Handle, Position, type Node, type NodeProps } from '@xyflow/react';
+import type { ProcessNode } from '../../../data/schema';
+import { StepCard, type StepCardVariant } from './StepCard';
+
+export interface StepNodeData extends Record<string, unknown> {
+  node: ProcessNode;
+  variant: StepCardVariant;
+}
+
+export type StepNodeType = Node<StepNodeData, 'step'>;
+
+/**
+ * Идентификаторы хэндлов узлов потока — используются в stageGraph.ts.
+ * Раскладка dagre идёт слева направо (rankdir LR), поэтому основная пара —
+ * right → left; bottom → top остаётся для редких обратных рёбер.
+ */
+export const STEP_HANDLE = {
+  left: 'left',
+  right: 'right',
+  top: 'top',
+  bottom: 'bottom',
+} as const;
+
+/** Общие для StepNode и WarningNode хэндлы: цели слева/сверху, источники справа/снизу. */
+export function StepHandles() {
+  return (
+    <>
+      <Handle type="target" position={Position.Left} id={STEP_HANDLE.left} isConnectable={false} />
+      <Handle type="target" position={Position.Top} id={STEP_HANDLE.top} isConnectable={false} />
+      <Handle
+        type="source"
+        position={Position.Right}
+        id={STEP_HANDLE.right}
+        isConnectable={false}
+      />
+      <Handle
+        type="source"
+        position={Position.Bottom}
+        id={STEP_HANDLE.bottom}
+        isConnectable={false}
+      />
+    </>
+  );
+}
+
+export function StepNode({ data }: NodeProps<StepNodeType>) {
+  return (
+    <>
+      <StepHandles />
+      <StepCard node={data.node} variant={data.variant} />
+    </>
+  );
+}

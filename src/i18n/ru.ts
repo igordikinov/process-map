@@ -34,6 +34,29 @@ export const ru = {
     ariaLabel: (number: number, title: string): string => `Этап ${number}: ${title}`,
   },
 
+  stageDetail: {
+    /** aria-label полотна уровня 2. */
+    canvasLabel: 'Схема этапа, уровень 2',
+    /** Заголовок левой колонки data-узлов (артборд A2). */
+    inputsColumn: 'Входные данные',
+    /** Заголовок правой колонки data-узлов (артборд A2). */
+    outputsColumn: 'Выходные данные',
+  },
+
+  stepNode: {
+    /** aria-label карточки шага: тип узла помогает скринридеру. */
+    ariaLabel: (label: string): string => `Шаг: ${label}`,
+    ariaLabelIntegration: (label: string): string => `Интеграция: ${label}`,
+    ariaLabelWarning: (label: string): string => `Предупреждение: ${label}`,
+    /** aria-label и title иконки link-external (показывается только при screen). */
+    openScreen: (title: string): string => `Открыть экран в In.Plan: ${title}`,
+  },
+
+  dataNode: {
+    /** aria-label карточки данных. */
+    ariaLabel: (label: string): string => `Данные: ${label}`,
+  },
+
   breadcrumbs: {
     /** Корень крошек, всегда одинаков: «E2E-процесс › {stage.title}». */
     root: 'E2E-процесс',
