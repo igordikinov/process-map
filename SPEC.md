@@ -1,0 +1,185 @@
+# SPEC — Техническая спецификация «In.Plan Process Map»
+
+Версия 1.0 · 24.08.2026. Дополняет PRD.md. Референс визуала — `Мокеты процесса In.Plan.zip` (артборды A1–A4 + дополнение A5 «редактор ссылки»).
+
+## 1. Стек
+
+| Слой | Выбор | Почему |
+|---|---|---|
+| Сборка | Vite 5, TypeScript strict | статический бандл, быстрый dev |
+| UI | React 18 | требование React Flow |
+| Граф | `@xyflow/react` (React Flow 12) | зум/пан, кастомные узлы, ортогональные рёбра (`smoothstep`) |
+| Автолейаут | `@dagrejs/dagre` — только в скрипте `scripts/layout.ts` | генерация стартовых координат, в рантайме не используется |
+| Стили | CSS Modules + CSS-переменные из токенов In.Plan | без Tailwind, чтобы совпасть с макетом |
+| Состояние | `zustand` | компактно, без бойлерплейта |
+| Валидация JSON | `zod` | схема данных + проверка импорта |
+| Тесты | Vitest + Testing Library, Playwright для e2e | |
+| Линт | ESLint + Prettier | |
+
+Пакетов помимо перечисленных не добавлять без записи в `bd`-задаче.
+
+## 2. Структура репозитория
+
+```
+process-map/
+  CLAUDE.md                 # инструкции агентам (см. CLAUDE.md)
+  PRD.md  SPEC.md
+  .beads/                   # трекер задач bd
+  design/                   # распакованный макет Claude Design (только для чтения)
+  public/icons/*.svg        # иконки из design/assets/icons
+  src/
+    main.tsx  App.tsx
+    config.ts               # linkTarget: '_top' | '_blank', compactHeight: 640
+    data/process.json       # ИСТОЧНИК ИСТИНЫ
+    data/schema.ts          # zod-схема + типы
+    data/loader.ts          # merge JSON + localStorage overrides
+    store/useProcessStore.ts
+    theme/tokens.css        # переменные из design/_ds/tokens/*.css
+    theme/global.css
+    components/
+      Overview/             # уровень 1
+      StageDetail/          # уровень 2
+      nodes/                # StageNode, StepNode, DataNode, IntegrationNode, WarningNode
+      edges/                # ProcessEdge (фиолетовый), IntegrationEdge (синий пунктир)
+      NodeDrawer/           # боковая панель + ScreenLinkSection + ScreenLinkForm
+      Toolbar/              # зум, fit, toggle интеграций, Просмотр/Редактор, экспорт/импорт
+      Legend/
+      Breadcrumbs/
+    hooks/useFrameSize.ts   # ResizeObserver → compact
+    hooks/useDeepLink.ts
+    utils/url.ts            # валидация, открытие ссылки
+    i18n/ru.ts              # все строки UI
+  scripts/
+    import-pptx.py          # pptx → process.json (одноразово)
+    layout.ts               # dagre → координаты
+  tests/  e2e/
+```
+
+## 3. Модель данных (`process.json`)
+
+```ts
+type NodeType = 'step' | 'data' | 'integration' | 'warning';
+type SystemCode = 'DP' | 'PS' | 'IO' | 'ERP' | 'MRP' | 'INPLAN';
+
+interface ScreenLink {
+  title: string;          // «Планирование поставок › Объёмный план»
+  url: string;            // https://...
+}
+
+interface ProcessNode {
+  id: string;             // kebab-case, уникален глобально
+  type: NodeType;
+  label: string;          // ≤ 2 строки
+  description?: string;
+  group?: string;         // id группы (dashed-контейнер), напр. "unconstrained"
+  inputs?: string[];      // человекочитаемые
+  outputs?: string[];
+  system?: SystemCode;
+  owner?: string;
+  screen?: ScreenLink;
+  position: { x: number; y: number };
+}
+
+interface Group { id: string; label: string; }
+
+interface Edge {
+  id: string;
+  source: string; target: string;
+  kind: 'process' | 'integration' | 'data';
+  label?: string;
+}
+
+interface ExternalIO {           // свимлейны уровня 1 и колонки уровня 2
+  system: SystemCode; label: string; stage: number; direction: 'in' | 'out';
+}
+
+interface Stage {
+  id: string; number: 1|2|3|4;
+  title: string; shortTitle: string;
+  keyOutputs: string[];          // ≤ 3
+  warningsCount?: number;
+  screen?: ScreenLink;
+  groups: Group[];
+  nodes: ProcessNode[];
+  edges: Edge[];
+  inputs: ExternalIO[]; outputs: ExternalIO[];
+}
+
+interface ProcessMap {
+  version: string; updatedAt: string; title: string;
+  stages: Stage[];
+  overviewEdges: Edge[];         // связи этап→этап и система→этап
+}
+```
+
+Правила: `id` стабильны (по ним работают deep-link и localStorage); `position` обязателен; JSON проходит `schema.parse()` в тесте `tests/data.test.ts`, который также проверяет, что число узлов ≥ 40 и все `edge.source/target` существуют.
+
+### Overrides (localStorage)
+
+Ключ `inplan-process-map:overrides:v1`, значение `Record<nodeId, { screen?: ScreenLink | null }>`. `loader.ts` накладывает overrides поверх JSON при старте. Экспорт отдаёт полный слитый `process.json`; импорт валидирует zod'ом и заменяет overrides.
+
+## 4. Экраны и поведение
+
+### 4.1 Обзор (A1)
+- Верхняя полоса 52 px: заголовок, бейдж «4 этапа», справа дата `updatedAt`.
+- Полотно React Flow с точечной сеткой (`Background variant=dots gap=16`).
+- Два dashed-контейнера свимлейнов (in/out) как узлы типа `group`, не перетаскиваются.
+- 4 `StageNode` 274×210: номер, название, разделитель, «Ключевые выходы» (≤ 3), внизу строка «Открыть в In.Plan →», если `stage.screen`. Активный/hover — фиолетовая верхняя полоска.
+- Рёбра этап→этап: `ProcessEdge` фиолетовый 1.8 px; система→этап: `IntegrationEdge` синий пунктир 1.3 px, `smoothstep`.
+- Все узлы `draggable=false`, `nodesConnectable=false`. Клик по StageNode → `navigate(stage)`.
+
+### 4.2 Детализация (A2)
+- Хлебные крошки «E2E-процесс › {stage.title}» + бейдж «Этап N» + кнопка назад; справа счётчик «N шагов · M входов · K выходов».
+- Слева колонка `DataNode` входов (200×56, подпись-источник), справа — выходов; посередине группы шагов (`group`-узлы с dashed-рамкой и заголовком).
+- `StepNode` 318×52: иконка по типу, текст, справа иконка `link-external.svg` если `node.screen` (клик по иконке → `openScreen`, `stopPropagation`).
+- `WarningNode` — фон `#fff8ed`, полоска `#ff9a3b`.
+- Клик по любому узлу → Drawer.
+
+### 4.3 Drawer (A3)
+- Ширина 360, справа, поверх полотна; полотно приглушается `rgba(31,31,32,.10)`, выбранный узел подсвечен `box-shadow 0 0 0 4px rgba(144,0,255,.14)`.
+- Секции по порядку: описание → **Экран в системе** → Входы → Выходы → Система/модуль → Ответственный.
+- «Экран в системе»: иконка + `screen.title` + url серым в одну строку с `text-overflow`. Нет ссылки → «Ссылка не задана» + action «Добавить» (только в редакторе).
+- Футер: «Подробнее» (stroked, v1 — скрыта если нет description) и «Открыть в модуле» (primary, disabled без ссылки).
+- Esc / клик по фону закрывает.
+
+### 4.4 Редактор (A5)
+- Toggle «Просмотр / Редактор» в тулбаре. В `localStorage` не сохраняется — при загрузке всегда «Просмотр».
+- Форма: `title` (обязательно, ≤ 80), `url` (обязательно, `new URL()` + протокол `https:`; `http:` допускается с предупреждением). Ошибка «Введите корректный URL». Сохранить → override, Отмена → откат. Кнопка «Удалить ссылку» пишет `screen: null`.
+- В тулбаре редактора: «Экспорт JSON» (скачивает `process.json`), «Импорт JSON» (file input), «Сбросить правки».
+
+### 4.5 Компактный режим (A4)
+Триггер: высота контейнера < `config.compactHeight` (640). Изменения: шапка 44 px, свимлейны заменяются на одну строку-бейдж «Внешние системы DP PS IO ERP MRP», карточки этапов 228×200 с 2 выходами, легенда сворачивается в кнопку-иконку, `fitView` вызывается заново.
+
+### 4.6 Тулбар
+Справа сверху: toggle «Показать интеграции» (скрывает `IntegrationEdge` и узлы систем), зум −/%/+/fit. Реализация через `useReactFlow()`.
+
+### 4.7 Deep-link
+`?stage=2` → сразу уровень 2; `&node=<id>` → плюс открытый Drawer. При навигации URL обновляется через `history.replaceState` (не `pushState`, чтобы не ломать историю родительской вики).
+
+### 4.8 Открытие ссылок
+`utils/url.ts::openScreen(url)`: `window.open(url, config.linkTarget)`; если `linkTarget === '_top'` и `window.top` недоступен (SecurityError), фолбэк на `_blank`. Тест покрывает оба пути.
+
+## 5. Визуальные токены
+
+Взять из `design/_ds/.../tokens/colors.css`, `typography.css`, `spacing.css`, перенести в `src/theme/tokens.css` под теми же именами переменных. Ключевые значения: фон полотна `#f5f6f8`, сетка `#dfdfe0`, границы `#eaeaea`/`#d4d5d6`, текст `#212529`/`#5a5a5c`/`#adb0b4`, акцент `#9000ff` (hover `#6f00ce`, light `#d899ff`), интеграция `#0d56e2`, предупреждение `#ff9a3b`, шрифт `'Open Sans', system-ui`. Иконки — из `design/assets/icons`.
+
+## 6. Встраивание в In.Plan
+
+```html
+<iframe src="https://<host>/process-map/?stage=1"
+        style="width:100%;height:720px;border:0" loading="lazy"
+        allow="clipboard-write"></iframe>
+```
+`vite.config.ts`: `base: './'` — чтобы бандл работал из любого подкаталога. В `dist/` не должно быть абсолютных путей. Сервер не должен отдавать `X-Frame-Options: DENY`; при необходимости `Content-Security-Policy: frame-ancestors https://*.company.ru`.
+
+## 7. Тестирование
+
+- `tests/data.test.ts` — схема, целостность рёбер, полнота (список обязательных id шагов из презентации в `tests/fixtures/required-nodes.json`).
+- `tests/url.test.ts` — валидация и `openScreen`.
+- `tests/loader.test.ts` — merge overrides, импорт/экспорт round-trip.
+- `e2e/`: обзор → этап 2 → шаг → Drawer → «Открыть в модуле» (перехват `window.open`); редактор: сохранить ссылку, перезагрузить, ссылка на месте; компактный режим при viewport 1024×600.
+- `npm run check` = typecheck + lint + unit; `npm run e2e` отдельно.
+
+## 8. Definition of Done для задачи
+
+Код + тесты зелёные (`npm run check`) + при UI-задаче скриншот Playwright сравнён глазами с соответствующим артбордом + `bd close <id> "…"` с кратким описанием.

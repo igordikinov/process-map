@@ -1,0 +1,55 @@
+/* In.Plan component-level tokens — from scp-ui themes/light-theme.scss */
+:root{
+/* Buttons */
+--scp-btn-icon-size-lg:24px;--scp-btn-icon-size-md:18px;--scp-btn-icon-size-sm:14px;--scp-btn-icon-size-xs:12px;
+--scp-btn-font-size-lg:18px;--scp-btn-font-size-md:14px;--scp-btn-font-size-sm:14px;--scp-btn-font-size-xs:12px;
+--scp-btn-height-lg:48px;--scp-btn-height-md:40px;--scp-btn-height-sm:32px;--scp-btn-height-xs:24px;
+/* Dialog */
+--scp-dialog-padding-vertical:16px;--scp-dialog-padding-body-vertical:8px;--scp-dialog-padding-horizontal:24px;
+--scp-dialog-max-height-pane:70vh;--scp-dialog-max-width-pane:70vw;--scp-dialog-min-width-pane:40vw;
+--scp-dialog-close-btn-color:#a6a6a6;
+/* Drawer */
+--scp-drawer-container-vertical-padding:16px;--scp-drawer-container-horisontal-padding:24px;--scp-drawer-resize-handle-bg:#00000026;
+/* Inputs / form fields */
+--scp-input-disabled-bgcolor:#dbdcdf8a;--scp-input-disabled-color:#00000061;
+--scp-form-field-font:400 12px/16px 'Open Sans';--scp-form-field-hint-padding:12px;--scp-form-field-error-color:#f22a41;
+--scp-options-select-min-height:42px;
+/* Radio */
+--scp-radio-icon-size-lg:20px;--scp-radio-icon-size-md:16px;--scp-radio-icon-size-sm:14px;
+--scp-radio-inactive-border:#212529;--scp-radio-disabled-border:#f5f5f5;--scp-radio-disabled-color:#d8cfde;
+/* Tooltip */
+--scp-tooltip-bgcolor:#1f1f20;--scp-tooltip-font-size:12px;
+/* Grid (tables) */
+--scp-grid-cell-border-width:1px;--scp-grid-selected-cell-border-color:#9000ff;--scp-grid-resizer-color:#9000ff;
+--scp-grid-header-row-height:36px;--scp-grid-content-row-height:32px;--scp-grid-actions-indent:20px;
+/* Widget (dashboards) */
+--scp-widget-color-primary:#38a169;--scp-widget-color-secondary:#f5b911;--scp-widget-color-danger:#f22a41;--scp-widget-color-default:#d8cfdeba;
+--scp-widget-color-text-light:#444647;--scp-widget-color-border:#cfcfcf;--scp-widget-color-border-dark:#909090;
+--scp-widget-color-background:#ffffff;--scp-widget-color-background-light:#f5f5f5;--scp-widget-color-background-scale:#ededed;--scp-widget-color-mark:#5b5c5c;
+--scp-widget-size-border-radius:8px;--scp-widget-size-padding-small:4px;--scp-widget-size-padding-medium:8px;--scp-widget-size-padding-large:16px;
+--scp-widget-size-gap-small:4px;--scp-widget-size-gap-medium:8px;--scp-widget-size-gap-large:16px;
+--scp-widget-size-scale-thickness:8px;--scp-widget-size-mark:16px;--scp-widget-size-mark-thickness:1px;
+--scp-widget-label-font-size:14px;--scp-widget-footer-font-size:12px;--scp-widget-line-height:16px;
+--scp-widget-shadow-default:0 2px 4px rgba(0,0,0,0.1);
+/* Badge */
+--scp-badge-size:24px;--scp-badge-bg:#f5f6f8;--scp-badge-color:#af47ff;--scp-badge-font:700 16px/24px 'Open Sans';--scp-badge-border-radius:9999px;--scp-badge-padding:0 8px;
+/* Note */
+--scp-note-container-padding:16px;--scp-note-container-sm-padding:12px;--scp-note-border-radius:4px;--scp-note-font-size:12px;--scp-note-font-color:#545d70;
+--scp-note-bg-info:#f9f9fb;--scp-note-icon-color-info:#9000ff;
+--scp-note-bg-success:#f6fbf9;--scp-note-icon-color-success:#22bb55;
+--scp-note-bg-warning:#fff9f3;--scp-note-icon-color-warning:#ff9a3b;
+--scp-note-bg-error:#fff6f6;--scp-note-icon-color-error:#f22a41;
+/* Menu */
+--scp-menu-item-disabled-bg:#adb0b4;
+/* Properties (key/value blocks) */
+--scp-property-key-color:#5a5a5a;--scp-property-gap:10px;--scp-property-font-weight:600;
+/* Shadows (mat elevation overrides) */
+--scp-shadow-level1:0px 2px 1px -1px rgba(0,0,0,0.2),0px 1px 2px 1px rgba(0,0,0,0.15);
+--scp-shadow-level2:0px 1px 3px -1px rgba(0,0,0,0.14),0px 1px 8px 2px rgba(0,0,0,0.15);
+--scp-shadow-level3:0px 2px 6px 0px rgba(0,0,0,0.12),0px 1px 12px 2px rgba(0,0,0,0.15);
+--scp-shadow-menu:0px 4px 15px 0px #00000026;
+/* Scrollbars */
+--scp-scrollbar-size:8px;--scp-scrollbar-border-radius:8px;--scp-scrollbar-thumb-color:#d9d9d9;--scp-scrollbar-track-color:transparent;--scp-scrollbar-padding:2px;
+/* Misc */
+--scp-secondary-section-height:255px;
+}

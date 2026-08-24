@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="_ds/in-plan-design-system-0a4cef78-5df6-4fd2-bc6c-d78cf7f52bbb/tokens/fonts.css">
+<link rel="stylesheet" href="_ds/in-plan-design-system-0a4cef78-5df6-4fd2-bc6c-d78cf7f52bbb/tokens/colors.css">
+<link rel="stylesheet" href="_ds/in-plan-design-system-0a4cef78-5df6-4fd2-bc6c-d78cf7f52bbb/tokens/typography.css">
+<link rel="stylesheet" href="_ds/in-plan-design-system-0a4cef78-5df6-4fd2-bc6c-d78cf7f52bbb/tokens/spacing.css">
+<link rel="stylesheet" href="_ds/in-plan-design-system-0a4cef78-5df6-4fd2-bc6c-d78cf7f52bbb/tokens/components.css">
+<link rel="stylesheet" href="_ds/in-plan-design-system-0a4cef78-5df6-4fd2-bc6c-d78cf7f52bbb/tokens/base.css">
+<link rel="stylesheet" href="_ds/in-plan-design-system-0a4cef78-5df6-4fd2-bc6c-d78cf7f52bbb/styles.css">
+<script src="_ds/in-plan-design-system-0a4cef78-5df6-4fd2-bc6c-d78cf7f52bbb/_ds_bundle.js"></script>
+</helmet>
+<div style="width:1280px;height:720px;position:relative;background:#ffffff;font-family:'Open Sans',system-ui,sans-serif;overflow:hidden">
+
+  <div style="height:52px;display:flex;align-items:center;gap:12px;padding:0 20px;border-bottom:1px solid #eaeaea;background:#ffffff">
+    <div style="width:28px;height:28px;border:1px solid #d4d5d6;border-radius:4px;display:flex;align-items:center;justify-content:center;background:#ffffff" style-hover="background:#f5f6f8"><img src="assets/icons/return-back.svg" alt="Назад" style="width:16px;height:16px;opacity:.8"></div>
+    <div style="display:flex;align-items:center;gap:8px;font-size:13px;color:#949598">
+      <span style="color:#5a5a5c">E2E-процесс</span>
+      <span style="color:#bfbfc1">›</span>
+      <span style="color:#212529;font-weight:600">Расчёт объёмных планов</span>
+      <x-import component-from-global-scope="InPlanDesignSystem_0a4cef.Badge" style="margin-left:8px" dc-props="{{ pillProps }}" hint-size="60px,20px">Этап 2</x-import>
+    </div>
+    <div style="flex:1"></div>
+    <div style="font-size:12px;color:#adb0b4">11 шагов · 4 входа · 4 выхода</div>
+  </div>
+
+  <div style="position:absolute;left:0;top:52px;right:0;bottom:0;background:#f5f6f8;background-image:radial-gradient(#dfdfe0 1px,transparent 1px);background-size:16px 16px">
+
+    <svg width="1280" height="668" style="position:absolute;left:0;top:0;pointer-events:none">
+      <defs>
+        <marker id="ah" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0.5 L7,4 L0,7.5 Z" fill="#a9aaad"></path></marker>
+      </defs>
+      <g fill="none" stroke="#bfbfc1" stroke-width="1.4" marker-end="url(#ah)">
+        <path d="M222,136 H248" stroke-dasharray="4 3"></path>
+        <path d="M222,202 H248" stroke-dasharray="4 3"></path>
+        <path d="M222,268 H248" stroke-dasharray="4 3"></path>
+        <path d="M222,334 H248" stroke-dasharray="4 3"></path>
+        <path d="M427,188 V198"></path>
+        <path d="M427,254 V264"></path>
+        <path d="M427,320 V330"></path>
+        <path d="M427,386 V396"></path>
+        <path d="M829,188 V198"></path>
+        <path d="M829,254 V264"></path>
+        <path d="M829,320 V330"></path>
+        <path d="M829,386 V396"></path>
+        <path d="M829,452 V462"></path>
+        <path d="M604,290 H650" stroke="#9000ff" stroke-width="1.8"></path>
+        <path d="M988,228 H1018 V138 H1044" stroke-dasharray="4 3"></path>
+        <path d="M988,294 H1024 V204 H1044" stroke-dasharray="4 3"></path>
+        <path d="M988,426 H1030 V270 H1044" stroke-dasharray="4 3"></path>
+        <path d="M988,492 H1036 V336 H1044" stroke-dasharray="4 3"></path>
+      </g>
+      <text x="608" y="282" font-family="'Open Sans',system-ui" font-size="11" fill="#6f00ce">далее</text>
+    </svg>
+
+    <div style="position:absolute;left:20px;top:84px;width:200px;font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:#949598">Входные данные</div>
+    <div style="position:absolute;left:20px;top:108px;width:200px;height:56px;box-sizing:border-box;display:flex;flex-direction:column;justify-content:center;gap:3px;padding:0 12px;background:#ffffff;border:1px solid #eaeaea;border-left:3px solid #949598;border-radius:8px;box-shadow:0 1px 2px rgba(0,0,0,.05)">
+      <div style="font-size:12.5px;line-height:15px;color:#212529">Прогноз в требуемой гранулярности</div>
+      <div style="font-size:11px;color:#adb0b4">Этап 1</div>
+    </div>
+    <div style="position:absolute;left:20px;top:174px;width:200px;height:56px;box-sizing:border-box;display:flex;flex-direction:column;justify-content:center;gap:3px;padding:0 12px;background:#ffffff;border:1px solid #eaeaea;border-left:3px solid #0d56e2;border-radius:8px;box-shadow:0 1px 2px rgba(0,0,0,.05)">
+      <div style="font-size:12.5px;line-height:15px;color:#212529">Остатки, НЗП, открытые заказы</div>
+      <div style="font-size:11px;color:#adb0b4">ERP</div>
+    </div>
+    <div style="position:absolute;left:20px;top:240px;width:200px;height:56px;box-sizing:border-box;display:flex;flex-direction:column;justify-content:center;gap:3px;padding:0 12px;background:#ffffff;border:1px solid #eaeaea;border-left:3px solid #0d56e2;border-radius:8px;box-shadow:0 1px 2px rgba(0,0,0,.05)">
+      <div style="font-size:12.5px;line-height:15px;color:#212529">Спецификации, квоты, ресурсы</div>
+      <div style="font-size:11px;color:#adb0b4">PS</div>
+    </div>
+    <div style="position:absolute;left:20px;top:306px;width:200px;height:56px;box-sizing:border-box;display:flex;flex-direction:column;justify-content:center;gap:3px;padding:0 12px;background:#ffffff;border:1px solid #eaeaea;border-left:3px solid #0d56e2;border-radius:8px;box-shadow:0 1px 2px rgba(0,0,0,.05)">
+      <div style="font-size:12.5px;line-height:15px;color:#212529">Целевые дни покрытия, ССЗ</div>
+      <div style="font-size:11px;color:#adb0b4">IO</div>
+    </div>
+
+    <div style="position:absolute;left:252px;top:88px;width:350px;height:392px;box-sizing:border-box;border:1px dashed #d4d5d6;border-radius:12px;background:rgba(255,255,255,.55)"></div>
+    <div style="position:absolute;left:268px;top:100px;font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:#77787a">Неограниченный расчёт</div>
+    <div style="position:absolute;left:268px;top:136px;width:318px;height:52px;box-sizing:border-box;display:flex;align-items:center;gap:10px;padding:0 12px;background:#ffffff;border:1px solid #eaeaea;border-left:3px solid #9000ff;border-radius:8px;box-shadow:0 1px 2px rgba(0,0,0,.06)">
+      <img src="assets/icons/calc.svg" alt="" style="width:16px;height:16px;opacity:.55">
+      <div style="font-size:13px;line-height:16px;color:#212529">Неттинг потребности по локациям</div>
+    </div>
+    <div style="position:absolute;left:268px;top:202px;width:318px;height:52px;box-sizing:border-box;display:flex;align-items:center;gap:10px;padding:0 12px;background:#ffffff;border:1px solid #eaeaea;border-left:3px solid #9000ff;border-radius:8px;box-shadow:0 1px 2px rgba(0,0,0,.06)">
+      <img src="assets/icons/calc.svg" alt="" style="width:16px;height:16px;opacity:.55">
+      <div style="font-size:13px;line-height:16px;color:#212529">Потребность в компонентах</div>
+    </div>
+    <div style="position:absolute;left:268px;top:268px;width:318px;height:52px;box-sizing:border-box;display:flex;align-items:center;gap:10px;padding:0 12px;background:#ffffff;border:1px solid #eaeaea;border-left:3px solid #9000ff;border-radius:8px;box-shadow:0 1px 2px rgba(0,0,0,.06)">
+      <img src="assets/icons/calc.svg" alt="" style="width:16px;height:16px;opacity:.55">
+      <div style="font-size:13px;line-height:16px;color:#212529">Потребность в производстве по квотам</div>
+    </div>
+    <div style="position:absolute;left:268px;top:334px;width:318px;height:52px;box-sizing:border-box;display:flex;align-items:center;gap:10px;padding:0 12px;background:#ffffff;border:1px solid #eaeaea;border-left:3px solid #9000ff;border-radius:8px;box-shadow:0 1px 2px rgba(0,0,0,.06)">
+      <img src="assets/icons/calc.svg" alt="" style="width:16px;height:16px;opacity:.55">
+      <div style="font-size:13px;line-height:16px;color:#212529">Уровни запасов от дней покрытия</div>
+    </div>
+    <div style="position:absolute;left:268px;top:400px;width:318px;height:52px;box-sizing:border-box;display:flex;align-items:center;gap:10px;padding:0 12px;background:#fff8ed;border:1px solid #ffdaa8;border-left:3px solid #ff9a3b;border-radius:8px;box-shadow:0 1px 2px rgba(0,0,0,.06)">
+      <img src="assets/icons/warning-triangle.svg" alt="" style="width:16px;height:16px">
+      <div style="font-size:13px;line-height:16px;color:#212529">Предупреждение out of stock</div>
+    </div>
+
+    <div style="position:absolute;left:654px;top:88px;width:350px;height:458px;box-sizing:border-box;border:1px dashed #d4d5d6;border-radius:12px;background:rgba(255,255,255,.55)"></div>
+    <div style="position:absolute;left:670px;top:100px;font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:#77787a">Расчёт с учётом ограничений</div>
+    <div style="position:absolute;left:670px;top:136px;width:318px;height:52px;box-sizing:border-box;display:flex;align-items:center;gap:10px;padding:0 12px;background:#ffffff;border:1px solid #eaeaea;border-left:3px solid #9000ff;border-radius:8px;box-shadow:0 1px 2px rgba(0,0,0,.06)">
+      <img src="assets/icons/recalculation.svg" alt="" style="width:16px;height:16px;opacity:.55">
+      <div style="font-size:13px;line-height:16px;color:#212529">Запуск оптимизатора</div>
+    </div>
+    <div style="position:absolute;left:670px;top:202px;width:318px;height:52px;box-sizing:border-box;display:flex;align-items:center;gap:10px;padding:0 12px;background:#ffffff;border:1px solid #eaeaea;border-left:3px solid #9000ff;border-radius:8px;box-shadow:0 1px 2px rgba(0,0,0,.06)">
+      <img src="assets/icons/step-in-process.svg" alt="" style="width:16px;height:16px;opacity:.55">
+      <div style="font-size:13px;line-height:16px;color:#212529">План производства</div>
+    </div>
+    <div style="position:absolute;left:670px;top:268px;width:318px;height:52px;box-sizing:border-box;display:flex;align-items:center;gap:10px;padding:0 12px;background:#ffffff;border:1px solid #eaeaea;border-left:3px solid #9000ff;border-radius:8px;box-shadow:0 1px 2px rgba(0,0,0,.06)">
+      <img src="assets/icons/step-in-process.svg" alt="" style="width:16px;height:16px;opacity:.55">
+      <div style="font-size:13px;line-height:16px;color:#212529">План перемещений</div>
+    </div>
+    <div style="position:absolute;left:670px;top:334px;width:318px;height:52px;box-sizing:border-box;display:flex;align-items:center;gap:10px;padding:0 12px;background:#ffffff;border:1px solid #eaeaea;border-left:3px solid #9000ff;border-radius:8px;box-shadow:0 1px 2px rgba(0,0,0,.06)">
+      <img src="assets/icons/calc.svg" alt="" style="width:16px;height:16px;opacity:.55">
+      <div style="font-size:13px;line-height:16px;color:#212529">Потребность в критическом сырье</div>
+    </div>
+    <div style="position:absolute;left:670px;top:400px;width:318px;height:52px;box-sizing:border-box;display:flex;align-items:center;gap:10px;padding:0 12px;background:#ffffff;border:1px solid #eaeaea;border-left:3px solid #9000ff;border-radius:8px;box-shadow:0 1px 2px rgba(0,0,0,.06)">
+      <img src="assets/icons/forecast-data.svg" alt="" style="width:16px;height:16px;opacity:.55">
+      <div style="font-size:13px;line-height:16px;color:#212529">Ограниченный прогноз продаж</div>
+    </div>
+    <div style="position:absolute;left:670px;top:466px;width:318px;height:52px;box-sizing:border-box;display:flex;align-items:center;gap:10px;padding:0 12px;background:#ffffff;border:1px solid #eaeaea;border-left:3px solid #949598;border-radius:8px;box-shadow:0 1px 2px rgba(0,0,0,.06)">
+      <img src="assets/icons/tables.svg" alt="" style="width:16px;height:16px;opacity:.55">
+      <div style="font-size:13px;line-height:16px;color:#212529">Журнал результатов расчёта</div>
+    </div>
+
+    <div style="position:absolute;left:1050px;top:84px;width:210px;font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:#949598">Выходные данные</div>
+    <div style="position:absolute;left:1050px;top:108px;width:210px;height:56px;box-sizing:border-box;display:flex;flex-direction:column;justify-content:center;gap:3px;padding:0 12px;background:#ffffff;border:1px solid #eaeaea;border-left:3px solid #0d56e2;border-radius:8px;box-shadow:0 1px 2px rgba(0,0,0,.05)">
+      <div style="font-size:12.5px;line-height:15px;color:#212529">План производства</div>
+      <div style="font-size:11px;color:#adb0b4">В PS · этап 3</div>
+    </div>
+    <div style="position:absolute;left:1050px;top:174px;width:210px;height:56px;box-sizing:border-box;display:flex;flex-direction:column;justify-content:center;gap:3px;padding:0 12px;background:#ffffff;border:1px solid #eaeaea;border-left:3px solid #0d56e2;border-radius:8px;box-shadow:0 1px 2px rgba(0,0,0,.05)">
+      <div style="font-size:12.5px;line-height:15px;color:#212529">План перемещений</div>
+      <div style="font-size:11px;color:#adb0b4">В ERP · этап 4</div>
+    </div>
+    <div style="position:absolute;left:1050px;top:240px;width:210px;height:56px;box-sizing:border-box;display:flex;flex-direction:column;justify-content:center;gap:3px;padding:0 12px;background:#ffffff;border:1px solid #eaeaea;border-left:3px solid #0d56e2;border-radius:8px;box-shadow:0 1px 2px rgba(0,0,0,.05)">
+      <div style="font-size:12.5px;line-height:15px;color:#212529">Ограниченный прогноз продаж</div>
+      <div style="font-size:11px;color:#adb0b4">В DP</div>
+    </div>
+    <div style="position:absolute;left:1050px;top:306px;width:210px;height:56px;box-sizing:border-box;display:flex;flex-direction:column;justify-content:center;gap:3px;padding:0 12px;background:#ffffff;border:1px solid #eaeaea;border-left:3px solid #949598;border-radius:8px;box-shadow:0 1px 2px rgba(0,0,0,.05)">
+      <div style="font-size:12.5px;line-height:15px;color:#212529">Журнал расчёта</div>
+      <div style="font-size:11px;color:#adb0b4">Платформа</div>
+    </div>
+
+    <div style="position:absolute;right:20px;top:16px;display:flex;align-items:center;gap:8px">
+      <div style="display:flex;align-items:center;gap:8px;height:32px;padding:0 12px;background:#ffffff;border:1px solid #d4d5d6;border-radius:4px">
+        <div style="width:26px;height:14px;border-radius:9999px;background:#9000ff;position:relative"><div style="position:absolute;top:2px;right:2px;width:10px;height:10px;border-radius:9999px;background:#fff"></div></div>
+        <span style="font-size:12px;color:#212529">Показать интеграции</span>
+      </div>
+      <div style="display:flex;background:#ffffff;border:1px solid #d4d5d6;border-radius:4px;overflow:hidden">
+        <div style="width:32px;height:32px;display:flex;align-items:center;justify-content:center;border-right:1px solid #eaeaea"><img src="assets/icons/minus.svg" alt="Уменьшить" style="width:14px;height:14px;opacity:.7"></div>
+        <div style="width:44px;height:32px;display:flex;align-items:center;justify-content:center;border-right:1px solid #eaeaea;font-size:12px;color:#5a5a5c">100%</div>
+        <div style="width:32px;height:32px;display:flex;align-items:center;justify-content:center;border-right:1px solid #eaeaea"><img src="assets/icons/plus.svg" alt="Увеличить" style="width:14px;height:14px;opacity:.7"></div>
+        <div style="width:32px;height:32px;display:flex;align-items:center;justify-content:center"><img src="assets/icons/fit.svg" alt="Уместить в экран" style="width:15px;height:15px;opacity:.7"></div>
+      </div>
+    </div>
+
+    <div style="position:absolute;left:20px;bottom:16px;display:flex;align-items:center;gap:18px;height:36px;padding:0 14px;background:#ffffff;border:1px solid #eaeaea;border-radius:8px;box-shadow:0 1px 2px rgba(0,0,0,.05)">
+      <div style="display:flex;align-items:center;gap:7px;font-size:11.5px;color:#5a5a5c"><span style="width:3px;height:14px;border-radius:2px;background:#9000ff"></span>Шаг</div>
+      <div style="display:flex;align-items:center;gap:7px;font-size:11.5px;color:#5a5a5c"><span style="width:3px;height:14px;border-radius:2px;background:#949598"></span>Данные</div>
+      <div style="display:flex;align-items:center;gap:7px;font-size:11.5px;color:#5a5a5c"><span style="width:3px;height:14px;border-radius:2px;background:#0d56e2"></span>Интеграция</div>
+      <div style="display:flex;align-items:center;gap:7px;font-size:11.5px;color:#5a5a5c"><span style="width:3px;height:14px;border-radius:2px;background:#ff9a3b"></span>Предупреждение</div>
+    </div>
+
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1280,&quot;height&quot;:720}}">class Component extends DCLogic {
+  renderVals() {
+    return { pillProps: { style: { font: "600 11px/16px 'Open Sans',system-ui,sans-serif", minHeight: 20, minWidth: 20, padding: '0 8px' } } };
+  }
+}</script>
+</body>
+</html>
