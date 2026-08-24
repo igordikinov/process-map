@@ -1,0 +1,71 @@
+/*
+ * Базовые глобальные стили приложения.
+ * Адаптировано из design/_ds/.../tokens/base.css: перенесены сброс/дефолты,
+ * нужные приложению; утилитарные классы дизайн-системы (.scp-title,
+ * .material-icons, .secondary-section и т.п.), которые здесь не используются,
+ * не перенесены.
+ *
+ * Шрифт: в ДС 'Open Sans' подключается через @import с fonts.googleapis.com
+ * (tokens/fonts.css). В этой задаче CDN-импорт НЕ переносится — приложение
+ * встраивается в iframe в In.Plan, где CSP может заблокировать внешний
+ * запрос. Ограничиваемся системным фолбэком; self-host через
+ * @fontsource/open-sans — задача process-map-j4x.
+ *
+ * Хардкод hex разрешён только в этом файле и в src/theme/tokens.css
+ * (см. исключение src/theme/** в eslint.config.js).
+ */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--scp-font-family), system-ui, sans-serif;
+  font-size: var(--scp-font-sizes-14);
+  line-height: var(--scp-line-height-20);
+  color: var(--scp-content-primary);
+  background: var(--pm-canvas-bg);
+}
+
+#root {
+  height: 100%;
+}
+
+h1,
+h2 {
+  margin: 0;
+}
+
+button {
+  border: none;
+  font-family: inherit;
+}
+
+input,
+textarea {
+  font-family: inherit;
+}
+
+/* Скроллбар (WebKit) — из tokens/base.css, значения из --scp-scrollbar-* */
+::-webkit-scrollbar {
+  width: var(--scp-scrollbar-size);
+  height: var(--scp-scrollbar-size);
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: var(--scp-scrollbar-thumb-color);
+  border-radius: var(--scp-scrollbar-border-radius);
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-track {
+  background-color: var(--scp-scrollbar-track-color);
+}
