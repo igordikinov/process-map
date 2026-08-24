@@ -1,0 +1,195 @@
+// Zod-схемы и типы модели данных process.json (SPEC.md §3).
+// Типы выводятся из схем через z.infer — интерфейсы SPEC не дублируются руками.
+import { z } from 'zod';
+
+export const NodeTypeSchema = z.enum(['step', 'data', 'integration', 'warning']);
+export type NodeType = z.infer<typeof NodeTypeSchema>;
+
+export const SystemCodeSchema = z.enum(['DP', 'PS', 'IO', 'ERP', 'MRP', 'INPLAN']);
+export type SystemCode = z.infer<typeof SystemCodeSchema>;
+
+export const ScreenLinkSchema = z.object({
+  title: z.string(),
+  url: z.string(),
+});
+export type ScreenLink = z.infer<typeof ScreenLinkSchema>;
+
+export const ProcessNodeSchema = z.object({
+  id: z.string(),
+  type: NodeTypeSchema,
+  label: z.string(),
+  description: z.string().optional(),
+  group: z.string().optional(),
+  inputs: z.array(z.string()).optional(),
+  outputs: z.array(z.string()).optional(),
+  system: SystemCodeSchema.optional(),
+  owner: z.string().optional(),
+  screen: ScreenLinkSchema.optional(),
+  position: z.object({ x: z.number(), y: z.number() }),
+});
+export type ProcessNode = z.infer<typeof ProcessNodeSchema>;
+
+export const GroupSchema = z.object({
+  id: z.string(),
+  label: z.string(),
+});
+export type Group = z.infer<typeof GroupSchema>;
+
+export const EdgeSchema = z.object({
+  id: z.string(),
+  source: z.string(),
+  target: z.string(),
+  kind: z.enum(['process', 'integration', 'data']),
+  label: z.string().optional(),
+});
+export type Edge = z.infer<typeof EdgeSchema>;
+
+export const ExternalIOSchema = z.object({
+  system: SystemCodeSchema,
+  label: z.string(),
+  stage: z.number(),
+  direction: z.enum(['in', 'out']),
+});
+export type ExternalIO = z.infer<typeof ExternalIOSchema>;
+
+export const StageSchema = z.object({
+  id: z.string(),
+  number: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]),
+  title: z.string(),
+  shortTitle: z.string(),
+  keyOutputs: z.array(z.string()).max(3),
+  warningsCount: z.number().optional(),
+  screen: ScreenLinkSchema.optional(),
+  groups: z.array(GroupSchema),
+  nodes: z.array(ProcessNodeSchema),
+  edges: z.array(EdgeSchema),
+  inputs: z.array(ExternalIOSchema),
+  outputs: z.array(ExternalIOSchema),
+});
+export type Stage = z.infer<typeof StageSchema>;
+
+export const ProcessMapSchema = z.object({
+  version: z.string(),
+  updatedAt: z.string(),
+  title: z.string(),
+  stages: z.array(StageSchema),
+  overviewEdges: z.array(EdgeSchema),
+});
+export type ProcessMap = z.infer<typeof ProcessMapSchema>;
+
+// Overrides (localStorage), SPEC.md §3 «Overrides».
+// null у screen — значимое значение (явно удалённая ссылка), поэтому нельзя
+// использовать .optional() для самого поля screen внутри записи: undefined
+// («не трогали») и null («удалили») должны различаться.
+export const OverrideEntrySchema = z.object({
+  screen: ScreenLinkSchema.nullable().optional(),
+});
+export type OverrideEntry = z.infer<typeof OverrideEntrySchema>;
+
+export const OverridesSchema = z.record(z.string(), OverrideEntrySchema);
+export type Overrides = z.infer<typeof OverridesSchema>;
+
+export const OVERRIDES_STORAGE_KEY = 'inplan-process-map:overrides:v1';
+
+/**
+ * Проверка ссылочной целостности ProcessMap:
+ * - все edge.source/edge.target указывают на существующие id: для stage.edges —
+ *   на узлы ТОГО ЖЕ этапа, для overviewEdges — см. ниже;
+ * - id узлов уникальны глобально по всему документу (не только внутри этапа);
+ * - id рёбер уникальны глобально (React Flow требует уникальных id в пределах
+ *   отрисовываемого графа);
+ * - node.group, если задан, ссылается на существующую group своего этапа.
+ *
+ * Для overviewEdges допустимыми source/target считаются:
+ *   - id любого этапа (stage.id) — рёбра этап → этап;
+ *   - код внешней системы (SystemCode), присутствующий хотя бы в одном
+ *     ExternalIO (stage.inputs/stage.outputs) какого-либо этапа — рёбра
+ *     система → этап (SPEC §3, §4.1: свимлейны уровня 1 — это внешние
+ *     системы, а не узлы графа с собственным id).
+ * Это два разных пространства идентификаторов (kebab-case id этапов и
+ * короткие коды систем DP/PS/IO/ERP/MRP/INPLAN), поэтому конфликтов имён
+ * не возникает и ложных ошибок не даёт.
+ */
+export function validateIntegrity(map: ProcessMap): string[] {
+  const problems: string[] = [];
+
+  const allNodeIds = new Set<string>();
+  const duplicateNodeIds = new Set<string>();
+  for (const stage of map.stages) {
+    for (const node of stage.nodes) {
+      if (allNodeIds.has(node.id)) {
+        duplicateNodeIds.add(node.id);
+      }
+      allNodeIds.add(node.id);
+    }
+  }
+  for (const id of duplicateNodeIds) {
+    problems.push(`Дублирующийся id узла: "${id}"`);
+  }
+
+  const stageIds = new Set(map.stages.map((stage) => stage.id));
+  const systemCodes = new Set<string>();
+  for (const stage of map.stages) {
+    for (const io of [...stage.inputs, ...stage.outputs]) {
+      systemCodes.add(io.system);
+    }
+  }
+
+  const seenEdgeIds = new Set<string>();
+  const checkEdgeId = (edge: Edge, scope: string): void => {
+    if (seenEdgeIds.has(edge.id)) {
+      problems.push(`Дублирующийся id ребра: "${edge.id}" (${scope})`);
+    }
+    seenEdgeIds.add(edge.id);
+  };
+
+  for (const stage of map.stages) {
+    const groupIds = new Set(stage.groups.map((group) => group.id));
+
+    for (const node of stage.nodes) {
+      if (node.group !== undefined && !groupIds.has(node.group)) {
+        problems.push(
+          `Узел "${node.id}" (этап "${stage.id}") ссылается на несуществующую группу "${node.group}"`,
+        );
+      }
+    }
+
+    // Рёбра этапа проверяются против узлов ЭТОГО этапа, а не против глобального
+    // множества: stage.edges рисуются внутри одного экрана детализации (SPEC §4.2),
+    // и ссылка на узел чужого этапа — ошибка данных, а не допустимая связь.
+    const stageNodeIds = new Set(stage.nodes.map((node) => node.id));
+
+    for (const edge of stage.edges) {
+      checkEdgeId(edge, `этап "${stage.id}"`);
+      if (!stageNodeIds.has(edge.source)) {
+        problems.push(
+          `Ребро "${edge.id}" (этап "${stage.id}"): source "${edge.source}" не найден среди узлов этого этапа`,
+        );
+      }
+      if (!stageNodeIds.has(edge.target)) {
+        problems.push(
+          `Ребро "${edge.id}" (этап "${stage.id}"): target "${edge.target}" не найден среди узлов этого этапа`,
+        );
+      }
+    }
+  }
+
+  const isValidOverviewEndpoint = (value: string): boolean =>
+    stageIds.has(value) || systemCodes.has(value);
+
+  for (const edge of map.overviewEdges) {
+    checkEdgeId(edge, 'обзор');
+    if (!isValidOverviewEndpoint(edge.source)) {
+      problems.push(
+        `Ребро обзора "${edge.id}": source "${edge.source}" не является ни id этапа, ни кодом системы`,
+      );
+    }
+    if (!isValidOverviewEndpoint(edge.target)) {
+      problems.push(
+        `Ребро обзора "${edge.id}": target "${edge.target}" не является ни id этапа, ни кодом системы`,
+      );
+    }
+  }
+
+  return problems;
+}
