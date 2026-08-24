@@ -1,0 +1,1572 @@
+{
+  "version": "1.0.0",
+  "updatedAt": "2026-08-24",
+  "title": "E2E процесс планирования In.Plan",
+  "stages": [
+    {
+      "id": "stage-1-obogaschenie-prognoza-zakazami",
+      "number": 1,
+      "title": "Обогащение прогноза заказами",
+      "shortTitle": "Обогащение прогноза заказами",
+      "keyOutputs": [
+        "Прогноз продаж в требуемой гранулярности",
+        "Скорректированный (открытый) прогноз продаж"
+      ],
+      "warningsCount": 0,
+      "groups": [
+        {
+          "id": "preobrazovanie-prognoza-k-trebuemoy-granulyarnosti",
+          "label": "Преобразование прогноза к требуемой гранулярности"
+        },
+        {
+          "id": "obogaschenie-prognoza-klientskimi-zakazami",
+          "label": "Обогащение прогноза клиентскими заказами"
+        }
+      ],
+      "nodes": [
+        {
+          "id": "peredacha-neogranichennogo-plana-sprosa-iz-modulya-dp-s-agregaciey-do",
+          "type": "integration",
+          "label": "Передача неограниченного плана спроса из модуля DP с агрегацией до групп клиентов",
+          "system": "DP",
+          "position": {
+            "x": 19,
+            "y": 113
+          }
+        },
+        {
+          "id": "sohranenie-predyduschih-versiy-planov",
+          "type": "step",
+          "label": "Сохранение предыдущих версий планов",
+          "group": "preobrazovanie-prognoza-k-trebuemoy-granulyarnosti",
+          "outputs": [
+            "Снэпшоты планов"
+          ],
+          "position": {
+            "x": 243,
+            "y": 222
+          }
+        },
+        {
+          "id": "dezagregaciya-prognoza-po-produktu",
+          "type": "step",
+          "label": "Дезагрегация прогноза по продукту",
+          "description": "Алгоритм дезагрегации\\аллокации определяет коэффициент и предполагает аллокацию прогноза:\n- По иерархии продукта (категория, DFU, SKU),\n- По локациям (регион, РЦ, завод),\n- По временной шкале (месяц, неделя)\nРезультат: понимание\n- Какой продукт будет продаваться\n- В каком количестве\n- На какой неделе\n- С какого склада будет отгружаться",
+          "group": "preobrazovanie-prognoza-k-trebuemoy-granulyarnosti",
+          "position": {
+            "x": 448,
+            "y": 222
+          }
+        },
+        {
+          "id": "dezagregaciya-prognoza-po-lokaciyam",
+          "type": "step",
+          "label": "Дезагрегация прогноза по локациям",
+          "group": "preobrazovanie-prognoza-k-trebuemoy-granulyarnosti",
+          "position": {
+            "x": 652,
+            "y": 222
+          }
+        },
+        {
+          "id": "dezagregaciya-prognoza-po-vremennoy-shkale",
+          "type": "step",
+          "label": "Дезагрегация прогноза по временной шкале",
+          "group": "preobrazovanie-prognoza-k-trebuemoy-granulyarnosti",
+          "position": {
+            "x": 857,
+            "y": 222
+          }
+        },
+        {
+          "id": "sravnenie-otkloneniya-ot-predyduschego-prognoza",
+          "type": "step",
+          "label": "Сравнение отклонения от предыдущего прогноза",
+          "group": "preobrazovanie-prognoza-k-trebuemoy-granulyarnosti",
+          "outputs": [
+            "Прогноз в требуемом формате на нужном уровне (продукт, локация, бакет)"
+          ],
+          "position": {
+            "x": 1062,
+            "y": 222
+          }
+        },
+        {
+          "id": "prognoz-prodazh-v-trebuemoy-granulyarnosti",
+          "type": "data",
+          "label": "Прогноз продаж в требуемой гранулярности",
+          "position": {
+            "x": 43,
+            "y": 463
+          }
+        },
+        {
+          "id": "otgruzhennye-zakazy-klientov",
+          "type": "data",
+          "label": "Отгруженные заказы клиентов",
+          "position": {
+            "x": 43,
+            "y": 486
+          }
+        },
+        {
+          "id": "otkrytye-zakazy-klientov-3-77",
+          "type": "data",
+          "label": "Открытые заказы клиентов",
+          "position": {
+            "x": 43,
+            "y": 508
+          }
+        },
+        {
+          "id": "umenshenie-prognoza-na-otgruzhennye-klientskie-zakazy",
+          "type": "step",
+          "label": "Уменьшение прогноза на отгруженные клиентские заказы",
+          "group": "obogaschenie-prognoza-klientskimi-zakazami",
+          "outputs": [
+            "Прогноз за вычетом отгрузок"
+          ],
+          "position": {
+            "x": 52,
+            "y": 575
+          }
+        },
+        {
+          "id": "korrektirovka-prognoza-s-uchetom-pereprodazh-nedoprodazh",
+          "type": "step",
+          "label": "Корректировка прогноза с учётом перепродаж / недопродаж",
+          "group": "obogaschenie-prognoza-klientskimi-zakazami",
+          "outputs": [
+            "Скорректированный (открытый) прогноз продаж"
+          ],
+          "position": {
+            "x": 396,
+            "y": 575
+          }
+        },
+        {
+          "id": "skorrektirovannyy-otkrytyy-prognoz-prodazh-2-184",
+          "type": "data",
+          "label": "Скорректированный (открытый) прогноз продаж",
+          "position": {
+            "x": 315,
+            "y": 267
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "e-peredacha-neogranichennogo-plana-sprosa-iz-modulya-dp-s-agregaciey-do--sohranenie-predyduschih-versiy-planov",
+          "source": "peredacha-neogranichennogo-plana-sprosa-iz-modulya-dp-s-agregaciey-do",
+          "target": "sohranenie-predyduschih-versiy-planov",
+          "kind": "integration"
+        },
+        {
+          "id": "e-sravnenie-otkloneniya-ot-predyduschego-prognoza--umenshenie-prognoza-na-otgruzhennye-klientskie-zakazy",
+          "source": "sravnenie-otkloneniya-ot-predyduschego-prognoza",
+          "target": "umenshenie-prognoza-na-otgruzhennye-klientskie-zakazy",
+          "kind": "process"
+        },
+        {
+          "id": "e-sohranenie-predyduschih-versiy-planov--dezagregaciya-prognoza-po-produktu",
+          "source": "sohranenie-predyduschih-versiy-planov",
+          "target": "dezagregaciya-prognoza-po-produktu",
+          "kind": "process"
+        },
+        {
+          "id": "e-dezagregaciya-prognoza-po-produktu--dezagregaciya-prognoza-po-lokaciyam",
+          "source": "dezagregaciya-prognoza-po-produktu",
+          "target": "dezagregaciya-prognoza-po-lokaciyam",
+          "kind": "process"
+        },
+        {
+          "id": "e-dezagregaciya-prognoza-po-lokaciyam--dezagregaciya-prognoza-po-vremennoy-shkale",
+          "source": "dezagregaciya-prognoza-po-lokaciyam",
+          "target": "dezagregaciya-prognoza-po-vremennoy-shkale",
+          "kind": "process"
+        },
+        {
+          "id": "e-dezagregaciya-prognoza-po-vremennoy-shkale--sravnenie-otkloneniya-ot-predyduschego-prognoza",
+          "source": "dezagregaciya-prognoza-po-vremennoy-shkale",
+          "target": "sravnenie-otkloneniya-ot-predyduschego-prognoza",
+          "kind": "process"
+        },
+        {
+          "id": "e-umenshenie-prognoza-na-otgruzhennye-klientskie-zakazy--korrektirovka-prognoza-s-uchetom-pereprodazh-nedoprodazh",
+          "source": "umenshenie-prognoza-na-otgruzhennye-klientskie-zakazy",
+          "target": "korrektirovka-prognoza-s-uchetom-pereprodazh-nedoprodazh",
+          "kind": "process"
+        }
+      ],
+      "inputs": [
+        {
+          "system": "DP",
+          "label": "Передача неограниченного плана спроса из модуля DP с агрегацией до групп клиентов",
+          "stage": 1,
+          "direction": "in"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "id": "stage-2-raschet-obemnyh-planov",
+      "number": 2,
+      "title": "Расчет объемных планов",
+      "shortTitle": "Расчет объемных планов",
+      "keyOutputs": [
+        "Уровни запасов в плановых ЕИ",
+        "Ограниченный План продаж (драфт)",
+        "План производства (драфт)"
+      ],
+      "warningsCount": 1,
+      "groups": [
+        {
+          "id": "raschet-neogranichennoy-potrebnosti-v-popolnenii",
+          "label": "Расчёт неограниченной потребности в пополнении"
+        },
+        {
+          "id": "raschet-obemnyh-planov-s-uchetom-ogranicheniy",
+          "label": "Расчёт объемных планов с учетом ограничений"
+        }
+      ],
+      "nodes": [
+        {
+          "id": "osnovnye-dannye",
+          "type": "data",
+          "label": "Основные данные",
+          "position": {
+            "x": 18,
+            "y": 107
+          }
+        },
+        {
+          "id": "aktualnye-urovni-zapasov",
+          "type": "data",
+          "label": "Актуальные уровни запасов",
+          "position": {
+            "x": 18,
+            "y": 125
+          }
+        },
+        {
+          "id": "aktualnye-parametry-planirovaniya",
+          "type": "data",
+          "label": "Актуальные параметры планирования",
+          "position": {
+            "x": 18,
+            "y": 144
+          }
+        },
+        {
+          "id": "raschet-planovogo-ostatka-0-i-formirovanie-preduprezhdeniya",
+          "type": "warning",
+          "label": "Расчет планового остатка <0 и формирование предупреждения",
+          "group": "raschet-neogranichennoy-potrebnosti-v-popolnenii",
+          "outputs": [
+            "Предупреждение по out of stock"
+          ],
+          "position": {
+            "x": 1018,
+            "y": 157
+          }
+        },
+        {
+          "id": "otkrytye-zakazy-klientov-4-43",
+          "type": "data",
+          "label": "Открытые заказы клиентов",
+          "position": {
+            "x": 18,
+            "y": 162
+          }
+        },
+        {
+          "id": "skorrektirovannyy-otkrytyy-prognoz-prodazh-4-43",
+          "type": "data",
+          "label": "Скорректированный (открытый) прогноз продаж",
+          "position": {
+            "x": 18,
+            "y": 181
+          }
+        },
+        {
+          "id": "optimalnyy-strahovoy-zapas-v-dnyah-pokrytiya-iz-modulya-io",
+          "type": "integration",
+          "label": "Оптимальный страховой запас в днях покрытия из модуля IO",
+          "group": "raschet-neogranichennoy-potrebnosti-v-popolnenii",
+          "outputs": [
+            "Макс. запас в днях покрытия (от ОСГ)"
+          ],
+          "system": "IO",
+          "position": {
+            "x": 775,
+            "y": 190
+          }
+        },
+        {
+          "id": "aktualnye-parametry-i-prioritety-prioritety-kvoty-parametry-popolneniya",
+          "type": "data",
+          "label": "Актуальные параметры и приоритеты (приоритеты, квоты, параметры пополнения)",
+          "position": {
+            "x": 18,
+            "y": 200
+          }
+        },
+        {
+          "id": "raschet-potrebnosti-na-kazhdoy-lokacii-netting",
+          "type": "step",
+          "label": "Расчет потребности на каждой локации (неттинг)",
+          "group": "raschet-neogranichennoy-potrebnosti-v-popolnenii",
+          "outputs": [
+            "Нетто потребность"
+          ],
+          "position": {
+            "x": 126,
+            "y": 256
+          }
+        },
+        {
+          "id": "raschet-potrebnosti-v-komponentah",
+          "type": "step",
+          "label": "Расчёт потребности в компонентах",
+          "group": "raschet-neogranichennoy-potrebnosti-v-popolnenii",
+          "outputs": [
+            "Неограниченная вторичная потребность"
+          ],
+          "position": {
+            "x": 330,
+            "y": 256
+          }
+        },
+        {
+          "id": "raschet-neogranichennoy-potrebnosti-v-proizvodstve-po-kvotam",
+          "type": "step",
+          "label": "Расчет неограниченной потребности в производстве по квотам",
+          "group": "raschet-neogranichennoy-potrebnosti-v-popolnenii",
+          "outputs": [
+            "Неограниченная потребность в производстве"
+          ],
+          "position": {
+            "x": 543,
+            "y": 256
+          }
+        },
+        {
+          "id": "raschet-neogranichennoy-potrebnosti-v-popolnenii-s-lokaciy-po-kvotam",
+          "type": "step",
+          "label": "Расчёт неограниченной потребности в пополнении с локаций по квотам",
+          "group": "raschet-neogranichennoy-potrebnosti-v-popolnenii",
+          "outputs": [
+            "Неограниченная потребность в перемещении"
+          ],
+          "position": {
+            "x": 780,
+            "y": 289
+          }
+        },
+        {
+          "id": "raschet-urovney-zapasov-ot-minimalnyh-maksimalnyh-dney-pokrytiya-i",
+          "type": "step",
+          "label": "Расчет уровней запасов от минимальных/максимальных дней покрытия и потребности",
+          "group": "raschet-neogranichennoy-potrebnosti-v-popolnenii",
+          "outputs": [
+            "Уровни запасов в плановых ЕИ"
+          ],
+          "position": {
+            "x": 1026,
+            "y": 289
+          }
+        },
+        {
+          "id": "peredacha-urovney-zapasov-iz-modulya-io",
+          "type": "integration",
+          "label": "Передача уровней запасов из модуля IO",
+          "system": "IO",
+          "position": {
+            "x": 9,
+            "y": 341
+          }
+        },
+        {
+          "id": "peredacha-grafika-proizvodstva-iz-modul-ps",
+          "type": "integration",
+          "label": "Передача графика производства из модуль PS",
+          "system": "PS",
+          "position": {
+            "x": 9,
+            "y": 412
+          }
+        },
+        {
+          "id": "dostupnyy-frv-resursov",
+          "type": "data",
+          "label": "Доступный ФРВ ресурсов",
+          "position": {
+            "x": 45,
+            "y": 497
+          }
+        },
+        {
+          "id": "operativnyy-plan-proizvodstva-4-68",
+          "type": "data",
+          "label": "Оперативный план производства",
+          "position": {
+            "x": 45,
+            "y": 514
+          }
+        },
+        {
+          "id": "neogranichennaya-potrebnost-v-popolnenii",
+          "type": "data",
+          "label": "Неограниченная потребность в пополнении",
+          "position": {
+            "x": 45,
+            "y": 531
+          }
+        },
+        {
+          "id": "aktualnye-prioritety",
+          "type": "data",
+          "label": "Актуальные приоритеты",
+          "position": {
+            "x": 45,
+            "y": 548
+          }
+        },
+        {
+          "id": "zapusk-algoritma-optimizator-evristika",
+          "type": "step",
+          "label": "Запуск алгоритма (оптимизатор/эвристика)",
+          "group": "raschet-obemnyh-planov-s-uchetom-ogranicheniy",
+          "position": {
+            "x": 45,
+            "y": 580
+          }
+        },
+        {
+          "id": "raschet-plana-proizvodstva",
+          "type": "step",
+          "label": "Расчет плана производства",
+          "group": "raschet-obemnyh-planov-s-uchetom-ogranicheniy",
+          "outputs": [
+            "План производства (драфт)"
+          ],
+          "position": {
+            "x": 254,
+            "y": 580
+          }
+        },
+        {
+          "id": "raschet-plana-peremescheniy",
+          "type": "step",
+          "label": "Расчет плана перемещений",
+          "group": "raschet-obemnyh-planov-s-uchetom-ogranicheniy",
+          "outputs": [
+            "План перемещений (драфт)"
+          ],
+          "position": {
+            "x": 455,
+            "y": 580
+          }
+        },
+        {
+          "id": "raschet-potrebnosti-v-kriticheskom-syre",
+          "type": "step",
+          "label": "Расчет потребности в критическом сырье",
+          "group": "raschet-obemnyh-planov-s-uchetom-ogranicheniy",
+          "outputs": [
+            "Потребность в критическом сырье"
+          ],
+          "position": {
+            "x": 657,
+            "y": 580
+          }
+        },
+        {
+          "id": "raschet-ogranichennogo-prognoza-prodazh",
+          "type": "step",
+          "label": "Расчет ограниченного прогноза продаж",
+          "group": "raschet-obemnyh-planov-s-uchetom-ogranicheniy",
+          "outputs": [
+            "Ограниченный прогноз продаж (драфт)"
+          ],
+          "position": {
+            "x": 858,
+            "y": 580
+          }
+        },
+        {
+          "id": "formirovanie-zhurnala-i-rezultatov",
+          "type": "step",
+          "label": "Формирование журнала и результатов",
+          "group": "raschet-obemnyh-planov-s-uchetom-ogranicheniy",
+          "position": {
+            "x": 1060,
+            "y": 580
+          }
+        },
+        {
+          "id": "urovni-zapasov-v-planovyh-ei",
+          "type": "data",
+          "label": "Уровни запасов в плановых ЕИ",
+          "position": {
+            "x": 9,
+            "y": 487
+          }
+        },
+        {
+          "id": "ogranichennyy-plan-prodazh-draft-2-151",
+          "type": "data",
+          "label": "Ограниченный План продаж (драфт)",
+          "position": {
+            "x": 195,
+            "y": 488
+          }
+        },
+        {
+          "id": "plan-proizvodstva-draft-2-151",
+          "type": "data",
+          "label": "План производства (драфт)",
+          "position": {
+            "x": 195,
+            "y": 517
+          }
+        },
+        {
+          "id": "plan-peremescheniy-draft-2-151",
+          "type": "data",
+          "label": "План перемещений (драфт)",
+          "position": {
+            "x": 195,
+            "y": 545
+          }
+        },
+        {
+          "id": "potrebnost-v-kriticheskom-syre-2-151",
+          "type": "data",
+          "label": "Потребность в критическом сырье",
+          "position": {
+            "x": 195,
+            "y": 573
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "e-raschet-potrebnosti-v-komponentah--raschet-planovogo-ostatka-0-i-formirovanie-preduprezhdeniya",
+          "source": "raschet-potrebnosti-v-komponentah",
+          "target": "raschet-planovogo-ostatka-0-i-formirovanie-preduprezhdeniya",
+          "kind": "process"
+        },
+        {
+          "id": "e-optimalnyy-strahovoy-zapas-v-dnyah-pokrytiya-iz-modulya-io--raschet-urovney-zapasov-ot-minimalnyh-maksimalnyh-dney-pokrytiya-i",
+          "source": "optimalnyy-strahovoy-zapas-v-dnyah-pokrytiya-iz-modulya-io",
+          "target": "raschet-urovney-zapasov-ot-minimalnyh-maksimalnyh-dney-pokrytiya-i",
+          "kind": "integration"
+        },
+        {
+          "id": "e-raschet-potrebnosti-na-kazhdoy-lokacii-netting--peredacha-urovney-zapasov-iz-modulya-io",
+          "source": "raschet-potrebnosti-na-kazhdoy-lokacii-netting",
+          "target": "peredacha-urovney-zapasov-iz-modulya-io",
+          "kind": "integration"
+        },
+        {
+          "id": "e-peredacha-urovney-zapasov-iz-modulya-io--raschet-potrebnosti-na-kazhdoy-lokacii-netting",
+          "source": "peredacha-urovney-zapasov-iz-modulya-io",
+          "target": "raschet-potrebnosti-na-kazhdoy-lokacii-netting",
+          "kind": "integration"
+        },
+        {
+          "id": "e-raschet-potrebnosti-na-kazhdoy-lokacii-netting--raschet-potrebnosti-v-komponentah",
+          "source": "raschet-potrebnosti-na-kazhdoy-lokacii-netting",
+          "target": "raschet-potrebnosti-v-komponentah",
+          "kind": "process"
+        },
+        {
+          "id": "e-raschet-potrebnosti-v-komponentah--raschet-neogranichennoy-potrebnosti-v-proizvodstve-po-kvotam",
+          "source": "raschet-potrebnosti-v-komponentah",
+          "target": "raschet-neogranichennoy-potrebnosti-v-proizvodstve-po-kvotam",
+          "kind": "process"
+        },
+        {
+          "id": "e-raschet-neogranichennoy-potrebnosti-v-popolnenii-s-lokaciy-po-kvotam--raschet-urovney-zapasov-ot-minimalnyh-maksimalnyh-dney-pokrytiya-i",
+          "source": "raschet-neogranichennoy-potrebnosti-v-popolnenii-s-lokaciy-po-kvotam",
+          "target": "raschet-urovney-zapasov-ot-minimalnyh-maksimalnyh-dney-pokrytiya-i",
+          "kind": "process"
+        },
+        {
+          "id": "e-raschet-urovney-zapasov-ot-minimalnyh-maksimalnyh-dney-pokrytiya-i--zapusk-algoritma-optimizator-evristika",
+          "source": "raschet-urovney-zapasov-ot-minimalnyh-maksimalnyh-dney-pokrytiya-i",
+          "target": "zapusk-algoritma-optimizator-evristika",
+          "kind": "process"
+        },
+        {
+          "id": "e-peredacha-grafika-proizvodstva-iz-modul-ps--raschet-potrebnosti-na-kazhdoy-lokacii-netting",
+          "source": "peredacha-grafika-proizvodstva-iz-modul-ps",
+          "target": "raschet-potrebnosti-na-kazhdoy-lokacii-netting",
+          "kind": "integration"
+        },
+        {
+          "id": "e-zapusk-algoritma-optimizator-evristika--raschet-plana-proizvodstva",
+          "source": "zapusk-algoritma-optimizator-evristika",
+          "target": "raschet-plana-proizvodstva",
+          "kind": "process"
+        },
+        {
+          "id": "e-raschet-plana-proizvodstva--raschet-plana-peremescheniy",
+          "source": "raschet-plana-proizvodstva",
+          "target": "raschet-plana-peremescheniy",
+          "kind": "process"
+        },
+        {
+          "id": "e-raschet-plana-peremescheniy--raschet-potrebnosti-v-kriticheskom-syre",
+          "source": "raschet-plana-peremescheniy",
+          "target": "raschet-potrebnosti-v-kriticheskom-syre",
+          "kind": "process"
+        },
+        {
+          "id": "e-raschet-potrebnosti-v-kriticheskom-syre--raschet-ogranichennogo-prognoza-prodazh",
+          "source": "raschet-potrebnosti-v-kriticheskom-syre",
+          "target": "raschet-ogranichennogo-prognoza-prodazh",
+          "kind": "process"
+        },
+        {
+          "id": "e-raschet-ogranichennogo-prognoza-prodazh--formirovanie-zhurnala-i-rezultatov",
+          "source": "raschet-ogranichennogo-prognoza-prodazh",
+          "target": "formirovanie-zhurnala-i-rezultatov",
+          "kind": "process"
+        }
+      ],
+      "inputs": [
+        {
+          "system": "IO",
+          "label": "Оптимальный страховой запас в днях покрытия из модуля IO",
+          "stage": 2,
+          "direction": "in"
+        },
+        {
+          "system": "IO",
+          "label": "Передача уровней запасов из модуля IO",
+          "stage": 2,
+          "direction": "in"
+        },
+        {
+          "system": "PS",
+          "label": "Передача графика производства из модуль PS",
+          "stage": 2,
+          "direction": "in"
+        },
+        {
+          "system": "ERP",
+          "label": "ERP",
+          "stage": 2,
+          "direction": "in"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "id": "stage-3-analiz-i-korrektirovka-rezultatov-scenarnoe-planirovanie",
+      "number": 3,
+      "title": "Анализ и корректировка результатов /Сценарное планирование",
+      "shortTitle": "Анализ и корректировка результатов",
+      "keyOutputs": [
+        "Производства (плановые заказы)",
+        "Потребность в критическом сырье (заявки на закупку)",
+        "Ограниченный прогноз продаж"
+      ],
+      "warningsCount": 5,
+      "groups": [
+        {
+          "id": "rabota-s-monitorom-preduprezhdeniy",
+          "label": "Работа с монитором предупреждений"
+        },
+        {
+          "id": "vnesenie-ruchnyh-korrektirovok",
+          "label": "Внесение ручных корректировок"
+        },
+        {
+          "id": "publikaciya-planov",
+          "label": "Публикация планов"
+        },
+        {
+          "id": "vnesenie-ruchnyh-korrektirovok-po-prichine-deficit-gp-iz-za-nizkogo",
+          "label": "Внесение ручных корректировок по причине \"Дефицит ГП из-за низкого приоритета\""
+        },
+        {
+          "id": "raschet-scenariev-dlya-s-op",
+          "label": "Расчет сценариев для S&OP"
+        }
+      ],
+      "nodes": [
+        {
+          "id": "ogranichennyy-plan-prodazh-draft-5-155",
+          "type": "data",
+          "label": "Ограниченный план продаж (драфт)",
+          "position": {
+            "x": 21,
+            "y": 123
+          }
+        },
+        {
+          "id": "formirovanie-preduprezhdeniy-sp-posle-progona-planirovaniya-5-78",
+          "type": "warning",
+          "label": "Формирование предупреждений SP после прогона планирования",
+          "description": "Причина в низком приоритете спроса -> Ведение приоритетов Модели оптимизации\nПричина в нехватке объемов в замороженном горизонте -> Подготовка сценариев для Supply Review\nПричина в маленьком прогнозе при большом размере партии, потенциальный MTO продукт -> Внесение ручных корректировок по причине \"MTO\"\nПричина в приоритете производства по марже в час в сочетании с большим объемом потребности продуктов-конкурентов -> Внесение ручных корректировок по причине \"Дефицит ГП из-за низкого приоритета\"\nПричина в нехватке СиМ -> Подготовка сценариев для Supply Review\nПричина в цикле производства -> Внесение ручных корректировок по причине \"Дефицит ГП из-за низкого приоритета\"\nПрочие причины: Проверить основные производственные и логистические данные -> Ведение основных данных",
+          "group": "rabota-s-monitorom-preduprezhdeniy",
+          "outputs": [
+            "Предупреждение по Low Stock",
+            "Предупреждение по Out of Stock",
+            "Предупреждение по Over Stock",
+            "Предупреждение по неликвидам",
+            "Предупреждение по загрузке ресурсов"
+          ],
+          "position": {
+            "x": 232,
+            "y": 123
+          }
+        },
+        {
+          "id": "plan-proizvodstva-draft-5-155",
+          "type": "data",
+          "label": "План производства (драфт)",
+          "position": {
+            "x": 21,
+            "y": 151
+          }
+        },
+        {
+          "id": "plan-peremescheniy-draft-5-155",
+          "type": "data",
+          "label": "План перемещений (драфт)",
+          "position": {
+            "x": 21,
+            "y": 179
+          }
+        },
+        {
+          "id": "potrebnost-v-kriticheskom-syre-5-155",
+          "type": "data",
+          "label": "Потребность в критическом сырье",
+          "position": {
+            "x": 21,
+            "y": 208
+          }
+        },
+        {
+          "id": "informaciya-po-buduschim-zakazam-klientov",
+          "type": "data",
+          "label": "Информация по будущим заказам клиентов",
+          "position": {
+            "x": 99,
+            "y": 307
+          }
+        },
+        {
+          "id": "pereschet-plana-s-uchetom-korrektirovok-5-85",
+          "type": "step",
+          "label": "Пересчет плана с учетом корректировок",
+          "description": "Корректировка MTO",
+          "group": "vnesenie-ruchnyh-korrektirovok",
+          "position": {
+            "x": 259,
+            "y": 317
+          }
+        },
+        {
+          "id": "raschet-ogranichennyh-planov",
+          "type": "step",
+          "label": "Расчёт Ограниченных Планов",
+          "group": "vnesenie-ruchnyh-korrektirovok",
+          "position": {
+            "x": 788,
+            "y": 348
+          }
+        },
+        {
+          "id": "informaciya-o-polomkah-ostanovkah-liniy",
+          "type": "data",
+          "label": "Информация о поломках / остановках линий",
+          "position": {
+            "x": 99,
+            "y": 356
+          }
+        },
+        {
+          "id": "pereschet-plana-s-uchetom-korrektirovok-5-116",
+          "type": "step",
+          "label": "Пересчет плана с учетом корректировок",
+          "description": "Поломки, форс-мажоры",
+          "group": "vnesenie-ruchnyh-korrektirovok",
+          "position": {
+            "x": 258,
+            "y": 366
+          }
+        },
+        {
+          "id": "peredacha-ogranichennogo-prognoza-v-dp",
+          "type": "step",
+          "label": "Передача ограниченного прогноза в DP",
+          "group": "publikaciya-planov",
+          "outputs": [
+            "Ограниченный прогноз продаж -> Выгрузка в DP"
+          ],
+          "system": "DP",
+          "position": {
+            "x": 1007,
+            "y": 369
+          }
+        },
+        {
+          "id": "preduprezhdenie-po-over-stock-5-93",
+          "type": "data",
+          "label": "Предупреждение по Over Stock",
+          "position": {
+            "x": 99,
+            "y": 406
+          }
+        },
+        {
+          "id": "pereschet-plana-s-uchetom-korrektirovok-5-117",
+          "type": "step",
+          "label": "Пересчет плана с учетом корректировок",
+          "description": "Излишки полуфабриката с коротким сроком годности",
+          "group": "vnesenie-ruchnyh-korrektirovok",
+          "position": {
+            "x": 256,
+            "y": 420
+          }
+        },
+        {
+          "id": "korrektirovka-plana-proizvodstva-5-82",
+          "type": "step",
+          "label": "Корректировка плана производства",
+          "group": "vnesenie-ruchnyh-korrektirovok",
+          "position": {
+            "x": 43,
+            "y": 439
+          }
+        },
+        {
+          "id": "publikaciya-planovyh-zakazov",
+          "type": "step",
+          "label": "Публикация плановых заказов",
+          "group": "publikaciya-planov",
+          "outputs": [
+            "План производства -> Выгрузка в PS"
+          ],
+          "system": "PS",
+          "position": {
+            "x": 1007,
+            "y": 452
+          }
+        },
+        {
+          "id": "korrektirovka-plana-proizvodstva-5-95",
+          "type": "step",
+          "label": "Корректировка плана производства",
+          "group": "vnesenie-ruchnyh-korrektirovok-po-prichine-deficit-gp-iz-za-nizkogo",
+          "position": {
+            "x": 258,
+            "y": 473
+          }
+        },
+        {
+          "id": "pereschet-plana-s-uchetom-korrektirovok-5-98",
+          "type": "step",
+          "label": "Пересчет плана с учетом корректировок",
+          "group": "vnesenie-ruchnyh-korrektirovok-po-prichine-deficit-gp-iz-za-nizkogo",
+          "position": {
+            "x": 679,
+            "y": 476
+          }
+        },
+        {
+          "id": "korrektirovka-plana-peremescheniy",
+          "type": "step",
+          "label": "Корректировка плана перемещений",
+          "group": "vnesenie-ruchnyh-korrektirovok-po-prichine-deficit-gp-iz-za-nizkogo",
+          "position": {
+            "x": 258,
+            "y": 503
+          }
+        },
+        {
+          "id": "preduprezhdenie-po-over-stock-5-158",
+          "type": "data",
+          "label": "Предупреждение по Over Stock",
+          "position": {
+            "x": 165,
+            "y": 514
+          }
+        },
+        {
+          "id": "publikaciya-zayavok-na-zakupku",
+          "type": "step",
+          "label": "Публикация заявок на закупку",
+          "group": "publikaciya-planov",
+          "outputs": [
+            "Потребность в критическом сырье -> Выгрузка в MRP"
+          ],
+          "system": "MRP",
+          "position": {
+            "x": 1007,
+            "y": 520
+          }
+        },
+        {
+          "id": "formirovanie-preduprezhdeniy-sp-posle-progona-planirovaniya-5-145",
+          "type": "data",
+          "label": "Формирование предупреждений SP после прогона планирования",
+          "position": {
+            "x": 43,
+            "y": 528
+          }
+        },
+        {
+          "id": "korrektirovka-plana-proizvodstva-v-scenarii",
+          "type": "step",
+          "label": "Корректировка плана производства в сценарии",
+          "group": "raschet-scenariev-dlya-s-op",
+          "position": {
+            "x": 351,
+            "y": 558
+          }
+        },
+        {
+          "id": "pereschet-plana-v-scenarii",
+          "type": "step",
+          "label": "Пересчет плана в сценарии",
+          "group": "raschet-scenariev-dlya-s-op",
+          "position": {
+            "x": 860,
+            "y": 563
+          }
+        },
+        {
+          "id": "korrektirovka-plana-peremescheniy-v-scenarii",
+          "type": "step",
+          "label": "Корректировка плана перемещений в сценарии",
+          "group": "raschet-scenariev-dlya-s-op",
+          "position": {
+            "x": 351,
+            "y": 594
+          }
+        },
+        {
+          "id": "publikaciya-zayavok-na-peremeschenie",
+          "type": "step",
+          "label": "Публикация заявок на перемещение",
+          "group": "publikaciya-planov",
+          "outputs": [
+            "План перемещений -> Выгрузка в ERP"
+          ],
+          "system": "ERP",
+          "position": {
+            "x": 1007,
+            "y": 594
+          }
+        },
+        {
+          "id": "sozdanie-scenariya",
+          "type": "step",
+          "label": "Создание сценария",
+          "group": "raschet-scenariev-dlya-s-op",
+          "position": {
+            "x": 236,
+            "y": 600
+          }
+        },
+        {
+          "id": "resheniya-o-vnesenii-korrektirovok-v-plany",
+          "type": "data",
+          "label": "Решения о внесении корректировок в Планы",
+          "position": {
+            "x": 96,
+            "y": 601
+          }
+        },
+        {
+          "id": "izmenenie-dostupnyh-moschnostey-v-scenarii",
+          "type": "step",
+          "label": "Изменение доступных мощностей в сценарии",
+          "group": "raschet-scenariev-dlya-s-op",
+          "position": {
+            "x": 351,
+            "y": 619
+          }
+        },
+        {
+          "id": "izmenenie-skorostey-proizvodstva-v-scenarii",
+          "type": "step",
+          "label": "Изменение скоростей производства в сценарии",
+          "group": "raschet-scenariev-dlya-s-op",
+          "position": {
+            "x": 351,
+            "y": 645
+          }
+        },
+        {
+          "id": "s-op",
+          "type": "data",
+          "label": "S&OP",
+          "position": {
+            "x": 43,
+            "y": 645
+          }
+        },
+        {
+          "id": "izmenenie-urovney-zapasov-v-scenarii",
+          "type": "step",
+          "label": "Изменение уровней запасов в сценарии",
+          "group": "raschet-scenariev-dlya-s-op",
+          "position": {
+            "x": 351,
+            "y": 677
+          }
+        },
+        {
+          "id": "analiz-preduprezhdeniy",
+          "type": "data",
+          "label": "Анализ предупреждений",
+          "position": {
+            "x": 379,
+            "y": 487
+          }
+        },
+        {
+          "id": "planovyy-ostatok-draft",
+          "type": "data",
+          "label": "Плановый остаток (драфт)",
+          "position": {
+            "x": 560,
+            "y": 560
+          }
+        },
+        {
+          "id": "scenarii",
+          "type": "data",
+          "label": "Сценарии",
+          "position": {
+            "x": 560,
+            "y": 586
+          }
+        },
+        {
+          "id": "opublikovannye-plany",
+          "type": "data",
+          "label": "Опубликованные планы:",
+          "position": {
+            "x": 737,
+            "y": 487
+          }
+        },
+        {
+          "id": "proizvodstva-planovye-zakazy",
+          "type": "data",
+          "label": "Производства (плановые заказы)",
+          "position": {
+            "x": 737,
+            "y": 509
+          }
+        },
+        {
+          "id": "potrebnost-v-kriticheskom-syre-zayavki-na-zakupku",
+          "type": "data",
+          "label": "Потребность в критическом сырье (заявки на закупку)",
+          "position": {
+            "x": 737,
+            "y": 532
+          }
+        },
+        {
+          "id": "ogranichennyy-prognoz-prodazh",
+          "type": "data",
+          "label": "Ограниченный прогноз продаж",
+          "position": {
+            "x": 737,
+            "y": 555
+          }
+        },
+        {
+          "id": "planovyy-ostatok",
+          "type": "data",
+          "label": "Плановый остаток",
+          "position": {
+            "x": 737,
+            "y": 577
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "e-formirovanie-preduprezhdeniy-sp-posle-progona-planirovaniya-5-78--korrektirovka-plana-proizvodstva-5-82",
+          "source": "formirovanie-preduprezhdeniy-sp-posle-progona-planirovaniya-5-78",
+          "target": "korrektirovka-plana-proizvodstva-5-82",
+          "kind": "process"
+        },
+        {
+          "id": "e-pereschet-plana-s-uchetom-korrektirovok-5-85--raschet-ogranichennyh-planov",
+          "source": "pereschet-plana-s-uchetom-korrektirovok-5-85",
+          "target": "raschet-ogranichennyh-planov",
+          "kind": "process"
+        },
+        {
+          "id": "e-korrektirovka-plana-proizvodstva-5-82--pereschet-plana-s-uchetom-korrektirovok-5-85",
+          "source": "korrektirovka-plana-proizvodstva-5-82",
+          "target": "pereschet-plana-s-uchetom-korrektirovok-5-85",
+          "kind": "process"
+        },
+        {
+          "id": "e-pereschet-plana-s-uchetom-korrektirovok-5-117--raschet-ogranichennyh-planov",
+          "source": "pereschet-plana-s-uchetom-korrektirovok-5-117",
+          "target": "raschet-ogranichennyh-planov",
+          "kind": "process"
+        },
+        {
+          "id": "e-pereschet-plana-s-uchetom-korrektirovok-5-116--raschet-ogranichennyh-planov",
+          "source": "pereschet-plana-s-uchetom-korrektirovok-5-116",
+          "target": "raschet-ogranichennyh-planov",
+          "kind": "process"
+        },
+        {
+          "id": "e-raschet-ogranichennyh-planov--publikaciya-planovyh-zakazov",
+          "source": "raschet-ogranichennyh-planov",
+          "target": "publikaciya-planovyh-zakazov",
+          "kind": "process"
+        },
+        {
+          "id": "e-korrektirovka-plana-proizvodstva-5-82--pereschet-plana-s-uchetom-korrektirovok-5-116",
+          "source": "korrektirovka-plana-proizvodstva-5-82",
+          "target": "pereschet-plana-s-uchetom-korrektirovok-5-116",
+          "kind": "process"
+        },
+        {
+          "id": "e-pereschet-plana-s-uchetom-korrektirovok-5-98--raschet-ogranichennyh-planov",
+          "source": "pereschet-plana-s-uchetom-korrektirovok-5-98",
+          "target": "raschet-ogranichennyh-planov",
+          "kind": "process"
+        },
+        {
+          "id": "e-korrektirovka-plana-proizvodstva-5-82--pereschet-plana-s-uchetom-korrektirovok-5-117",
+          "source": "korrektirovka-plana-proizvodstva-5-82",
+          "target": "pereschet-plana-s-uchetom-korrektirovok-5-117",
+          "kind": "process"
+        },
+        {
+          "id": "e-korrektirovka-plana-proizvodstva-5-95--pereschet-plana-s-uchetom-korrektirovok-5-98",
+          "source": "korrektirovka-plana-proizvodstva-5-95",
+          "target": "pereschet-plana-s-uchetom-korrektirovok-5-98",
+          "kind": "process"
+        },
+        {
+          "id": "e-korrektirovka-plana-peremescheniy--pereschet-plana-s-uchetom-korrektirovok-5-98",
+          "source": "korrektirovka-plana-peremescheniy",
+          "target": "pereschet-plana-s-uchetom-korrektirovok-5-98",
+          "kind": "process"
+        },
+        {
+          "id": "e-sozdanie-scenariya--korrektirovka-plana-proizvodstva-v-scenarii",
+          "source": "sozdanie-scenariya",
+          "target": "korrektirovka-plana-proizvodstva-v-scenarii",
+          "kind": "process"
+        },
+        {
+          "id": "e-korrektirovka-plana-proizvodstva-v-scenarii--pereschet-plana-v-scenarii",
+          "source": "korrektirovka-plana-proizvodstva-v-scenarii",
+          "target": "pereschet-plana-v-scenarii",
+          "kind": "process"
+        },
+        {
+          "id": "e-sozdanie-scenariya--korrektirovka-plana-peremescheniy-v-scenarii",
+          "source": "sozdanie-scenariya",
+          "target": "korrektirovka-plana-peremescheniy-v-scenarii",
+          "kind": "process"
+        },
+        {
+          "id": "e-korrektirovka-plana-peremescheniy-v-scenarii--pereschet-plana-v-scenarii",
+          "source": "korrektirovka-plana-peremescheniy-v-scenarii",
+          "target": "pereschet-plana-v-scenarii",
+          "kind": "process"
+        },
+        {
+          "id": "e-izmenenie-urovney-zapasov-v-scenarii--pereschet-plana-v-scenarii",
+          "source": "izmenenie-urovney-zapasov-v-scenarii",
+          "target": "pereschet-plana-v-scenarii",
+          "kind": "process"
+        },
+        {
+          "id": "e-izmenenie-dostupnyh-moschnostey-v-scenarii--pereschet-plana-v-scenarii",
+          "source": "izmenenie-dostupnyh-moschnostey-v-scenarii",
+          "target": "pereschet-plana-v-scenarii",
+          "kind": "process"
+        },
+        {
+          "id": "e-izmenenie-skorostey-proizvodstva-v-scenarii--pereschet-plana-v-scenarii",
+          "source": "izmenenie-skorostey-proizvodstva-v-scenarii",
+          "target": "pereschet-plana-v-scenarii",
+          "kind": "process"
+        },
+        {
+          "id": "e-sozdanie-scenariya--izmenenie-dostupnyh-moschnostey-v-scenarii",
+          "source": "sozdanie-scenariya",
+          "target": "izmenenie-dostupnyh-moschnostey-v-scenarii",
+          "kind": "process"
+        },
+        {
+          "id": "e-sozdanie-scenariya--izmenenie-skorostey-proizvodstva-v-scenarii",
+          "source": "sozdanie-scenariya",
+          "target": "izmenenie-skorostey-proizvodstva-v-scenarii",
+          "kind": "process"
+        },
+        {
+          "id": "e-sozdanie-scenariya--izmenenie-urovney-zapasov-v-scenarii",
+          "source": "sozdanie-scenariya",
+          "target": "izmenenie-urovney-zapasov-v-scenarii",
+          "kind": "process"
+        }
+      ],
+      "inputs": [],
+      "outputs": [
+        {
+          "system": "DP",
+          "label": "Ограниченный прогноз продаж -> Выгрузка в DP",
+          "stage": 3,
+          "direction": "out"
+        },
+        {
+          "system": "PS",
+          "label": "План производства -> Выгрузка в PS",
+          "stage": 3,
+          "direction": "out"
+        },
+        {
+          "system": "MRP",
+          "label": "Потребность в критическом сырье -> Выгрузка в MRP",
+          "stage": 3,
+          "direction": "out"
+        },
+        {
+          "system": "ERP",
+          "label": "План перемещений -> Выгрузка в ERP",
+          "stage": 3,
+          "direction": "out"
+        }
+      ]
+    },
+    {
+      "id": "stage-4-raschet-plana-popolneniya-drp-deployment",
+      "number": 4,
+      "title": "Расчёт плана пополнения (DRP/Deployment) + Транспортбилдер",
+      "shortTitle": "Расчёт плана пополнения (DRP/Deployment)",
+      "keyOutputs": [
+        "План пополнения по дням",
+        "Схема загрузки транспортных средств"
+      ],
+      "warningsCount": 0,
+      "groups": [
+        {
+          "id": "raschet-plana-popolneniya-raspredeleniya",
+          "label": "Расчет плана пополнения/распределения"
+        }
+      ],
+      "nodes": [
+        {
+          "id": "skorrektirovannyy-otkrytyy-prognoz-prodazh-6-105",
+          "type": "data",
+          "label": "Скорректированный (открытый) прогноз продаж",
+          "position": {
+            "x": 30,
+            "y": 174
+          }
+        },
+        {
+          "id": "operativnyy-plan-proizvodstva-6-105",
+          "type": "data",
+          "label": "Оперативный план производства",
+          "position": {
+            "x": 30,
+            "y": 201
+          }
+        },
+        {
+          "id": "otkrytye-zakazy-klientov-6-105",
+          "type": "data",
+          "label": "Открытые заказы клиентов",
+          "position": {
+            "x": 30,
+            "y": 227
+          }
+        },
+        {
+          "id": "multisorsing",
+          "type": "data",
+          "label": "Мультисорсинг",
+          "position": {
+            "x": 30,
+            "y": 253
+          }
+        },
+        {
+          "id": "ogranicheniya-resursov-po-personalu",
+          "type": "data",
+          "label": "Ограничения ресурсов по персоналу",
+          "position": {
+            "x": 30,
+            "y": 280
+          }
+        },
+        {
+          "id": "lid-taym-transportirovki",
+          "type": "data",
+          "label": "Лид тайм транспортировки",
+          "position": {
+            "x": 30,
+            "y": 306
+          }
+        },
+        {
+          "id": "raschet-plana-popolneniya-raspredeleniya-deployment",
+          "type": "step",
+          "label": "Расчет плана пополнения/ распределения (деплоймент)",
+          "group": "raschet-plana-popolneniya-raspredeleniya",
+          "outputs": [
+            "План пополнения по дням"
+          ],
+          "position": {
+            "x": 434,
+            "y": 312
+          }
+        },
+        {
+          "id": "formirovanie-rekomendaciy-s-uchetom-parametrov-nagruzki-na-transport",
+          "type": "step",
+          "label": "Формирование рекомендаций с учетом параметров нагрузки на транспорт",
+          "group": "raschet-plana-popolneniya-raspredeleniya",
+          "outputs": [
+            "Схема загрузки транспортных средств (драфт)"
+          ],
+          "position": {
+            "x": 647,
+            "y": 312
+          }
+        },
+        {
+          "id": "korrektirovki-rekomendaciy-zayavok-na-peremeschenie",
+          "type": "step",
+          "label": "Корректировки рекомендаций (заявок на перемещение)",
+          "group": "raschet-plana-popolneniya-raspredeleniya",
+          "position": {
+            "x": 860,
+            "y": 312
+          }
+        },
+        {
+          "id": "publikaciya-rekomendaciy-zayavok-na-peremeschenie",
+          "type": "step",
+          "label": "Публикация рекомендаций (заявок на перемещение)",
+          "group": "raschet-plana-popolneniya-raspredeleniya",
+          "outputs": [
+            "Схема загрузки транспортных средств"
+          ],
+          "position": {
+            "x": 1073,
+            "y": 312
+          }
+        },
+        {
+          "id": "matricy-peremescheniy-sku-rc",
+          "type": "data",
+          "label": "Матрицы перемещений SKU\\РЦ",
+          "position": {
+            "x": 30,
+            "y": 332
+          }
+        },
+        {
+          "id": "istochniki-postavki",
+          "type": "data",
+          "label": "Источники поставки",
+          "position": {
+            "x": 30,
+            "y": 359
+          }
+        },
+        {
+          "id": "razmeschennye-zakazy-po",
+          "type": "data",
+          "label": "Размещенные заказы (PO)",
+          "position": {
+            "x": 30,
+            "y": 385
+          }
+        },
+        {
+          "id": "planovye-prihody",
+          "type": "data",
+          "label": "Плановые приходы",
+          "position": {
+            "x": 30,
+            "y": 412
+          }
+        },
+        {
+          "id": "matricy-peremescheniy-sku-ndc-rc",
+          "type": "data",
+          "label": "Матрицы перемещений SKU\\НДЦ\\РЦ",
+          "position": {
+            "x": 30,
+            "y": 438
+          }
+        },
+        {
+          "id": "urovni-sz",
+          "type": "data",
+          "label": "Уровни СЗ",
+          "position": {
+            "x": 30,
+            "y": 464
+          }
+        },
+        {
+          "id": "min-partii-na-transportirovku-i-kratnosti",
+          "type": "data",
+          "label": "Мин. Партии на транспортировку и кратности",
+          "position": {
+            "x": 30,
+            "y": 491
+          }
+        },
+        {
+          "id": "ogranicheniya-po-propusknoy-sposobnosti",
+          "type": "data",
+          "label": "Ограничения по пропускной способности",
+          "position": {
+            "x": 30,
+            "y": 517
+          }
+        },
+        {
+          "id": "osg",
+          "type": "data",
+          "label": "ОСГ",
+          "position": {
+            "x": 30,
+            "y": 543
+          }
+        },
+        {
+          "id": "allokaciya",
+          "type": "data",
+          "label": "Аллокация",
+          "position": {
+            "x": 30,
+            "y": 570
+          }
+        },
+        {
+          "id": "plan-popolneniya-po-dnyam",
+          "type": "data",
+          "label": "План пополнения по дням",
+          "position": {
+            "x": 916,
+            "y": 490
+          }
+        },
+        {
+          "id": "shema-zagruzki-transportnyh-sredstv",
+          "type": "data",
+          "label": "Схема загрузки транспортных средств",
+          "position": {
+            "x": 1099,
+            "y": 490
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "e-raschet-plana-popolneniya-raspredeleniya-deployment--formirovanie-rekomendaciy-s-uchetom-parametrov-nagruzki-na-transport",
+          "source": "raschet-plana-popolneniya-raspredeleniya-deployment",
+          "target": "formirovanie-rekomendaciy-s-uchetom-parametrov-nagruzki-na-transport",
+          "kind": "process"
+        },
+        {
+          "id": "e-formirovanie-rekomendaciy-s-uchetom-parametrov-nagruzki-na-transport--korrektirovki-rekomendaciy-zayavok-na-peremeschenie",
+          "source": "formirovanie-rekomendaciy-s-uchetom-parametrov-nagruzki-na-transport",
+          "target": "korrektirovki-rekomendaciy-zayavok-na-peremeschenie",
+          "kind": "process"
+        },
+        {
+          "id": "e-korrektirovki-rekomendaciy-zayavok-na-peremeschenie--publikaciya-rekomendaciy-zayavok-na-peremeschenie",
+          "source": "korrektirovki-rekomendaciy-zayavok-na-peremeschenie",
+          "target": "publikaciya-rekomendaciy-zayavok-na-peremeschenie",
+          "kind": "process"
+        }
+      ],
+      "inputs": [
+        {
+          "system": "PS",
+          "label": "Передача графика производства из модуль PS",
+          "stage": 4,
+          "direction": "in"
+        }
+      ],
+      "outputs": []
+    }
+  ],
+  "overviewEdges": [
+    {
+      "id": "ov-DP--stage-1-obogaschenie-prognoza-zakazami",
+      "source": "DP",
+      "target": "stage-1-obogaschenie-prognoza-zakazami",
+      "kind": "integration"
+    },
+    {
+      "id": "ov-stage-1-obogaschenie-prognoza-zakazami--stage-2-raschet-obemnyh-planov",
+      "source": "stage-1-obogaschenie-prognoza-zakazami",
+      "target": "stage-2-raschet-obemnyh-planov",
+      "kind": "process"
+    },
+    {
+      "id": "ov-stage-3-analiz-i-korrektirovka-rezultatov-scenarnoe-planirovanie--DP",
+      "source": "stage-3-analiz-i-korrektirovka-rezultatov-scenarnoe-planirovanie",
+      "target": "DP",
+      "kind": "integration"
+    },
+    {
+      "id": "ov-ERP--stage-2-raschet-obemnyh-planov",
+      "source": "ERP",
+      "target": "stage-2-raschet-obemnyh-planov",
+      "kind": "integration"
+    },
+    {
+      "id": "ov-IO--stage-2-raschet-obemnyh-planov",
+      "source": "IO",
+      "target": "stage-2-raschet-obemnyh-planov",
+      "kind": "integration"
+    },
+    {
+      "id": "ov-PS--stage-4-raschet-plana-popolneniya-drp-deployment",
+      "source": "PS",
+      "target": "stage-4-raschet-plana-popolneniya-drp-deployment",
+      "kind": "integration"
+    },
+    {
+      "id": "ov-stage-3-analiz-i-korrektirovka-rezultatov-scenarnoe-planirovanie--PS",
+      "source": "stage-3-analiz-i-korrektirovka-rezultatov-scenarnoe-planirovanie",
+      "target": "PS",
+      "kind": "integration"
+    },
+    {
+      "id": "ov-stage-2-raschet-obemnyh-planov--stage-3-analiz-i-korrektirovka-rezultatov-scenarnoe-planirovanie",
+      "source": "stage-2-raschet-obemnyh-planov",
+      "target": "stage-3-analiz-i-korrektirovka-rezultatov-scenarnoe-planirovanie",
+      "kind": "process"
+    },
+    {
+      "id": "ov-stage-3-analiz-i-korrektirovka-rezultatov-scenarnoe-planirovanie--stage-4-raschet-plana-popolneniya-drp-deployment",
+      "source": "stage-3-analiz-i-korrektirovka-rezultatov-scenarnoe-planirovanie",
+      "target": "stage-4-raschet-plana-popolneniya-drp-deployment",
+      "kind": "process"
+    }
+  ]
+}

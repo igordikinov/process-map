@@ -1,15 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { ProcessMapSchema, validateIntegrity, type ProcessMap, type ProcessNode } from '../src/data/schema.ts';
 import { buildSampleProcessMap } from './fixtures/sample-process.ts';
+import processJson from '../src/data/process.json';
+import requiredNodeIds from './fixtures/required-nodes.json';
 
-// Источник данных для позитивных тестов схемы/целостности.
-// Сейчас: программная фикстура (src/data/process.json ещё не создан —
-// это задача process-map-np4, импорт из презентации).
-// После её выполнения переключить на реальный файл:
-//   import processJson from '../src/data/process.json';
-//   function loadProcessMap(): unknown { return processJson; }
+// Источник данных для позитивных тестов схемы/целостности — реальный
+// src/data/process.json, сгенерированный scripts/import-pptx.py из презентации
+// (задача process-map-np4). Фикстура buildSampleProcessMap остаётся для
+// негативных кейсов, где документ намеренно портится.
 function loadProcessMap(): unknown {
-  return buildSampleProcessMap();
+  return processJson;
 }
 
 describe('ProcessMapSchema', () => {
@@ -32,6 +32,14 @@ describe('ProcessMapSchema', () => {
     const map = ProcessMapSchema.parse(loadProcessMap());
     const ids = map.stages.flatMap((stage) => stage.nodes.map((node) => node.id));
     expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it('содержит все обязательные id узлов из tests/fixtures/required-nodes.json', () => {
+    const map = ProcessMapSchema.parse(loadProcessMap());
+    const present = new Set(map.stages.flatMap((stage) => stage.nodes.map((node) => node.id)));
+    expect(requiredNodeIds.length).toBeGreaterThanOrEqual(40);
+    const missing = requiredNodeIds.filter((id) => !present.has(id));
+    expect(missing).toEqual([]);
   });
 
   it('отвергает узел без обязательного position', () => {
