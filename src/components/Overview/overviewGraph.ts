@@ -14,6 +14,7 @@
 import type { Edge as FlowEdge, Node as FlowNode } from '@xyflow/react';
 import type { ExternalIO, ProcessMap, SystemCode } from '../../data/schema';
 import { ru } from '../../i18n/ru';
+import { IO_NODE_SIZE, STAGE_NODE_SIZE } from '../../theme/sizes';
 import { STAGE_HANDLE, type StageNodeType } from '../nodes/StageNode';
 import { SYSTEM_HANDLE, type IntegrationNodeType } from '../nodes/IntegrationNode';
 import type { LaneNodeType } from '../nodes/LaneNode';
@@ -22,11 +23,13 @@ export type OverviewNode = LaneNodeType | IntegrationNodeType | StageNodeType;
 
 // ───────────────────────────── геометрия макета ─────────────────────────────
 
-/** Ширина/высота карточки этапа — дублирует --pm-stage-node-* (SPEC §4.1). */
-const STAGE_WIDTH = 274;
-const STAGE_HEIGHT = 210;
-/** Шаг между карточками этапов: 274 + 30 = 304 (макет: left 48/352/656/960). */
-const STAGE_STEP = 304;
+/** Ширина/высота карточки этапа — из src/theme/sizes.ts (SPEC §4.1). */
+const STAGE_WIDTH = STAGE_NODE_SIZE.width;
+const STAGE_HEIGHT = STAGE_NODE_SIZE.height;
+/** Зазор между карточками этапов (макет: left 48/352/656/960 → 352 − 48 − 274). */
+const STAGE_GAP = 30;
+/** Шаг между карточками этапов: 274 + 30 = 304. */
+const STAGE_STEP = STAGE_WIDTH + STAGE_GAP;
 const STAGE_X0 = 48;
 const STAGE_Y = 200;
 
@@ -40,8 +43,8 @@ const LANE_RIGHT_GAP = 26;
 /** Горизонтальный отступ карточек систем внутри свимлейна (макет: 60 − 20). */
 const LANE_PADDING_X = 40;
 
-const IO_WIDTH = 200;
-const IO_HEIGHT = 40;
+const IO_WIDTH = IO_NODE_SIZE.width;
+const IO_HEIGHT = IO_NODE_SIZE.height;
 /** Смещение карточки системы от верха свимлейна (макет: 88 − 64 = 498 − 474). */
 const IO_OFFSET_Y = 24;
 

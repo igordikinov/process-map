@@ -3,12 +3,16 @@
 // Намеренно не зависит от React Flow: Handle'ы и NodeProps живут в StageNode.tsx,
 // а карточку можно рендерить и тестировать без ReactFlowProvider и без моков
 // размеров контейнера.
+import { iconUrl } from '../../../assets/icons';
 import type { Stage } from '../../../data/schema';
 import { ru } from '../../../i18n/ru';
 import { useProcessStore } from '../../../store/useProcessStore';
 import styles from './StageCard.module.css';
 
-const WARNING_ICON = `${import.meta.env.BASE_URL}icons/warning-triangle.svg`;
+// Путь считает сборщик, а не строка в рантайме: при `base: './'` (SPEC §6)
+// рантайм-путь резолвился бы от URL документа и ломался бы во встраивании
+// без завершающего слэша. Подробности — в src/assets/icons/index.ts.
+const WARNING_ICON = iconUrl('warning-triangle');
 
 export interface StageCardProps {
   stage: Stage;

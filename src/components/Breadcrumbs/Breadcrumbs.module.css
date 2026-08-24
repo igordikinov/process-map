@@ -1,0 +1,105 @@
+/*
+ * Шапка экрана детализации, 52 px (SPEC §4.2, артборд A2 `design/StageDetail.dc.html`).
+ * Только var(...) из src/theme/tokens.css — ни цветов, ни размеров литералами
+ * (CLAUDE.md «Кодовые правила»). Значений точно под макет в шкале ДС нет для
+ * пары чисел (13px текст крошек, 28px кнопка «Назад», opacity .8 иконки) —
+ * взяты ближайшие существующие токены, подробности в отчёте задачи
+ * process-map-mpg; сами токены не заводились (src/theme/** не трогаем в этой
+ * задаче — им параллельно занят другой агент).
+ */
+
+.header {
+  display: flex;
+  height: var(--pm-header-height);
+  flex: none;
+  align-items: center;
+  padding: 0 var(--scp-spacing-xl);
+  border-bottom: 1px solid var(--scp-border-neutral-tertiary);
+  background: var(--scp-background-primary);
+  gap: var(--scp-spacing-md);
+}
+
+/* Точный макет — квадрат 28×28. Ближайший существующий токен размера —
+   --pm-stage-number-size (24px, используется для похожего квадратного
+   контейнера в StageCard). Разница с макетом — см. отчёт задачи. */
+.backButton {
+  display: flex;
+  width: var(--pm-stage-number-size);
+  height: var(--pm-stage-number-size);
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid var(--scp-color-neutral-200);
+  border-radius: var(--scp-radius-button);
+  background: var(--scp-background-primary);
+  cursor: pointer;
+  transition: background-color 120ms ease;
+}
+
+.backButton:hover,
+.backButton:focus-visible {
+  background: var(--scp-color-neutral-50);
+  outline: none;
+}
+
+/* Макет — 16×16, opacity .8. Размер совпадает точно с --scp-spacing-lg (16px),
+   opacity .8 в шкале токенов отсутствует (есть только .1/.5/.9) — берём
+   ближайшее --scp-opacity-high (.9). */
+.backIcon {
+  width: var(--scp-spacing-lg);
+  height: var(--scp-spacing-lg);
+  opacity: var(--scp-opacity-high);
+}
+
+.crumbs {
+  display: flex;
+  align-items: center;
+  color: var(--scp-color-neutral-500);
+  font-size: var(--scp-font-sizes-12);
+  gap: var(--scp-spacing-sm);
+  white-space: nowrap;
+}
+
+.crumbLabel {
+  color: var(--scp-color-neutral-700);
+}
+
+.crumbSeparator {
+  color: var(--scp-color-neutral-300);
+}
+
+.crumbActive {
+  overflow: hidden;
+  max-width: 32ch;
+  color: var(--scp-content-primary);
+  font-weight: var(--scp-font-weight-semi-bold);
+  text-overflow: ellipsis;
+}
+
+/* Pill-бейдж «Этап N» — тот же паттерн, что .badge в OverviewHeader.module.css
+   (компонент Badge из ДС в проект не тянется, CLAUDE.md — без UI-китов),
+   продублирован здесь локально: общего модуля для двух шапок нет. */
+.badge {
+  display: inline-flex;
+  height: var(--pm-badge-height);
+  flex: none;
+  align-items: center;
+  padding: 0 var(--scp-paddings-s);
+  border-radius: var(--pm-radius-pill);
+  background: var(--scp-color-brand-100);
+  color: var(--scp-text-brand-primary);
+  font-size: var(--scp-font-sizes-12);
+  font-weight: var(--scp-font-weight-semi-bold);
+  white-space: nowrap;
+}
+
+.spacer {
+  flex: 1;
+}
+
+.counter {
+  color: var(--scp-content-secondary);
+  font-size: var(--scp-font-sizes-12);
+  white-space: nowrap;
+}

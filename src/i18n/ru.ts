@@ -33,4 +33,18 @@ export const ru = {
     /** aria-label кнопки-карточки. */
     ariaLabel: (number: number, title: string): string => `Этап ${number}: ${title}`,
   },
+
+  breadcrumbs: {
+    /** Корень крошек, всегда одинаков: «E2E-процесс › {stage.title}». */
+    root: 'E2E-процесс',
+    /** Бейдж рядом с крошками: «Этап N». */
+    stageBadge: (number: number): string => `Этап ${number}`,
+    /** aria-label кнопки возврата на уровень 1. */
+    backAriaLabel: 'Назад к обзору процесса',
+    /** Счётчик справа: «11 шагов · 4 входа · 4 выхода». */
+    counter: (steps: number, inputs: number, outputs: number): string =>
+      `${steps} ${pluralRu(steps, 'шаг', 'шага', 'шагов')} · ` +
+      `${inputs} ${pluralRu(inputs, 'вход', 'входа', 'входов')} · ` +
+      `${outputs} ${pluralRu(outputs, 'выход', 'выхода', 'выходов')}`,
+  },
 } as const;

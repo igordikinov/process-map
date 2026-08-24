@@ -26,8 +26,10 @@ process-map/
   PRD.md  SPEC.md
   .beads/                   # трекер задач bd
   design/                   # распакованный макет Claude Design (только для чтения)
-  public/icons/*.svg        # иконки из design/assets/icons
   src/
+    assets/icons/*.svg      # иконки из design/assets/icons; импортируются
+                            # как ассеты Vite (реестр assets/icons/index.ts),
+                            # не через public/ — см. process-map-o62
     main.tsx  App.tsx
     config.ts               # linkTarget: '_top' | '_blank', compactHeight: 640
     data/process.json       # ИСТОЧНИК ИСТИНЫ
@@ -35,6 +37,8 @@ process-map/
     data/loader.ts          # merge JSON + localStorage overrides
     store/useProcessStore.ts
     theme/tokens.css        # переменные из design/_ds/tokens/*.css
+    theme/sizes.ts          # размеры узлов числами для React Flow и dagre;
+                            # источник истины для --pm-*-node-* (process-map-vhg)
     theme/global.css
     components/
       Overview/             # уровень 1

@@ -33,6 +33,13 @@ import {
   type ProcessNode,
   type Stage,
 } from '../src/data/schema.ts';
+import {
+  DATA_NODE_SIZE,
+  STAGE_NODE_SIZE as STAGE_SIZE,
+  STEP_NODE_SIZE,
+  type NodeSize,
+} from '../src/theme/sizes.ts';
+import { splitStageDataNodes as splitDataNodes } from '../src/utils/stageNodes.ts';
 
 // @dagrejs/dagre — CommonJS-пакет: `module.exports = { graphlib, layout, ... }`.
 // Через ESM-импорт Node видит только `graphlib` (cjs-module-lexer не распознаёт
@@ -52,25 +59,22 @@ function jsonPath(): string {
   return fileURLToPath(new URL('../src/data/process.json', import.meta.url));
 }
 
-export interface Size {
-  width: number;
-  height: number;
-}
+export type Size = NodeSize;
 
 /**
- * Размеры узлов согласованы с app-токенами src/theme/tokens.css:
- * --pm-step-node-* (318×52), --pm-data-node-* (200×56), --pm-stage-node-* (274×210).
+ * Размеры узлов — из src/theme/sizes.ts, единственного источника истины
+ * (он же сверяется с токенами --pm-*-node-* в tests/sizes.test.ts).
  * IntegrationNode и WarningNode отдельных размеров в SPEC не имеют и рисуются
  * карточкой шага, поэтому используют размер StepNode.
  */
 export const NODE_SIZE: Record<NodeType, Size> = {
-  step: { width: 318, height: 52 },
-  integration: { width: 318, height: 52 },
-  warning: { width: 318, height: 52 },
-  data: { width: 200, height: 56 },
+  step: STEP_NODE_SIZE,
+  integration: STEP_NODE_SIZE,
+  warning: STEP_NODE_SIZE,
+  data: DATA_NODE_SIZE,
 };
 
-export const STAGE_NODE_SIZE: Size = { width: 274, height: 210 };
+export const STAGE_NODE_SIZE: Size = STAGE_SIZE;
 
 /** Внешняя система обзора — свимлейн-бейдж; размера в SPEC нет, значение номинальное. */
 const SYSTEM_NODE_SIZE: Size = { width: 160, height: 56 };
@@ -159,19 +163,13 @@ export interface Placement {
  * перечни-источники стоят в левом поле, блоки результатов — справа от потока.
  * SPEC §4.2: колонка DataNode входов слева, выходов справа.
  */
-function splitDataNodes(stage: Stage): { inputs: ProcessNode[]; outputs: ProcessNode[] } {
-  const flow = stage.nodes.filter((node) => node.type !== 'data');
-  const data = stage.nodes.filter((node) => node.type === 'data');
-  if (flow.length === 0) {
-    return { inputs: data, outputs: [] };
-  }
-  const xs = flow.map((node) => node.position.x);
-  const midpoint = (Math.min(...xs) + Math.max(...xs)) / 2;
-  return {
-    inputs: data.filter((node) => node.position.x < midpoint),
-    outputs: data.filter((node) => node.position.x >= midpoint),
-  };
-}
+// Правило разделения data-узлов на колонки входов и выходов живёт в
+// src/utils/stageNodes.ts — там же, откуда его берут экран StageDetail и
+// счётчик в Breadcrumbs. Скрипт импортирует ту же функцию, чтобы раскладка
+// не могла разойтись с тем, что нарисовано и посчитано в приложении.
+// Обратное направление (приложение импортирует из scripts/) невозможно:
+// этот файл тянет @dagrejs/dagre, а SPEC §1 требует держать dagre вне
+// рантайм-бандла.
 
 /** Порядок узлов внутри ранга сидируется исходной геометрией слайда: сверху вниз, слева направо. */
 function bySlideOrder(a: ProcessNode, b: ProcessNode): number {
