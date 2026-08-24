@@ -407,4 +407,61 @@
   /* Шапка — SPEC §4.1 (52px) / §4.5 компактный режим (44px) */
   --pm-header-height: 52px;
   --pm-header-height-compact: 44px;
+
+  /* ---------------------------------------------------------------- */
+  /* Значения артборда A1, которых НЕТ в шкале дизайн-системы.         */
+  /* Взяты как есть из design/Supply Planning Process Map.dc.html      */
+  /* (артборд A1 «Обзор процесса, уровень 1», 1280×720), где макет     */
+  /* задаёт их инлайновыми стилями. Заводятся здесь, а не в CSS-       */
+  /* модулях, потому что CLAUDE.md запрещает хардкод цветов и размеров */
+  /* в компонентах, а ESLint проверяет только hex в .ts/.tsx.          */
+  /* ---------------------------------------------------------------- */
+
+  /* Типографика: шкала --scp-font-sizes-* начинается с 12px,
+     промежуточных кеглей макета в ней нет. */
+  --pm-font-size-10-5: 10.5px;
+  --pm-font-size-11: 11px;
+  --pm-font-size-11-5: 11.5px;
+  --pm-font-size-15: 15px;
+  --pm-line-height-14: 14px;
+  --pm-line-height-15: 15px;
+
+  /* Отступы: шкала --scp-spacing-* = 4/8/12/16/20/24…, промежуточных нет. */
+  --pm-space-5: 5px;
+  --pm-space-6: 6px;
+  --pm-space-7: 7px;
+  --pm-space-9: 9px;
+  --pm-space-10: 10px;
+
+  /* Разрядка «эйбров» (Ключевые выходы / Внешние системы). */
+  --pm-tracking-eyebrow: 0.04em;
+  --pm-tracking-lane: 0.05em;
+
+  /* Тени: токенов теней в ДС In.Plan нет вовсе.
+     --pm-shadow-stage-active переиспользует --pm-node-focus-ring — в макете
+     это один и тот же rgba(144,0,255,.14). */
+  --pm-shadow-stage: 0 1px 3px rgb(0 0 0 / 7%);
+  --pm-shadow-stage-active: 0 2px 8px var(--pm-node-focus-ring);
+
+  /* Полупрозрачный фон dashed-свимлейна. */
+  --pm-lane-bg: rgb(255 255 255 / 50%);
+
+  /* Размеры элементов A1. */
+  --pm-stage-number-size: 24px;
+  --pm-stage-accent-bar: 3px; /* верхняя полоска карточки этапа */
+  --pm-warning-icon-size: 13px;
+  --pm-io-node-width: 200px;
+  --pm-io-node-height: 40px;
+  --pm-badge-height: 20px;
+  --pm-radius-pill: 9999px;
+
+  /* Рёбра — SPEC §4.1 задаёт толщины явно. */
+  --pm-edge-process-width: 1.8;
+  --pm-edge-integration-width: 1.3;
+  --pm-edge-integration-dash: 4 3;
+
+  /* Список «Ключевые выходы»: карточка 274×210 фиксирована, поэтому в неё
+     помещается ровно 3 однострочных пункта (keyOutputs по схеме ≤ 3).
+     15px строка × 3 + 6px зазор × 2 = 57px. */
+  --pm-stage-outputs-max-height: 57px;
 }

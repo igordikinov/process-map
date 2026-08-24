@@ -1,0 +1,48 @@
+/* Экран обзора уровня 1 (SPEC §4.1). */
+
+/* Высота задаётся во vh, а не в %: html/body без высоты (её ставит global.css,
+   который в этой задаче не меняется), а в iframe In.Plan 100vh равно высоте
+   самого iframe (SPEC §6). */
+.root {
+  display: flex;
+  width: 100%;
+  height: 100vh;
+  flex-direction: column;
+  background: var(--scp-background-primary);
+}
+
+/* Высота ЯВНАЯ, не flex:1. React Flow ставит себе width/height: 100% инлайном,
+   а проценты не разрешаются относительно flex-элемента, высота которого
+   получена из flex-grow: полотно схлопывалось в 0 и рисовалось пустым. */
+.canvas {
+  position: relative;
+  height: calc(100vh - var(--pm-header-height));
+  background: var(--pm-canvas-bg);
+}
+
+/* Цвет точек сетки Background: компонент принимает color пропом, но var()
+   в атрибуте fill React Flow не разворачивает — задаём через CSS. */
+.canvas :global(.react-flow__background) circle {
+  fill: var(--pm-grid-dot);
+}
+
+/* Узлы уровня 1 не перетаскиваются (CLAUDE.md, v1), курсор не должен обещать
+   обратное; кликабельна только карточка этапа — она сама <button>. */
+.canvas :global(.react-flow__node) {
+  cursor: default;
+}
+
+/* Хэндлы нужны только как точки привязки рёбер — визуально их быть не должно. */
+.canvas :global(.react-flow__handle) {
+  width: 1px;
+  min-width: 0;
+  height: 1px;
+  min-height: 0;
+  border: 0;
+  background: transparent;
+  opacity: 0;
+}
+
+.canvas :global(.react-flow__node-lane) {
+  z-index: 0 !important;
+}

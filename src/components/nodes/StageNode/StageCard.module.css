@@ -1,0 +1,180 @@
+/*
+ * Карточка этапа, уровень 1 (SPEC §4.1, артборд A1 274×210).
+ * Только var(...) из src/theme/tokens.css — ни цветов, ни размеров литералами
+ * (CLAUDE.md «Кодовые правила»). Значения, которых нет в шкале ДС, заведены
+ * там же как --pm-* с пометкой «из макета A1».
+ */
+
+.card {
+  display: flex;
+  overflow: hidden;
+  width: var(--pm-stage-node-width);
+  height: var(--pm-stage-node-height);
+  flex-direction: column;
+  padding: var(--scp-paddings-l);
+  border: 1px solid var(--scp-border-neutral-tertiary);
+  border-top: var(--pm-stage-accent-bar) solid var(--scp-color-neutral-200);
+  border-radius: var(--scp-border-radius-md);
+  margin: 0;
+  background: var(--scp-background-primary);
+  box-shadow: var(--pm-shadow-stage);
+  cursor: pointer;
+  font-family: inherit;
+  gap: var(--pm-space-10);
+  text-align: left;
+  transition:
+    border-color 120ms ease,
+    box-shadow 120ms ease;
+}
+
+.card:hover,
+.card:focus-visible,
+.card.active {
+  border-color: var(--scp-color-brand-300);
+  border-top-color: var(--scp-accent-primary);
+  box-shadow: var(--pm-shadow-stage-active);
+  outline: none;
+}
+
+.head {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--pm-space-10);
+}
+
+.number {
+  display: flex;
+  width: var(--pm-stage-number-size);
+  height: var(--pm-stage-number-size);
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--scp-border-radius-sm);
+  background: var(--scp-color-neutral-50);
+  color: var(--scp-color-neutral-700);
+  font-size: var(--scp-font-sizes-12);
+  font-weight: var(--scp-font-weight-bold);
+}
+
+.card:hover .number,
+.card:focus-visible .number,
+.card.active .number {
+  background: var(--scp-accent-primary);
+  color: var(--scp-content-constant);
+}
+
+.caption {
+  color: var(--scp-content-secondary);
+  font-size: var(--pm-font-size-11);
+}
+
+.card:hover .caption,
+.card:focus-visible .caption,
+.card.active .caption {
+  color: var(--scp-accent-primary);
+  font-weight: var(--scp-font-weight-semi-bold);
+}
+
+.warnings {
+  display: flex;
+  align-items: center;
+  color: var(--scp-color-warning-700);
+  font-size: var(--pm-font-size-11);
+  gap: var(--pm-space-5);
+}
+
+.warningsIcon {
+  width: var(--pm-warning-icon-size);
+  height: var(--pm-warning-icon-size);
+}
+
+/* Названия этапов в данных длиннее макетных, поэтому максимум 2 строки с
+   многоточием: иначе заголовок съедает место у «Ключевых выходов». */
+.title {
+  overflow: hidden;
+  flex: none;
+  color: var(--scp-content-primary);
+  font-size: var(--pm-font-size-15);
+  font-weight: var(--scp-font-weight-semi-bold);
+  line-height: var(--scp-line-height-20);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  display: -webkit-box;
+}
+
+.divider {
+  height: 1px;
+  flex: none;
+  background: var(--scp-table-border);
+}
+
+.card:hover .divider,
+.card:focus-visible .divider,
+.card.active .divider {
+  background: var(--scp-color-brand-100);
+}
+
+.outputsTitle {
+  flex: none;
+  color: var(--scp-content-secondary);
+  font-size: var(--pm-font-size-10-5);
+  font-weight: var(--scp-font-weight-semi-bold);
+  letter-spacing: var(--pm-tracking-eyebrow);
+  line-height: var(--pm-line-height-14);
+  text-transform: uppercase;
+}
+
+/* Высота списка фиксирована и кратна строке (см. --pm-stage-outputs-max-height):
+   обрезка происходит по многоточию внутри пункта, а не срезом по нижнему краю
+   карточки. Полный текст пункта — в его title. */
+.outputs {
+  display: flex;
+  overflow: hidden;
+  max-height: var(--pm-stage-outputs-max-height);
+  flex: none;
+  flex-direction: column;
+  padding: 0;
+  margin: 0;
+  color: var(--scp-content-sub-primary);
+  font-size: var(--scp-font-sizes-12);
+  gap: var(--pm-space-6);
+  line-height: var(--pm-line-height-15);
+  list-style: none;
+}
+
+.output {
+  display: flex;
+  min-width: 0;
+  flex: none;
+  gap: var(--pm-space-7);
+}
+
+.outputText {
+  overflow: hidden;
+  min-width: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dash {
+  flex: none;
+  color: var(--scp-color-neutral-300);
+}
+
+.card:hover .dash,
+.card:focus-visible .dash,
+.card.active .dash {
+  color: var(--scp-color-brand-300);
+}
+
+.link {
+  display: flex;
+  flex: none;
+  align-items: center;
+  padding-top: var(--scp-paddings-s);
+  margin-top: auto;
+  color: var(--scp-text-brand-primary);
+  font-size: var(--pm-font-size-11);
+  font-weight: var(--scp-font-weight-semi-bold);
+  gap: var(--pm-space-6);
+}

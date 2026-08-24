@@ -1,0 +1,35 @@
+/*
+ * Оформление рёбер уровня 1 (SPEC §4.1).
+ * Только var(...) из src/theme/tokens.css: MarkerType.ArrowClosed из React Flow
+ * требует hex прямо в .tsx, что запрещено (CLAUDE.md), поэтому стрелки
+ * объявлены как SVG-маркеры в EdgeMarkers.tsx, а заливка задаётся отсюда.
+ */
+
+.process {
+  fill: none;
+  stroke: var(--scp-accent-primary);
+  stroke-width: var(--pm-edge-process-width);
+}
+
+.integration {
+  fill: none;
+  stroke: var(--pm-integration);
+  stroke-dasharray: var(--pm-edge-integration-dash);
+  stroke-width: var(--pm-edge-integration-width);
+}
+
+/* Маркеры-стрелки живут в скрытом svg вне полотна. */
+.markers {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+}
+
+.arrowProcess {
+  fill: var(--scp-accent-primary);
+}
+
+.arrowIntegration {
+  fill: var(--pm-integration);
+}

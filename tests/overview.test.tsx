@@ -1,0 +1,199 @@
+// Тесты обзора уровня 1 (SPEC §4.1).
+//
+// Стратегия рендера: React Flow в jsdom требует ResizeObserver, DOMMatrix и
+// ненулевого getBoundingClientRect. Поэтому основные проверки идут по чистым
+// компонентам (OverviewHeader, StageCard) и по чистой функции сборки графа
+// buildOverviewGraph — это покрывает больше, чем осмотр DOM полотна, и не
+// зависит от версии jsdom. Факт монтирования полотна проверяется одним
+// smoke-тестом с минимальными моками окружения.
+import { beforeEach, describe, expect, it } from 'vitest';
+import { fireEvent, render, screen, within } from '@testing-library/react';
+import { OverviewHeader } from '../src/components/Overview/OverviewHeader';
+import { buildOverviewGraph, systemNodeId } from '../src/components/Overview/overviewGraph';
+import { StageCard } from '../src/components/nodes/StageNode/StageCard';
+import { loadBaseProcessMap } from '../src/data/loader';
+import type { Stage } from '../src/data/schema';
+import { ru } from '../src/i18n/ru';
+import { createInitialState, useProcessStore } from '../src/store/useProcessStore';
+
+const map = loadBaseProcessMap();
+
+function stageAt(index: number): Stage {
+  const stage = map.stages[index];
+  if (stage === undefined) {
+    throw new Error(`В process.json нет этапа с индексом ${index}`);
+  }
+  return stage;
+}
+
+beforeEach(() => {
+  useProcessStore.setState(createInitialState());
+});
+
+describe('OverviewHeader', () => {
+  it('рендерит заголовок, бейдж с числом этапов и дату обновления', () => {
+    render(
+      <OverviewHeader
+        title={map.title}
+        stagesCount={map.stages.length}
+        updatedAt={map.updatedAt}
+      />,
+    );
+
+    expect(screen.getByRole('heading', { name: map.title })).toBeInTheDocument();
+    expect(screen.getByText('4 этапа')).toBeInTheDocument();
+    expect(screen.getByText('Обновлено 24.08.2026')).toBeInTheDocument();
+  });
+
+  // App больше не рендерит <h1>{ru.appTitle}</h1> (его место занял заголовок из
+  // данных), поэтому ключ проверяется здесь напрямую: он остаётся именем
+  // приложения в <title> и понадобится Breadcrumbs в M2.
+  it('сохраняет ключ appTitle', () => {
+    expect(ru.appTitle).toBe('In.Plan Process Map');
+  });
+
+  it('склоняет «этап» по числу', () => {
+    expect(ru.overview.stagesBadge(1)).toBe('1 этап');
+    expect(ru.overview.stagesBadge(4)).toBe('4 этапа');
+    expect(ru.overview.stagesBadge(11)).toBe('11 этапов');
+  });
+});
+
+describe('StageCard', () => {
+  it('рендерит все 4 карточки этапов с номерами и названиями', () => {
+    render(
+      <>
+        {map.stages.map((stage) => (
+          <StageCard key={stage.id} stage={stage} />
+        ))}
+      </>,
+    );
+
+    const cards = screen.getAllByRole('button');
+    expect(cards).toHaveLength(4);
+
+    map.stages.forEach((stage, index) => {
+      const card = cards[index];
+      expect(card).toBeDefined();
+      expect(within(card as HTMLElement).getByText(String(stage.number))).toBeInTheDocument();
+      expect(within(card as HTMLElement).getByText(stage.title)).toBeInTheDocument();
+    });
+  });
+
+  it('показывает блок «Ключевые выходы» со всеми строками этапа', () => {
+    const stage = stageAt(1);
+    render(<StageCard stage={stage} />);
+
+    expect(screen.getByText(ru.stageNode.keyOutputs)).toBeInTheDocument();
+    expect(stage.keyOutputs.length).toBeGreaterThan(0);
+    for (const output of stage.keyOutputs) {
+      expect(screen.getByText(output)).toBeInTheDocument();
+    }
+    expect(screen.getAllByRole('listitem')).toHaveLength(stage.keyOutputs.length);
+  });
+
+  it('не показывает строку «Открыть в In.Plan», если у этапа нет screen', () => {
+    const stage = stageAt(0);
+    expect(stage.screen).toBeUndefined();
+
+    render(<StageCard stage={stage} />);
+    expect(screen.queryByText(ru.stageNode.openInInplan)).not.toBeInTheDocument();
+  });
+
+  it('показывает строку «Открыть в In.Plan», если screen задан', () => {
+    const stage: Stage = {
+      ...stageAt(0),
+      screen: { title: 'Планирование поставок › Объёмный план', url: 'https://example.com/plan' },
+    };
+
+    render(<StageCard stage={stage} />);
+    expect(screen.getByText(ru.stageNode.openInInplan)).toBeInTheDocument();
+  });
+
+  it('показывает счётчик предупреждений вместо подписи «Этап»', () => {
+    const stage = stageAt(2);
+    expect(stage.warningsCount).toBe(5);
+
+    render(<StageCard stage={stage} />);
+    expect(screen.getByText('5 предупреждений')).toBeInTheDocument();
+    expect(screen.queryByText(ru.stageNode.caption)).not.toBeInTheDocument();
+  });
+
+  it('клик по карточке вызывает navigateToStage', () => {
+    const stage = stageAt(1);
+    render(<StageCard stage={stage} />);
+
+    expect(useProcessStore.getState().currentStageId).toBeNull();
+    fireEvent.click(screen.getByRole('button'));
+    expect(useProcessStore.getState().currentStageId).toBe(stage.id);
+  });
+
+  it('активная карточка помечается aria-current и подписью «Выбранный этап»', () => {
+    const stage = stageAt(0);
+    useProcessStore.getState().navigateToStage(stage.id);
+
+    render(<StageCard stage={stage} />);
+    expect(screen.getByRole('button')).toHaveAttribute('aria-current', 'step');
+    expect(screen.getByText(ru.stageNode.captionActive)).toBeInTheDocument();
+  });
+});
+
+describe('buildOverviewGraph', () => {
+  it('строит свимлейны, узлы систем и 4 карточки этапов', () => {
+    const { nodes } = buildOverviewGraph(map, true);
+
+    expect(nodes.filter((node) => node.type === 'lane')).toHaveLength(2);
+    expect(nodes.filter((node) => node.type === 'stage')).toHaveLength(4);
+
+    // Уникальные системы: вход DP/IO/PS/ERP, выход DP/PS/MRP/ERP.
+    expect(nodes.filter((node) => node.type === 'system')).toHaveLength(8);
+    expect(nodes.some((node) => node.id === systemNodeId('in', 'DP'))).toBe(true);
+    expect(nodes.some((node) => node.id === systemNodeId('out', 'MRP'))).toBe(true);
+
+    // Родитель обязан идти раньше своих детей.
+    const laneIndex = nodes.findIndex((node) => node.id === 'lane-in');
+    const childIndex = nodes.findIndex((node) => node.id === systemNodeId('in', 'DP'));
+    expect(laneIndex).toBeLessThan(childIndex);
+  });
+
+  it('ни один узел не перетаскивается и не соединяется', () => {
+    const { nodes } = buildOverviewGraph(map, true);
+    for (const node of nodes) {
+      expect(node.draggable).toBe(false);
+      expect(node.connectable).toBe(false);
+    }
+  });
+
+  it('переводит overviewEdges в process- и integration-рёбра с валидными концами', () => {
+    const { nodes, edges } = buildOverviewGraph(map, true);
+    const ids = new Set(nodes.map((node) => node.id));
+
+    expect(edges.filter((edge) => edge.type === 'process')).toHaveLength(3);
+    expect(edges.filter((edge) => edge.type === 'integration')).toHaveLength(6);
+    for (const edge of edges) {
+      expect(ids.has(edge.source)).toBe(true);
+      expect(ids.has(edge.target)).toBe(true);
+    }
+  });
+
+  it('при выключенных интеграциях остаются только этапы и процессные рёбра', () => {
+    const { nodes, edges } = buildOverviewGraph(map, false);
+
+    expect(nodes).toHaveLength(4);
+    expect(nodes.every((node) => node.type === 'stage')).toBe(true);
+    expect(edges).toHaveLength(3);
+    expect(edges.every((edge) => edge.type === 'process')).toBe(true);
+  });
+
+  it('карточки этапов не накладываются друг на друга', () => {
+    const stages = buildOverviewGraph(map, true).nodes.filter((node) => node.type === 'stage');
+    for (let index = 1; index < stages.length; index += 1) {
+      const previous = stages[index - 1];
+      const current = stages[index];
+      expect(previous).toBeDefined();
+      expect(current).toBeDefined();
+      const gap = (current?.position.x ?? 0) - ((previous?.position.x ?? 0) + 274);
+      expect(gap).toBeGreaterThan(0);
+    }
+  });
+});

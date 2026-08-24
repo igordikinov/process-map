@@ -1,0 +1,43 @@
+/* Верхняя полоса обзора, 52 px (SPEC §4.1, артборд A1). */
+
+.header {
+  display: flex;
+  height: var(--pm-header-height);
+  flex: none;
+  align-items: center;
+  padding: 0 var(--scp-spacing-xl);
+  border-bottom: 1px solid var(--scp-border-neutral-tertiary);
+  background: var(--scp-background-primary);
+  gap: var(--scp-spacing-md);
+}
+
+.title {
+  color: var(--scp-content-primary);
+  font-size: var(--scp-font-sizes-14);
+  font-weight: var(--scp-font-weight-semi-bold);
+}
+
+/* В макете это компонент Badge из ДС In.Plan; библиотека в проект не тянется
+   (CLAUDE.md — без UI-китов), поэтому pill свёрстан локально на токенах. */
+.badge {
+  display: inline-flex;
+  height: var(--pm-badge-height);
+  align-items: center;
+  padding: 0 var(--scp-paddings-s);
+  border-radius: var(--pm-radius-pill);
+  background: var(--scp-color-brand-100);
+  color: var(--scp-text-brand-primary);
+  font-size: var(--scp-font-sizes-12);
+  font-weight: var(--scp-font-weight-semi-bold);
+  white-space: nowrap;
+}
+
+.spacer {
+  flex: 1;
+}
+
+.updated {
+  color: var(--scp-content-secondary);
+  font-size: var(--scp-font-sizes-12);
+  white-space: nowrap;
+}

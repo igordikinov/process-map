@@ -1,0 +1,25 @@
+/*
+ * Dashed-контейнер свимлейна уровня 1 (SPEC §4.1, артборд A1).
+ * Размер задаётся через style узла React Flow, здесь только оформление.
+ * Только var(...) из src/theme/tokens.css. Рамка в макете #cfd4dc, ближайший
+ * токен — --scp-color-neutral-200 (#d4d5d6); см. отчёт по задаче.
+ */
+
+.lane {
+  width: 100%;
+  height: 100%;
+  border: 1px dashed var(--scp-color-neutral-200);
+  border-radius: var(--scp-border-radius-lg);
+  background: var(--pm-lane-bg);
+}
+
+.title {
+  position: absolute;
+  top: var(--pm-space-6);
+  left: var(--scp-paddings-m);
+  color: var(--scp-color-neutral-500);
+  font-size: var(--pm-font-size-10-5);
+  font-weight: var(--scp-font-weight-semi-bold);
+  letter-spacing: var(--pm-tracking-lane);
+  text-transform: uppercase;
+}

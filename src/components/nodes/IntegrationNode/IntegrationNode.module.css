@@ -1,0 +1,35 @@
+/*
+ * Карточка внешней системы в свимлейне уровня 1 (SPEC §4.1, артборд A1 200×40).
+ * Только var(...) из src/theme/tokens.css. Рамка в макете #dfe3ea, ближайший
+ * токен — --scp-border-neutral-tertiary (#eaeaea); см. отчёт по задаче.
+ */
+
+.card {
+  display: flex;
+  width: var(--pm-io-node-width);
+  height: var(--pm-io-node-height);
+  align-items: center;
+  padding: 0 var(--scp-paddings-m);
+  border: 1px solid var(--scp-border-neutral-tertiary);
+  border-left: var(--pm-stage-accent-bar) solid var(--pm-integration);
+  border-radius: var(--scp-border-radius-md);
+  background: var(--scp-background-primary);
+  gap: var(--pm-space-9);
+}
+
+.code {
+  flex: none;
+  color: var(--pm-integration);
+  font-size: var(--scp-font-sizes-12);
+  font-weight: var(--scp-font-weight-bold);
+}
+
+.label {
+  overflow: hidden;
+  color: var(--scp-color-neutral-700);
+  font-size: var(--pm-font-size-11-5);
+  line-height: var(--pm-line-height-14);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  display: -webkit-box;
+}
