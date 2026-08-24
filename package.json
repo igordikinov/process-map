@@ -13,6 +13,7 @@
     "layout": "node --experimental-strip-types scripts/layout.ts"
   },
   "dependencies": {
+    "@fontsource/open-sans": "^5.3.0",
     "@xyflow/react": "^12.3.6",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
