@@ -23,6 +23,53 @@
   right: calc(var(--pm-drawer-width) + var(--scp-spacing-xl));
 }
 
+/* Переключатель «Просмотр / Редактор» (SPEC §4.4) — сегментированная пара
+   кнопок в общей рамке, как зум-группа справа: тот же 32px-контрол, та же
+   рамка и радиус. Активный сегмент — светло-фиолетовый (акцент только на
+   активном блоке, как в макете A1). Артборда A5 в design/ нет — см.
+   ScreenLinkForm.module.css. */
+.modeGroup {
+  display: flex;
+  height: var(--pm-toolbar-control-size);
+  flex: none;
+  overflow: hidden;
+  border: 1px solid var(--scp-color-neutral-200);
+  border-radius: var(--scp-radius-button);
+  background: var(--scp-background-primary);
+}
+
+.modeButton {
+  display: flex;
+  height: 100%;
+  align-items: center;
+  padding: 0 var(--scp-paddings-m);
+  border: 0;
+  border-right: 1px solid var(--scp-border-neutral-tertiary);
+  background: transparent;
+  color: var(--scp-color-neutral-700);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: var(--scp-font-sizes-12);
+  white-space: nowrap;
+}
+
+.modeButton:last-child {
+  border-right: 0;
+}
+
+.modeButton:hover,
+.modeButton:focus-visible {
+  background: var(--scp-color-neutral-50);
+  outline: none;
+}
+
+.modeActive,
+.modeActive:hover {
+  background: var(--scp-background-action-brand-tertiary-active);
+  color: var(--scp-text-brand-primary);
+  font-weight: var(--scp-font-weight-semi-bold);
+}
+
 .toggle {
   display: flex;
   height: var(--pm-toolbar-control-size);

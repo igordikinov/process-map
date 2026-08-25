@@ -9,7 +9,7 @@ import {
   type NodeTypes,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { loadProcessMap } from '../../data/loader';
+import { useProcessMap } from '../../hooks/useProcessMap';
 import { ru } from '../../i18n/ru';
 import { useProcessStore } from '../../store/useProcessStore';
 import { Breadcrumbs } from '../Breadcrumbs';
@@ -51,8 +51,10 @@ export function StageDetail() {
   const showIntegrations = useProcessStore((state) => state.showIntegrations);
   const selectedNodeId = useProcessStore((state) => state.selectedNodeId);
 
-  // Данные статичны в пределах сессии просмотра (см. Overview.tsx).
-  const map = useMemo(() => loadProcessMap(), []);
+  // Карта с наложенными overrides, реактивно к правкам редактора (SPEC §4.4):
+  // сохранённая в панели ссылка сразу появляется и в самой панели, и иконкой
+  // link-external на карточке шага (SPEC §4.2). См. src/hooks/useProcessMap.ts.
+  const map = useProcessMap();
   const stage = map.stages.find((candidate) => candidate.id === currentStageId);
   const graph = useMemo(
     () => (stage === undefined ? undefined : buildStageGraph(stage, showIntegrations)),

@@ -54,6 +54,44 @@ describe('Toolbar', () => {
     );
   });
 
+  // Переключатель «Просмотр / Редактор» — SPEC §4.4, задача process-map-0sb.
+  it('режим по умолчанию — «Просмотр», и это видно по aria-pressed', () => {
+    renderToolbar();
+
+    expect(useProcessStore.getState().mode).toBe('view');
+    expect(screen.getByRole('button', { name: ru.toolbar.modeView })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    expect(screen.getByRole('button', { name: ru.toolbar.modeEdit })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
+  });
+
+  it('клик по «Редактор» и обратно переключает mode в store', () => {
+    renderToolbar();
+
+    fireEvent.click(screen.getByRole('button', { name: ru.toolbar.modeEdit }));
+    expect(useProcessStore.getState().mode).toBe('edit');
+    expect(screen.getByRole('button', { name: ru.toolbar.modeEdit })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: ru.toolbar.modeView }));
+    expect(useProcessStore.getState().mode).toBe('view');
+  });
+
+  it('режим не персистится: в localStorage после переключения пусто (SPEC §4.4)', () => {
+    renderToolbar();
+
+    fireEvent.click(screen.getByRole('button', { name: ru.toolbar.modeEdit }));
+
+    // Ни своего ключа, ни записи в ключе overrides — режим живёт только в памяти.
+    expect(localStorage.length).toBe(0);
+  });
+
   it('рендерит кнопки зума и процент масштаба, доступные по aria-label', () => {
     renderToolbar();
 
@@ -81,6 +119,8 @@ describe('Toolbar', () => {
     renderToolbar();
 
     const buttons = [
+      screen.getByRole('button', { name: ru.toolbar.modeView }),
+      screen.getByRole('button', { name: ru.toolbar.modeEdit }),
       screen.getByRole('switch', { name: ru.toolbar.showIntegrations }),
       screen.getByRole('button', { name: ru.toolbar.zoomOut }),
       screen.getByRole('button', { name: ru.toolbar.zoomIn }),

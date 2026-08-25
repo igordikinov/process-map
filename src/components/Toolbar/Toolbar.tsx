@@ -53,9 +53,48 @@ export function Toolbar({ fitViewOptions, drawerOpen = false }: ToolbarProps) {
   const { zoom } = useViewport();
   const showIntegrations = useProcessStore((state) => state.showIntegrations);
   const toggleIntegrations = useProcessStore((state) => state.toggleIntegrations);
+  const mode = useProcessStore((state) => state.mode);
+  const setMode = useProcessStore((state) => state.setMode);
 
   return (
     <div className={drawerOpen ? `${styles.toolbar} ${styles.shifted}` : styles.toolbar}>
+      {/* Переключатель «Просмотр / Редактор» (SPEC §4.4). Значение живёт в
+          store и НЕ персистится: при каждой загрузке — «Просмотр», иначе
+          режим редактора «залипал» бы у читателя вики.
+
+          Два <button aria-pressed>, а не radiogroup: у radiogroup своя
+          клавиатурная модель (стрелки + roving tabindex), которую пришлось бы
+          писать руками ради двух значений; кнопки-переключатели работают
+          Tab'ом и Enter'ом сами. Тулбар — на обоих уровнях: режим глобален,
+          и переключатель, исчезающий на уровне 1, скрывал бы от пользователя
+          тот факт, что он всё ещё в редакторе. */}
+      <div className={styles.modeGroup} role="group" aria-label={ru.toolbar.mode}>
+        <button
+          type="button"
+          className={
+            mode === 'view' ? `${styles.modeButton} ${styles.modeActive}` : styles.modeButton
+          }
+          aria-pressed={mode === 'view'}
+          onClick={() => {
+            setMode('view');
+          }}
+        >
+          {ru.toolbar.modeView}
+        </button>
+        <button
+          type="button"
+          className={
+            mode === 'edit' ? `${styles.modeButton} ${styles.modeActive}` : styles.modeButton
+          }
+          aria-pressed={mode === 'edit'}
+          onClick={() => {
+            setMode('edit');
+          }}
+        >
+          {ru.toolbar.modeEdit}
+        </button>
+      </div>
+
       <button
         type="button"
         role="switch"

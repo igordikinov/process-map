@@ -9,7 +9,7 @@ import {
   type NodeTypes,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { loadProcessMap } from '../../data/loader';
+import { useProcessMap } from '../../hooks/useProcessMap';
 import { ru } from '../../i18n/ru';
 import { useProcessStore } from '../../store/useProcessStore';
 import { EdgeMarkers, IntegrationEdge, ProcessEdge } from '../edges';
@@ -47,9 +47,12 @@ const fitViewOptions = { padding: FIT_VIEW_PADDING };
 export function Overview() {
   const showIntegrations = useProcessStore((state) => state.showIntegrations);
 
-  // Данные статичны в пределах сессии просмотра: loadProcessMap() читает
-  // process.json + overrides из localStorage один раз при монтировании.
-  const map = useMemo(() => loadProcessMap(), []);
+  // Карта = process.json + overrides из localStorage. useProcessMap()
+  // подписывает экран на правки редактора (SPEC §4.4): после записи ссылки
+  // ссылка обязана появиться сразу, без перезагрузки страницы. Ссылка на
+  // объект карты стабильна, пока правок нет, поэтому useMemo ниже не
+  // пересчитывается на каждый рендер — см. src/hooks/useProcessMap.ts.
+  const map = useProcessMap();
   const { nodes, edges } = useMemo(
     () => buildOverviewGraph(map, showIntegrations),
     [map, showIntegrations],

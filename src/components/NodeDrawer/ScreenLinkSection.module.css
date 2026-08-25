@@ -6,11 +6,24 @@
  * Только var(...) из src/theme/tokens.css (CLAUDE.md «Кодовые правила»).
  */
 
+/* Заданная ссылка + действие «Изменить» под ней (только в редакторе,
+   SPEC §4.4). Действие ставится отдельной строкой, а не в ряд со ссылкой:
+   в 360px панели строка ссылки и так ужимает заголовок и url многоточием. */
+.link {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--pm-space-6);
+}
+
 /* Ссылка целиком в одну строку: заголовок и url усекаются многоточием
    (SPEC §4.3 — «в одну строку с text-overflow»). */
 .row {
   display: flex;
+  width: 100%;
   min-width: 0;
+  box-sizing: border-box;
   align-items: center;
   padding: var(--pm-space-7) var(--pm-space-10);
   border-radius: var(--scp-radius-button);
