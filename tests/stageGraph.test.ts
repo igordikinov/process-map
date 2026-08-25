@@ -10,6 +10,10 @@ import {
   COLUMN_TITLE_HEIGHT,
   groupContainerId,
   GROUP_PADDING,
+  initialViewport,
+  START_PADDING,
+  START_ZOOM_MAX,
+  START_ZOOM_MIN,
 } from '../src/components/StageDetail';
 import { loadBaseProcessMap } from '../src/data/loader';
 import type { ProcessNode, Stage } from '../src/data/schema';
@@ -309,4 +313,143 @@ describe('buildStageGraph', () => {
       }
     },
   );
+});
+
+// ─────────────── стартовый вид полотна (задача process-map-l8a) ───────────────
+
+/** Рабочая область полотна = высота окна минус шапка 52 px (--pm-header-height). */
+const CANVAS_1280 = { width: 1280, height: 668 };
+/** Компактный режим SPEC §4.5: окно 1024×600. */
+const CANVAS_1024 = { width: 1024, height: 548 };
+
+/** Кегль подписи шага в макете A2 — от него считается читаемость. */
+const STEP_LABEL_FONT_PX = 13;
+/** Нижняя граница читаемости — --scp-font-body-s дизайн-системы. */
+const MIN_READABLE_FONT_PX = 12;
+
+describe('initialViewport', () => {
+  it.each([
+    ['1280×720', CANVAS_1280],
+    ['1024×600', CANVAS_1024],
+  ] as const)('%s: подпись шага ни на одном этапе не мельче 12 px', (_size, container) => {
+    for (const stage of map.stages) {
+      const { bounds } = buildStageGraph(stage);
+      const viewport = initialViewport(bounds, container);
+
+      expect(viewport.zoom).toBeGreaterThanOrEqual(START_ZOOM_MIN);
+      expect(viewport.zoom).toBeLessThanOrEqual(START_ZOOM_MAX);
+      // Главное утверждение задачи: fitView давал здесь 3.2…6.9 px.
+      expect(STEP_LABEL_FONT_PX * viewport.zoom).toBeGreaterThanOrEqual(MIN_READABLE_FONT_PX);
+    }
+  });
+
+  it.each([
+    ['1280×720', CANVAS_1280],
+    ['1024×600', CANVAS_1024],
+  ] as const)(
+    '%s: левый край раскладки прижат к START_PADDING (начало потока)',
+    (_size, container) => {
+      for (const stage of map.stages) {
+        const { bounds } = buildStageGraph(stage);
+        const viewport = initialViewport(bounds, container);
+
+        // Экранная координата левого края раскладки (включая рамку группы и
+        // заголовок колонки, которые уходят в отрицательные координаты).
+        const screenLeft = viewport.x + bounds.x * viewport.zoom;
+        expect(screenLeft).toBeCloseTo(START_PADDING, 6);
+      }
+    },
+  );
+
+  it('по вертикали: не влезает — привязка к верху, влезает — центрирование', () => {
+    for (const stage of map.stages) {
+      const { bounds } = buildStageGraph(stage);
+      const viewport = initialViewport(bounds, CANVAS_1280);
+      const screenTop = viewport.y + bounds.y * viewport.zoom;
+      const scaledHeight = bounds.height * viewport.zoom;
+
+      if (scaledHeight <= CANVAS_1280.height - START_PADDING * 2) {
+        // Этап 1 — полоса 296 px: центрируется, иначе снизу пустота в 372 px.
+        expect(screenTop).toBeCloseTo((CANVAS_1280.height - scaledHeight) / 2, 6);
+        expect(screenTop).toBeGreaterThan(START_PADDING);
+      } else {
+        expect(screenTop).toBeCloseTo(START_PADDING, 6);
+      }
+    }
+  });
+
+  it('этап 1 центрируется по вертикали, этапы 2–4 прижаты к верху', () => {
+    const verdicts = map.stages.map((stage) => {
+      const { bounds } = buildStageGraph(stage);
+      const viewport = initialViewport(bounds, CANVAS_1280);
+      const screenTop = viewport.y + bounds.y * viewport.zoom;
+      return { number: stage.number, centred: screenTop > START_PADDING + 1 };
+    });
+
+    expect(verdicts).toEqual([
+      { number: 1, centred: true },
+      { number: 2, centred: false },
+      { number: 3, centred: false },
+      { number: 4, centred: false },
+    ]);
+  });
+
+  it('маленькая раскладка не увеличивается выше макета (потолок 1.0)', () => {
+    const bounds = { x: 0, y: 0, width: 400, height: 200 };
+    const viewport = initialViewport(bounds, CANVAS_1280);
+
+    expect(viewport.zoom).toBe(START_ZOOM_MAX);
+    expect(viewport.x + bounds.x * viewport.zoom).toBeCloseTo(START_PADDING, 6);
+    // Влезает по высоте — центрируется.
+    expect(viewport.y + bounds.y * viewport.zoom).toBeCloseTo((CANVAS_1280.height - 200) / 2, 6);
+  });
+
+  it('раскладка между полом и потолком берёт свой fit-масштаб', () => {
+    // Ширина подобрана так, чтобы fit попал строго между START_ZOOM_MIN и 1.
+    const bounds = { x: 0, y: 0, width: 1300, height: 400 };
+    const viewport = initialViewport(bounds, CANVAS_1280);
+    const fit = Math.min(
+      (CANVAS_1280.width - START_PADDING * 2) / bounds.width,
+      (CANVAS_1280.height - START_PADDING * 2) / bounds.height,
+    );
+
+    expect(fit).toBeGreaterThan(START_ZOOM_MIN);
+    expect(fit).toBeLessThan(START_ZOOM_MAX);
+    expect(viewport.zoom).toBeCloseTo(fit, 6);
+  });
+
+  it('неизмеренное полотно (0×0) не даёт NaN и Infinity', () => {
+    for (const container of [
+      { width: 0, height: 0 },
+      { width: 1280, height: 0 },
+      { width: 0, height: 668 },
+    ]) {
+      const viewport = initialViewport({ x: 0, y: 0, width: 3528, height: 296 }, container);
+      expect(Number.isFinite(viewport.x)).toBe(true);
+      expect(Number.isFinite(viewport.y)).toBe(true);
+      expect(Number.isFinite(viewport.zoom)).toBe(true);
+      expect(viewport.zoom).toBeGreaterThan(0);
+    }
+    // Пустая раскладка (этап без узлов) — тот же путь.
+    const empty = initialViewport({ x: 0, y: 0, width: 0, height: 0 }, CANVAS_1280);
+    expect(Number.isFinite(empty.zoom)).toBe(true);
+  });
+
+  it('bounds покрывает и узлы, и контейнеры групп/колонок', () => {
+    for (const stage of map.stages) {
+      const { bounds } = buildStageGraph(stage);
+      const rects = absoluteRects(stage);
+
+      for (const [id, rect] of rects) {
+        expect(rect.x, `${id} левее bounds`).toBeGreaterThanOrEqual(bounds.x);
+        expect(rect.y, `${id} выше bounds`).toBeGreaterThanOrEqual(bounds.y);
+        expect(rect.x + rect.width).toBeLessThanOrEqual(bounds.x + bounds.width);
+        expect(rect.y + rect.height).toBeLessThanOrEqual(bounds.y + bounds.height);
+      }
+
+      // Рамка группы уходит выше карточек, заголовок колонки — тоже:
+      // bounds.y обязан быть отрицательным, иначе верх раскладки срежется.
+      expect(bounds.y).toBeLessThan(0);
+    }
+  });
 });

@@ -171,3 +171,109 @@ test('кнопка «Назад» возвращает на обзор', async (
   await expect(page.locator('.react-flow__node-stage')).toHaveCount(4);
   await expect(page.locator('.react-flow__node-step')).toHaveCount(0);
 });
+
+// ───────────── стартовый вид полотна (задача process-map-l8a) ─────────────
+//
+// fitView давал масштаб 0.25…0.53, то есть подпись шага 13px рисовалась в
+// 3.2…6.9 px. Порог 12/13 ≈ 0.923 выведен из шкалы кеглей дизайн-системы
+// (--scp-font-body-s = 12px — самый мелкий кегль основного текста).
+const START_ZOOM_MIN = 12 / 13;
+
+/** Масштаб вьюпорта React Flow из transform контейнера .react-flow__viewport. */
+async function viewportZoom(page: Page): Promise<number> {
+  return page.evaluate(() => {
+    const viewport = document.querySelector('.react-flow__viewport') as HTMLElement | null;
+    return Number(/scale\(([^)]+)\)/.exec(viewport?.style.transform ?? '')?.[1] ?? '0');
+  });
+}
+
+for (const index of [0, 1, 2, 3]) {
+  test(`этап ${index + 1}: стартовый масштаб не мельче читаемого порога`, async ({ page }) => {
+    await page.goto('/');
+    await openStage(page, index);
+    // Стартовый вьюпорт ставится в useEffect после измерения полотна.
+    await page.waitForFunction(() => {
+      const viewport = document.querySelector('.react-flow__viewport') as HTMLElement | null;
+      return Number(/scale\(([^)]+)\)/.exec(viewport?.style.transform ?? '')?.[1] ?? '0') > 0.5;
+    });
+
+    const zoom = await viewportZoom(page);
+    expect(zoom).toBeGreaterThanOrEqual(START_ZOOM_MIN - 0.001);
+    expect(zoom).toBeLessThanOrEqual(1);
+    // Тот же порог, но выраженный в том, что видит читатель.
+    expect(13 * zoom).toBeGreaterThanOrEqual(12 - 0.01);
+  });
+}
+
+test('этап открывается от начала потока: самый левый узел виден слева', async ({ page }) => {
+  await page.goto('/');
+  await openStage(page, 0);
+  await page.waitForFunction(() => {
+    const viewport = document.querySelector('.react-flow__viewport') as HTMLElement | null;
+    return Number(/scale\(([^)]+)\)/.exec(viewport?.style.transform ?? '')?.[1] ?? '0') > 0.5;
+  });
+
+  // Узел с минимальной координатой X в графе обязан попасть в левую четверть
+  // экрана — при fitView он оказывался в центре сжатой полоски.
+  const left = await page.evaluate(() => {
+    let best: { id: string; x: number } | null = null;
+    document.querySelectorAll('.react-flow__node').forEach((el) => {
+      const id = el.getAttribute('data-id') ?? '';
+      if (id.startsWith('group:') || id.startsWith('column:')) {
+        return;
+      }
+      const rect = el.getBoundingClientRect();
+      if (best === null || rect.x < best.x) {
+        best = { id, x: rect.x };
+      }
+    });
+    return best as { id: string; x: number } | null;
+  });
+
+  expect(left).not.toBeNull();
+  expect(left?.x ?? 0).toBeGreaterThanOrEqual(0);
+  expect(left?.x ?? 0).toBeLessThan(1280 / 4);
+});
+
+test('компактное окно 1024×600: стартовый вид тоже читаем (SPEC §4.5)', async ({ page }) => {
+  await page.setViewportSize({ width: 1024, height: 600 });
+  await page.goto('/');
+  await openStage(page, 2);
+  await page.waitForFunction(() => {
+    const viewport = document.querySelector('.react-flow__viewport') as HTMLElement | null;
+    return Number(/scale\(([^)]+)\)/.exec(viewport?.style.transform ?? '')?.[1] ?? '0') > 0.5;
+  });
+
+  const zoom = await viewportZoom(page);
+  expect(zoom).toBeGreaterThanOrEqual(START_ZOOM_MIN - 0.001);
+  expect(13 * zoom).toBeGreaterThanOrEqual(12 - 0.01);
+});
+
+test('ручной зум колесом по-прежнему позволяет отдалить схему целиком', async ({ page }) => {
+  await page.goto('/');
+  await openStage(page, 1);
+  await page.waitForFunction(() => {
+    const viewport = document.querySelector('.react-flow__viewport') as HTMLElement | null;
+    return Number(/scale\(([^)]+)\)/.exec(viewport?.style.transform ?? '')?.[1] ?? '0') > 0.5;
+  });
+
+  // Порог 0.923 ограничивает ТОЛЬКО стартовый вид: minZoom полотна остался 0.1.
+  await page.evaluate(() => {
+    const pane = document.querySelector('.react-flow__pane') as HTMLElement;
+    for (let i = 0; i < 40; i += 1) {
+      pane.dispatchEvent(
+        new WheelEvent('wheel', {
+          deltaY: 120,
+          ctrlKey: true,
+          clientX: 640,
+          clientY: 400,
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+    }
+  });
+  await page.waitForTimeout(500);
+
+  expect(await viewportZoom(page)).toBeLessThan(START_ZOOM_MIN);
+});

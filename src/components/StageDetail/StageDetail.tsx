@@ -17,14 +17,8 @@ import { DataNode } from '../nodes/DataNode';
 import { GroupNode } from '../nodes/GroupNode';
 import { StepNode } from '../nodes/StepNode';
 import { WarningNode } from '../nodes/WarningNode';
-import {
-  buildStageGraph,
-  FIT_VIEW_PADDING,
-  GRID_DOT_SIZE,
-  GRID_GAP,
-  MAX_ZOOM,
-  MIN_ZOOM,
-} from './stageGraph';
+import { buildStageGraph, GRID_DOT_SIZE, GRID_GAP, MAX_ZOOM, MIN_ZOOM } from './stageGraph';
+import { StartViewport } from './StartViewport';
 import styles from './StageDetail.module.css';
 
 // Объекты объявлены на уровне модуля: React Flow предупреждает, если nodeTypes
@@ -40,8 +34,6 @@ const edgeTypes = {
   process: ProcessEdge,
   integration: IntegrationEdge,
 } as unknown as EdgeTypes;
-
-const fitViewOptions = { padding: FIT_VIEW_PADDING, minZoom: MIN_ZOOM, maxZoom: MAX_ZOOM };
 
 export function StageDetail() {
   const currentStageId = useProcessStore((state) => state.currentStageId);
@@ -67,9 +59,9 @@ export function StageDetail() {
         <EdgeMarkers>
           <ReactFlow
             // key по этапу: смена этапа пересобирает полотно целиком и заново
-            // запускает fitView — иначе после перехода остаётся вьюпорт
-            // предыдущего этапа, а раскладки различаются в разы (3926×1064 у
-            // этапа 2 против 3512×272 у этапа 1).
+            // считает стартовый вид (StartViewport ниже) — иначе после перехода
+            // остаётся вьюпорт предыдущего этапа, а раскладки различаются в
+            // разы (3942×1088 у этапа 2 против 3528×296 у этапа 1).
             key={stage.id}
             nodes={graph.nodes}
             edges={graph.edges}
@@ -82,11 +74,14 @@ export function StageDetail() {
             nodesFocusable={false}
             edgesFocusable={false}
             panOnScroll
-            fitView
-            fitViewOptions={fitViewOptions}
+            // fitView намеренно НЕ используется: он опускал масштаб до 0.25…0.53
+            // и делал подписи нечитаемыми. Стартовый вид — StartViewport.
+            // minZoom/maxZoom здесь остаются границами РУЧНОГО зума (колесо,
+            // тулбар M3): отдалить схему целиком пользователь по-прежнему может.
             minZoom={MIN_ZOOM}
             maxZoom={MAX_ZOOM}
           >
+            <StartViewport bounds={graph.bounds} />
             <Background variant={BackgroundVariant.Dots} gap={GRID_GAP} size={GRID_DOT_SIZE} />
           </ReactFlow>
         </EdgeMarkers>

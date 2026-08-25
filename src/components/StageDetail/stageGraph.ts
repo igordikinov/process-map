@@ -51,15 +51,108 @@ export const COLUMN_TITLE_HEIGHT = 24;
 /** Точечная сетка полотна — та же, что на уровне 1 (SPEC §4.1). */
 export const GRID_GAP = 16;
 export const GRID_DOT_SIZE = 1;
-/** Отступ fitView, чтобы контейнеры не упирались в края полотна. */
-export const FIT_VIEW_PADDING = 0.06;
 /**
- * Нижняя граница зума меньше, чем на уровне 1 (там 0.3): раскладка этапа 2
- * шириной 3926 px в окне 1280 требует масштаба около 0.3 ещё до паддинга
- * fitView, а на узком контейнере — заметно меньше.
+ * Границы РУЧНОГО зума (колесо, тулбар M3). Нижняя граница меньше, чем на
+ * уровне 1 (там 0.3): раскладки этапов до 3942 px шириной, и пользователь
+ * вправе отдалить их целиком, чтобы увидеть форму процесса. К СТАРТОВОМУ виду
+ * это отношения не имеет — см. START_ZOOM_MIN.
  */
 export const MIN_ZOOM = 0.1;
 export const MAX_ZOOM = 2;
+
+// ──────────────────── стартовый вид (задача process-map-l8a) ────────────────────
+//
+// Раньше экран открывался через fitView. На реальных данных это давало масштаб
+// 0.31…0.53, то есть подпись шага 13px рисовалась в 4.1…6.9 px — нечитаемо;
+// вдобавок fitView центрирует раскладку, и этап 1 (3528×296) открывался тонкой
+// полоской посреди пустого поля, а не с начала потока.
+//
+// Теперь стартовый вид считается сам: масштаб — читаемый, привязка — левый
+// верхний угол раскладки.
+
+/** Кегль подписи шага в макете A2 (токен --pm-font-size-13). */
+const STEP_LABEL_FONT_PX = 13;
+
+/**
+ * Нижняя граница читаемого кегля — 12 px, самый мелкий кегль ОСНОВНОГО текста в
+ * дизайн-системе In.Plan (--scp-font-body-s / --scp-font-sizes-12). Меньше 12
+ * в шкале есть только «эйбры» (--pm-font-size-10-5/11), и то для капса
+ * заголовков, а не для читаемых подписей.
+ */
+const MIN_READABLE_FONT_PX = 12;
+
+/**
+ * Минимальный стартовый масштаб = 12/13 ≈ 0.923: подпись шага не мельче 12 px
+ * ни на одном этапе и ни при какой высоте контейнера (в том числе в компактном
+ * режиме SPEC §4.5, где полотно 1024×548).
+ *
+ * Порог выведен из шкалы кеглей, а не подобран на глаз: любое другое число
+ * пришлось бы обосновывать отдельно.
+ */
+export const START_ZOOM_MIN = MIN_READABLE_FONT_PX / STEP_LABEL_FONT_PX;
+
+/**
+ * Стартовый масштаб не увеличивается выше 1: карточки не должны быть КРУПНЕЕ
+ * макета A2, даже если раскладка целиком влезает в полотно.
+ */
+export const START_ZOOM_MAX = 1;
+
+/** Отступ раскладки от краёв полотна в стартовом виде, px экрана. */
+export const START_PADDING = 24;
+
+export interface Viewport {
+  x: number;
+  y: number;
+  zoom: number;
+}
+
+export interface ContainerSize {
+  width: number;
+  height: number;
+}
+
+/**
+ * Стартовый вьюпорт полотна.
+ *
+ * Масштаб: сколько влезает целиком, но не мельче START_ZOOM_MIN и не крупнее
+ * START_ZOOM_MAX.
+ *
+ * Смещение — гибрид, по осям по-разному:
+ *   · X — ВСЕГДА привязка к левому краю раскладки. По горизонтали ни один этап
+ *     в полотно не влезает (2152…3942 px при читаемом масштабе), и начало
+ *     потока важнее его центра: пользователь должен увидеть первый шаг, а не
+ *     середину.
+ *   · Y — центрирование, когда раскладка влезает по высоте целиком, иначе
+ *     привязка к верху. Этап 1 — полоса 296 px при 668 доступных: прижатая к
+ *     верху полоса с пустотой в 372 px снизу читается как поломка вёрстки.
+ *
+ * Координаты левого верхнего угла раскладки бывают отрицательными (рамка группы
+ * уходит выше и левее карточек, заголовок колонки — выше), поэтому смещение
+ * считается от bounds.x/bounds.y, а не от нуля.
+ */
+export function initialViewport(bounds: Box, container: ContainerSize): Viewport {
+  // Полотно ещё не измерено (первый кадр, jsdom) — считать нечего, отдаём
+  // читаемый масштаб без сдвига.
+  if (container.width <= 0 || container.height <= 0 || bounds.width <= 0 || bounds.height <= 0) {
+    return { x: START_PADDING, y: START_PADDING, zoom: START_ZOOM_MAX };
+  }
+
+  const fit = Math.min(
+    (container.width - START_PADDING * 2) / bounds.width,
+    (container.height - START_PADDING * 2) / bounds.height,
+  );
+  const zoom = Math.min(START_ZOOM_MAX, Math.max(START_ZOOM_MIN, fit));
+
+  const scaledHeight = bounds.height * zoom;
+  const fitsVertically = scaledHeight <= container.height - START_PADDING * 2;
+  const topOffset = fitsVertically ? (container.height - scaledHeight) / 2 : START_PADDING;
+
+  return {
+    x: START_PADDING - bounds.x * zoom,
+    y: topOffset - bounds.y * zoom,
+    zoom,
+  };
+}
 
 /** id контейнера группы — с префиксом, чтобы не столкнуться с id узлов. */
 export function groupContainerId(groupId: string): string {
@@ -74,7 +167,8 @@ function sizeOf(node: ProcessNode): NodeSize {
   return node.type === 'data' ? DATA_NODE_SIZE : STEP_NODE_SIZE;
 }
 
-interface Box {
+/** Прямоугольник в координатах раскладки (не экрана). */
+export interface Box {
   x: number;
   y: number;
   width: number;
@@ -94,6 +188,13 @@ function boundingBox(nodes: readonly ProcessNode[]): Box {
 export interface StageGraph {
   nodes: StageDetailNode[];
   edges: FlowEdge[];
+  /**
+   * Габарит всей раскладки в координатах графа, включая dashed-рамки групп и
+   * заголовки колонок (они уходят выше и левее самих карточек, поэтому
+   * bounds.x/y бывают отрицательными). Нужен для стартового вьюпорта —
+   * см. initialViewport.
+   */
+  bounds: Box;
 }
 
 /** Тип узла React Flow по ProcessNode.type. `integration` рисуется карточкой шага. */
@@ -266,5 +367,29 @@ export function buildStageGraph(stage: Stage): StageGraph {
     });
   }
 
-  return { nodes: [...containers, ...children, ...loose], edges };
+  // ── габарит раскладки ──
+  // Считается по УЖЕ построенным прямоугольникам: узлы + контейнеры. Контейнеры
+  // обязательны — dashed-рамка группы уходит на GROUP_PADDING левее и выше
+  // своих карточек, а заголовок колонки на COLUMN_TITLE_HEIGHT выше, и без них
+  // стартовый вид срезал бы рамку у края полотна.
+  const rects: Box[] = [
+    ...stage.nodes.map((node) => ({
+      x: node.position.x,
+      y: node.position.y,
+      ...sizeOf(node),
+    })),
+    ...[...groupOrigin.values(), ...columnOrigin.values()],
+  ];
+  const bounds: Box =
+    rects.length === 0
+      ? { x: 0, y: 0, width: 0, height: 0 }
+      : (() => {
+          const x0 = Math.min(...rects.map((rect) => rect.x));
+          const y0 = Math.min(...rects.map((rect) => rect.y));
+          const x1 = Math.max(...rects.map((rect) => rect.x + rect.width));
+          const y1 = Math.max(...rects.map((rect) => rect.y + rect.height));
+          return { x: x0, y: y0, width: x1 - x0, height: y1 - y0 };
+        })();
+
+  return { nodes: [...containers, ...children, ...loose], edges, bounds };
 }
