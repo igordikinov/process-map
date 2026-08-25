@@ -1,5 +1,6 @@
-// Минимальные объявления типов для встроенных модулей Node, которыми пользуется
-// scripts/layout.ts.
+// Минимальные объявления типов для встроенных модулей Node, которыми пользуются
+// scripts/layout.ts и тесты, читающие файлы репозитория
+// (tests/importPreserve.test.ts).
 //
 // Почему не @types/node: пакета в проекте нет, а новая зависимость по CLAUDE.md
 // заводится только отдельной задачей в bd. Здесь объявлено ровно то, что реально
@@ -30,4 +31,6 @@ declare module 'node:url' {
 declare const process: {
   argv: string[];
   exitCode: number;
+  /** Корень прогона: под vitest+jsdom import.meta.url не file:-URL. */
+  cwd(): string;
 };

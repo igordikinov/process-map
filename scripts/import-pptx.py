@@ -21,6 +21,20 @@ import-pptx.py — перенос содержимого «SNP Е2Е проце�
 Явных связей (stCxn/endCxn) в презентации нет, поэтому принадлежность узла группе
 и концы рёбер выводятся геометрически. Всё, что не распозналось однозначно,
 не выдумывается, а печатается в отчёте-сверке.
+
+РУЧНЫЕ ПОЛЯ (`screen`, `owner`) ПЕРЕЖИВАЮТ ПЕРЕГЕНЕРАЦИЮ
+---------------------------------------------------------
+Ссылок на экраны In.Plan в презентации нет: их проставляет человек в редакторе,
+и ради них карта вообще встроена в вики. Скрипт собирает документ из презентации
+с нуля, поэтому перед записью он читает предыдущий src/data/process.json и
+переносит на новые узлы поля, которых в презентации не существует
+(PRESERVED_NODE_FIELDS / PRESERVED_STAGE_FIELDS). Сопоставление — по `id`;
+id стабильны по построению (см. IdFactory). Всё, что перенести не удалось,
+печатается поимённо — молчаливой потери ссылок быть не должно.
+
+Самопроверка переноса (без презентации, только stdlib):
+
+    python scripts/import-pptx.py --self-test
 """
 
 from __future__ import annotations
@@ -79,6 +93,58 @@ MAX_KEY_OUTPUTS = 3                  # ограничение zod-схемы
 MAX_ID_LENGTH = 72                   # длиннее, чтобы различающая часть текста не срезалась
 
 SYSTEM_CODES = ("DP", "PS", "IO", "ERP", "MRP", "INPLAN")
+
+# --------------------------------------------------------------------------------------
+# Контракт с src/data/schema.ts
+# --------------------------------------------------------------------------------------
+#
+# NODE_KEY_ORDER / STAGE_KEY_ORDER повторяют ПОРЯДОК ключей zod-схем
+# ProcessNodeSchema и StageSchema. Это не косметика: экспорт из приложения
+# (src/utils/processTransfer.ts::serializeProcessMap) прогоняет карту через zod,
+# который пересобирает объекты в порядке схемы, и обязан совпадать с этим файлом
+# побайтово. Расхождение ловит tests/importPreserve.test.ts.
+NODE_KEY_ORDER = (
+    "id",
+    "type",
+    "label",
+    "description",
+    "group",
+    "inputs",
+    "outputs",
+    "system",
+    "owner",
+    "screen",
+    "position",
+)
+STAGE_KEY_ORDER = (
+    "id",
+    "number",
+    "title",
+    "shortTitle",
+    "keyOutputs",
+    "warningsCount",
+    "screen",
+    "groups",
+    "nodes",
+    "edges",
+    "inputs",
+    "outputs",
+)
+
+# Поля модели, которых В ПРЕЗЕНТАЦИИ НЕТ: их заполняет человек (редактор ссылок —
+# SPEC §4.4, `owner` — правкой файла). Импортёр их не создаёт, значит обязан
+# переносить из предыдущего process.json, иначе перегенерация их стирает.
+PRESERVED_NODE_FIELDS = ("owner", "screen")
+PRESERVED_STAGE_FIELDS = ("screen",)
+
+# Остальное импортёр строит сам из презентации.
+IMPORTER_NODE_FIELDS = tuple(k for k in NODE_KEY_ORDER if k not in PRESERVED_NODE_FIELDS)
+IMPORTER_STAGE_FIELDS = tuple(k for k in STAGE_KEY_ORDER if k not in PRESERVED_STAGE_FIELDS)
+
+# Код возврата, когда ссылки на экраны потеряны: узла с таким id в презентации
+# больше нет. Файл при этом записывается — импорт корректен, потерян только
+# ручной слой, и его полный список напечатан в отчёте.
+EXIT_LINKS_LOST = 2
 
 A = "{http://schemas.openxmlformats.org/drawingml/2006/main}"
 P = "{http://schemas.openxmlformats.org/presentationml/2006/main}"
@@ -1339,6 +1405,220 @@ def print_report(process_map: dict, reports: Sequence[SlideReport], questions: S
 
 
 # --------------------------------------------------------------------------------------
+# Перенос ручных полей из предыдущего process.json
+# --------------------------------------------------------------------------------------
+
+
+@dataclass
+class CarryOverReport:
+    """Что произошло с полями, которых в презентации нет."""
+
+    had_previous: bool = False
+    previous_nodes: int = 0
+    transferred: list[str] = field(default_factory=list)
+    cleared: list[str] = field(default_factory=list)
+    invalid: list[str] = field(default_factory=list)
+    lost: list[str] = field(default_factory=list)
+    screens_transferred: int = 0
+    screens_lost: int = 0
+
+
+def is_screen_link(value: object) -> bool:
+    """ScreenLink из schema.ts: ровно { title: string, url: string }."""
+    return (
+        isinstance(value, dict)
+        and set(value) == {"title", "url"}
+        and isinstance(value.get("title"), str)
+        and isinstance(value.get("url"), str)
+    )
+
+
+def is_owner(value: object) -> bool:
+    return isinstance(value, str)
+
+
+FIELD_VALIDATORS = {"screen": is_screen_link, "owner": is_owner}
+
+
+def reorder_keys(payload: dict, order: Sequence[str]) -> dict:
+    """
+    Пересобирает словарь в порядке ключей zod-схемы. Нужен, потому что перенос
+    добавляет `owner`/`screen` уже после `position`, а порядок ключей влияет на
+    байты файла (см. NODE_KEY_ORDER).
+    """
+    result = {key: payload[key] for key in order if key in payload}
+    # Ключей вне схемы быть не должно; если появились — не теряем их молча.
+    result.update({key: value for key, value in payload.items() if key not in result})
+    return result
+
+
+def load_previous_map(path: Path) -> dict | None:
+    """
+    Предыдущий process.json. Отсутствие файла — норма (первый запуск на чистом
+    репозитории). А вот битый файл — НЕ норма: перезаписать его молча значит
+    ровно то, ради чего эта функция написана, поэтому импорт останавливается.
+    """
+    if not path.exists():
+        return None
+    try:
+        previous = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as error:
+        raise SystemExit(
+            f"Предыдущий {path} не читается ({error}). Импорт остановлен, чтобы не "
+            f"затереть ручные ссылки на экраны: почините или удалите файл вручную."
+        ) from error
+    if not isinstance(previous, dict):
+        raise SystemExit(f"Предыдущий {path} — не объект карты процесса. Импорт остановлен.")
+    return previous
+
+
+def index_previous(previous: dict) -> tuple[dict[str, dict], dict[str, dict]]:
+    """id → узел и id → этап предыдущего документа."""
+    nodes: dict[str, dict] = {}
+    stages: dict[str, dict] = {}
+    for stage in previous.get("stages") or []:
+        if not isinstance(stage, dict):
+            continue
+        if isinstance(stage.get("id"), str):
+            stages[stage["id"]] = stage
+        for node in stage.get("nodes") or []:
+            if isinstance(node, dict) and isinstance(node.get("id"), str):
+                nodes[node["id"]] = node
+    return nodes, stages
+
+
+def carry_field(target: dict, source: dict, name: str, where: str, report: CarryOverReport) -> None:
+    """
+    Переносит одно поле. Три РАЗЛИЧИМЫХ состояния источника:
+
+      · ключа нет           — поля никогда не было, переносить нечего, молчим;
+      · значение null       — человек СОЗНАТЕЛЬНО удалил ссылку (SPEC §4.4,
+                              кнопка «Удалить ссылку» пишет screen: null).
+                              В сам JSON null не попадает: ProcessNodeSchema
+                              объявляет screen как .optional(), а не .nullable(),
+                              и «ссылки нет» кодируется отсутствием ключа.
+                              Поэтому поле не переносим, но и не считаем потерей —
+                              печатаем отдельной строкой, чтобы отличать от
+                              «ссылки не было»;
+      · значение есть       — переносим, если оно валидно по schema.ts.
+    """
+    if name not in source:
+        return
+    value = source[name]
+    if value is None:
+        report.cleared.append(f"{where}: {name} — было явно удалено (null), оставлено пустым")
+        return
+    if not FIELD_VALIDATORS[name](value):
+        report.invalid.append(f"{where}: {name} = {value!r} — не проходит schema.ts, НЕ перенесено")
+        return
+    target[name] = value
+    if name == "screen":
+        report.screens_transferred += 1
+        report.transferred.append(f"{where}: screen → «{value['title']}» {value['url']}")
+    else:
+        report.transferred.append(f"{where}: {name} → «{value}»")
+
+
+def describe_lost(node: dict, field_name: str) -> str:
+    value = node.get(field_name)
+    if field_name == "screen" and isinstance(value, dict):
+        return f"screen «{value.get('title')}» {value.get('url')}"
+    return f"{field_name} «{value}»"
+
+
+def carry_over_manual_fields(fresh: dict, previous: dict | None) -> CarryOverReport:
+    """
+    Переносит PRESERVED_* поля из предыдущего документа в свежесобранный.
+    Сопоставление строго по `id` (узлы — глобально по документу, этапы — по
+    stage.id): id стабильны по построению, а привязка по порядку обхода или по
+    подписи развалилась бы при первой же правке презентации.
+
+    Возвращает отчёт: что перенесено, что было явно очищено, что невалидно и
+    что потеряно вместе с исчезнувшим узлом.
+    """
+    report = CarryOverReport()
+    if previous is None:
+        return report
+    report.had_previous = True
+
+    prev_nodes, prev_stages = index_previous(previous)
+    report.previous_nodes = len(prev_nodes)
+
+    fresh_node_ids: set[str] = set()
+    fresh_labels: dict[str, list[str]] = {}
+    for stage in fresh["stages"]:
+        prev_stage = prev_stages.get(stage["id"])
+        if prev_stage is not None:
+            for name in PRESERVED_STAGE_FIELDS:
+                carry_field(stage, prev_stage, name, f"этап «{stage['id']}»", report)
+        for node in stage["nodes"]:
+            fresh_node_ids.add(node["id"])
+            fresh_labels.setdefault(node["label"], []).append(node["id"])
+            prev_node = prev_nodes.get(node["id"])
+            if prev_node is None:
+                continue
+            for name in PRESERVED_NODE_FIELDS:
+                carry_field(node, prev_node, name, f"узел «{node['id']}»", report)
+
+    # Узлы, которых в презентации больше нет. Молча потерять ссылку нельзя —
+    # печатаем id, подпись и сам url, чтобы её можно было проставить заново,
+    # и подсказываем узел с такой же подписью, если он появился под новым id.
+    for node_id, prev_node in sorted(prev_nodes.items()):
+        if node_id in fresh_node_ids:
+            continue
+        for name in PRESERVED_NODE_FIELDS:
+            if prev_node.get(name) is None:
+                continue
+            if name == "screen":
+                report.screens_lost += 1
+            hint = ""
+            twins = [i for i in fresh_labels.get(prev_node.get("label", ""), []) if i != node_id]
+            if twins:
+                hint = f"; возможно, это теперь {', '.join(twins)}"
+            report.lost.append(
+                f"узла «{node_id}» больше нет в презентации — потеряно "
+                f"{describe_lost(prev_node, name)} (подпись: «{prev_node.get('label', '')}»){hint}"
+            )
+
+    for stage in fresh["stages"]:
+        stage["nodes"] = [reorder_keys(node, NODE_KEY_ORDER) for node in stage["nodes"]]
+    fresh["stages"] = [reorder_keys(stage, STAGE_KEY_ORDER) for stage in fresh["stages"]]
+    return report
+
+
+def print_carry_over(report: CarryOverReport) -> None:
+    print("\n" + "=" * 78)
+    print("РУЧНЫЕ ПОЛЯ (ссылки на экраны, ответственные) — ПЕРЕНОС ИЗ ПРЕДЫДУЩЕГО JSON")
+    print("=" * 78)
+    if not report.had_previous:
+        print(f"  предыдущего {JSON_PATH.name} нет — первый запуск, переносить нечего")
+        return
+    print(f"  узлов в предыдущем файле: {report.previous_nodes}")
+    print(f"  перенесено ссылок (screen): {report.screens_transferred}")
+    print(f"  потеряно ссылок (screen):   {report.screens_lost}")
+    if report.transferred:
+        print(f"  перенесено полей ({len(report.transferred)}):")
+        for item in report.transferred:
+            print(f"    + {item}")
+    else:
+        print("  перенесённых полей нет")
+    if report.cleared:
+        print(f"  явно удалённые ранее ссылки ({len(report.cleared)}) — это НЕ потеря:")
+        for item in report.cleared:
+            print(f"    · {item}")
+    if report.invalid:
+        print(f"  НЕВАЛИДНЫЕ ЗНАЧЕНИЯ ({len(report.invalid)}):")
+        for item in report.invalid:
+            print(f"    ! {item}")
+    if report.lost:
+        print(f"  ПОТЕРЯННЫЕ РУЧНЫЕ ПОЛЯ ({len(report.lost)}) — проставить заново:")
+        for item in report.lost:
+            print(f"    ! {item}")
+    else:
+        print("  потерянных ручных полей нет")
+
+
+# --------------------------------------------------------------------------------------
 # Запись файлов
 # --------------------------------------------------------------------------------------
 
@@ -1379,24 +1659,226 @@ def collect_required_node_ids(process_map: dict) -> list[str]:
     return ids
 
 
+# --------------------------------------------------------------------------------------
+# Самопроверка переноса (python scripts/import-pptx.py --self-test)
+# --------------------------------------------------------------------------------------
+
+
+def _fresh_fixture() -> dict:
+    """Свежесобранный документ в том виде, в каком его отдаёт build_process_map."""
+    return {
+        "version": MAP_VERSION,
+        "updatedAt": MAP_UPDATED_AT,
+        "title": MAP_TITLE,
+        "stages": [
+            {
+                "id": "stage-1",
+                "number": 1,
+                "title": "Этап 1",
+                "shortTitle": "Этап 1",
+                "keyOutputs": [],
+                "warningsCount": 0,
+                "groups": [],
+                "nodes": [
+                    {"id": "kept", "type": "step", "label": "Шаг", "position": {"x": 1, "y": 2}},
+                    {"id": "cleared", "type": "step", "label": "Ш2", "position": {"x": 3, "y": 4}},
+                    {"id": "never", "type": "step", "label": "Ш3", "position": {"x": 5, "y": 6}},
+                    {"id": "bad", "type": "step", "label": "Ш4", "position": {"x": 7, "y": 8}},
+                    {"id": "renamed-2-9", "type": "step", "label": "Ушёл", "position": {"x": 9, "y": 9}},
+                ],
+                "edges": [],
+                "inputs": [],
+                "outputs": [],
+            }
+        ],
+        "overviewEdges": [],
+    }
+
+
+def _previous_fixture() -> dict:
+    link = {"title": "Экран плана", "url": "https://inplan.example/plan"}
+    return {
+        "version": MAP_VERSION,
+        "updatedAt": MAP_UPDATED_AT,
+        "title": MAP_TITLE,
+        "stages": [
+            {
+                "id": "stage-1",
+                "number": 1,
+                "title": "Этап 1",
+                "shortTitle": "Этап 1",
+                "keyOutputs": [],
+                "warningsCount": 0,
+                "screen": {"title": "Обзор этапа", "url": "https://inplan.example/stage-1"},
+                "groups": [],
+                "nodes": [
+                    {
+                        "id": "kept",
+                        "type": "step",
+                        "label": "Шаг",
+                        "owner": "Планировщик спроса",
+                        "screen": link,
+                        "position": {"x": 0, "y": 0},
+                    },
+                    # null — «пользователь удалил ссылку», а не «ссылки не было».
+                    {
+                        "id": "cleared",
+                        "type": "step",
+                        "label": "Ш2",
+                        "screen": None,
+                        "position": {"x": 0, "y": 0},
+                    },
+                    # ключа screen нет вовсе.
+                    {"id": "never", "type": "step", "label": "Ш3", "position": {"x": 0, "y": 0}},
+                    # значение не проходит ScreenLinkSchema.
+                    {
+                        "id": "bad",
+                        "type": "step",
+                        "label": "Ш4",
+                        "screen": {"url": "https://inplan.example/x"},
+                        "position": {"x": 0, "y": 0},
+                    },
+                    # узел, которого в презентации больше нет, но ссылка была.
+                    {
+                        "id": "gone",
+                        "type": "step",
+                        "label": "Ушёл",
+                        "screen": {"title": "Старый экран", "url": "https://inplan.example/old"},
+                        "position": {"x": 0, "y": 0},
+                    },
+                ],
+                "edges": [],
+                "inputs": [],
+                "outputs": [],
+            }
+        ],
+        "overviewEdges": [],
+    }
+
+
+def run_self_test() -> int:
+    """Проверки переноса ручных полей. Только stdlib, презентация не нужна."""
+    checks = 0
+
+    def check(condition: bool, message: str) -> None:
+        nonlocal checks
+        checks += 1
+        if not condition:
+            raise SystemExit(f"САМОПРОВЕРКА ПРОВАЛЕНА: {message}")
+
+    # 1. Контракт с serialize_node: импортёр не создаёт ручных полей.
+    produced = serialize_node(NodeDraft(node_id="x", node_type="step", label="L", box=Box(0, 0, 1, 1)))
+    check(
+        set(produced) <= set(IMPORTER_NODE_FIELDS),
+        f"serialize_node отдаёт ключи вне IMPORTER_NODE_FIELDS: {set(produced) - set(IMPORTER_NODE_FIELDS)}",
+    )
+    check(
+        not (set(PRESERVED_NODE_FIELDS) & set(IMPORTER_NODE_FIELDS)),
+        "PRESERVED_NODE_FIELDS пересекается с IMPORTER_NODE_FIELDS",
+    )
+
+    # 2. Первый запуск: предыдущего файла нет.
+    fresh = _fresh_fixture()
+    empty = carry_over_manual_fields(fresh, None)
+    check(not empty.had_previous and not empty.transferred and not empty.lost, "пустой перенос")
+    check(fresh == _fresh_fixture(), "перенос без предыдущего файла изменил документ")
+
+    # 3. Основной случай.
+    fresh = _fresh_fixture()
+    report = carry_over_manual_fields(fresh, _previous_fixture())
+    nodes = {n["id"]: n for n in fresh["stages"][0]["nodes"]}
+
+    check(
+        nodes["kept"].get("screen") == {"title": "Экран плана", "url": "https://inplan.example/plan"},
+        "screen не перенесён по совпадающему id",
+    )
+    check(nodes["kept"].get("owner") == "Планировщик спроса", "owner не перенесён")
+    # 1 ссылка узла + 1 ссылка этапа (stage.screen считается тем же счётчиком).
+    check(report.screens_transferred == 2, f"screens_transferred={report.screens_transferred}, ожидалось 2")
+
+    # 4. null отличается от отсутствия ключа.
+    check("screen" not in nodes["cleared"], "screen: null попал в JSON (схема его не примет)")
+    check(len(report.cleared) == 1, f"явных удалений {len(report.cleared)}, ожидалось 1")
+    check("cleared" in report.cleared[0], "явное удаление не названо поимённо")
+    check(
+        all("«never»" not in item for item in report.cleared + report.transferred + report.lost),
+        "узел без ключа screen попал в отчёт — «не было» перепутано с «удалили»",
+    )
+    check("screen" not in nodes["never"], "узлу без ссылки ссылка приписана")
+
+    # 5. Невалидное значение не переносится и не молчит.
+    check("screen" not in nodes["bad"], "невалидный screen перенесён в JSON")
+    check(len(report.invalid) == 1, f"невалидных {len(report.invalid)}, ожидалось 1")
+
+    # 6. Исчезнувший узел: громкая потеря, url в отчёте, подсказка по подписи.
+    check(report.screens_lost == 1, f"screens_lost={report.screens_lost}, ожидалось 1")
+    check(len(report.lost) == 1, f"потерь {len(report.lost)}, ожидалось 1")
+    check("https://inplan.example/old" in report.lost[0], "url потерянной ссылки не напечатан")
+    check("renamed-2-9" in report.lost[0], "подсказка по совпадающей подписи не выдана")
+
+    # 7. Этап.
+    check(
+        fresh["stages"][0].get("screen") == {"title": "Обзор этапа", "url": "https://inplan.example/stage-1"},
+        "stage.screen не перенесён",
+    )
+
+    # 8. Порядок ключей — иначе экспорт из приложения перестанет совпадать побайтово.
+    check(
+        list(nodes["kept"]) == [k for k in NODE_KEY_ORDER if k in nodes["kept"]],
+        f"порядок ключей узла нарушен: {list(nodes['kept'])}",
+    )
+    check(
+        list(fresh["stages"][0]) == [k for k in STAGE_KEY_ORDER if k in fresh["stages"][0]],
+        f"порядок ключей этапа нарушен: {list(fresh['stages'][0])}",
+    )
+
+    # 9. Идемпотентность: перенос из уже перенесённого документа ничего не меняет.
+    again = json.loads(json.dumps(fresh, ensure_ascii=False))
+    carry_over_manual_fields(again, json.loads(json.dumps(fresh, ensure_ascii=False)))
+    check(
+        json.dumps(again, ensure_ascii=False, indent=2) == json.dumps(fresh, ensure_ascii=False, indent=2),
+        "повторный перенос изменил документ — идемпотентность нарушена",
+    )
+
+    print(f"САМОПРОВЕРКА ПРОЙДЕНА: {checks} проверок")
+    return 0
+
+
 def main(argv: Iterable[str]) -> int:
-    del argv
+    args = list(argv)
     # Отчёт содержит кириллицу и стрелки: на консоли с cp866/cp1251 печать иначе
     # падает с UnicodeEncodeError уже после записи файлов.
     for stream in (sys.stdout, sys.stderr):
         if hasattr(stream, "reconfigure"):
             stream.reconfigure(encoding="utf-8", errors="replace")
 
+    if "--self-test" in args:
+        return run_self_test()
+
+    # Ручной слой читаем ДО сборки: если предыдущий файл битый, лучше упасть
+    # раньше, чем после разбора презентации.
+    previous = load_previous_map(JSON_PATH)
+
     # Фаза 1 — подсчёт коллизий базовых slug'ов, фаза 2 — стабильные id.
     _, _, _, collisions = build_process_map(None)
     process_map, reports, questions, _ = build_process_map(dict(collisions))
+
+    carry_over = carry_over_manual_fields(process_map, previous)
 
     check_unique_ids(process_map)
     write_json(JSON_PATH, process_map)
     write_json(REQUIRED_NODES_PATH, collect_required_node_ids(process_map))
     print_report(process_map, reports, questions)
+    print_carry_over(carry_over)
     print(f"\nзаписано: {JSON_PATH.relative_to(ROOT).as_posix()}")
     print(f"записано: {REQUIRED_NODES_PATH.relative_to(ROOT).as_posix()}")
+    if carry_over.lost:
+        print(
+            f"\nВНИМАНИЕ: потеряно ручных полей: {len(carry_over.lost)} "
+            f"(из них ссылок на экраны: {carry_over.screens_lost}). "
+            f"Список выше — проставьте их заново в редакторе. Код возврата {EXIT_LINKS_LOST}."
+        )
+        return EXIT_LINKS_LOST
     return 0
 
 
