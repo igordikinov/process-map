@@ -20,15 +20,24 @@
 // Legend.module.css. Теперь она отдельная строка (.legendStrip) под .canvas,
 // а не над ним; сама позиция строки задаётся снаружи, здесь только контент.
 //
-// Компактный режим (SPEC §4.5) сворачивает легенду в кнопку-иконку
-// (design/*.dc.html, артборд A4, assets/icons/tables.svg) — задача M4.
-// Здесь заложена только точка расширения: списки *_ITEMS ниже не завязаны
-// на разметку панели, поэтому M4 сможет переиспользовать их для содержимого
-// свёрнутой кнопки/поповера, не трогая этот компонент. Сама логика
-// «высота контейнера < config.compactHeight» не реализуется в этой задаче.
+// Компактный режим (SPEC §4.5, артборд A4, задача process-map-5l3):
+// легенда сворачивается в кнопку-иконку (assets/icons/tables.svg). Кнопка
+// живёт ВНУТРИ той же полосы под полотном, а не всплывает над ним: макет A4
+// рисует её в левом нижнем углу полотна, но в M2 замерено, что плавающая
+// панель перекрывает содержимое на любом углу и на любом этапе (см.
+// Legend.module.css). Схлопывание внутрь полосы даёт то же «легенда не
+// занимает место», не возвращая устранённый дефект.
+//
+// Раскрытие — состояние самого компонента, а не store: это не состояние
+// карты процесса (уровень, выбранный узел, режим), а положение одного
+// элемента хрома, которое ничего не должно переживать.
+import { useState } from 'react';
+import { iconUrl } from '../../assets/icons';
 import { ru } from '../../i18n/ru';
 import { useProcessStore } from '../../store/useProcessStore';
 import styles from './Legend.module.css';
+
+const LEGEND_ICON = iconUrl('tables');
 
 interface LegendItem {
   key: string;
@@ -61,22 +70,60 @@ const STAGE_ITEMS: readonly LegendItem[] = [
  *  фильтр по обоим уровням общий и просто не найдёт лишний ключ. */
 const HIDDEN_WITHOUT_INTEGRATIONS = new Set(['integration', 'system']);
 
-export function Legend() {
+export interface LegendProps {
+  /** SPEC §4.5: легенда сворачивается в кнопку-иконку. */
+  compact?: boolean;
+}
+
+export function Legend({ compact = false }: LegendProps) {
   const isOverview = useProcessStore((state) => state.currentStageId === null);
   const showIntegrations = useProcessStore((state) => state.showIntegrations);
+  const [expanded, setExpanded] = useState(false);
 
   const items = (isOverview ? OVERVIEW_ITEMS : STAGE_ITEMS).filter(
     (item) => showIntegrations || !HIDDEN_WITHOUT_INTEGRATIONS.has(item.key),
   );
 
+  const list = items.map((item) => (
+    <span key={item.key} className={styles.item}>
+      <span className={`${styles.swatch} ${item.swatch}`} aria-hidden="true" />
+      {item.label}
+    </span>
+  ));
+
+  if (!compact) {
+    return (
+      <div className={styles.legend} role="group" aria-label={ru.legend.ariaLabel}>
+        {list}
+      </div>
+    );
+  }
+
+  // Свёрнутая легенда: кнопка-иконка, по клику список раскрывается ВПРАВО в
+  // той же полосе. Развёрнутый список — не поповер: полоса под полотном
+  // достаточно широкая, и всплывающий слой пришлось бы снова размещать над
+  // чем-то (см. комментарий в шапке файла).
   return (
-    <div className={styles.legend} role="group" aria-label={ru.legend.ariaLabel}>
-      {items.map((item) => (
-        <span key={item.key} className={styles.item}>
-          <span className={`${styles.swatch} ${item.swatch}`} aria-hidden="true" />
-          {item.label}
-        </span>
-      ))}
+    <div
+      className={`${styles.legend} ${styles.compact}`}
+      role="group"
+      aria-label={ru.legend.ariaLabel}
+    >
+      <button
+        type="button"
+        className={styles.toggle}
+        aria-expanded={expanded}
+        aria-label={expanded ? ru.legend.collapse : ru.legend.expand}
+        title={expanded ? ru.legend.collapse : ru.legend.expand}
+        onClick={() => {
+          setExpanded((previous) => !previous);
+        }}
+      >
+        <img src={LEGEND_ICON} alt="" className={styles.toggleIcon} />
+      </button>
+      {/* Список не «спрятан классом»: скрытый DOM всё равно читается
+          скринридером и попадает в поиск по странице. */}
+      {expanded && list}
     </div>
   );
 }

@@ -30,6 +30,17 @@ async function openStage(page: Page, index: number): Promise<void> {
     (box?.x ?? 0) + (box?.width ?? 0) / 2,
     (box?.y ?? 0) + (box?.height ?? 0) / 2,
   );
+  await waitForStageDetailReady(page);
+}
+
+/**
+ * Ждёт готовности полотна уровня 2, когда карточек уровня 1 на экране уже нет
+ * (используется вместо openStage()). Актуально после page.reload(): deep-link
+ * (?stage=…, SPEC §4.7, process-map-0y2) сам восстанавливает открытый этап —
+ * приложение открывается сразу на уровне 2, а не на обзоре, поэтому кликать
+ * по несуществующей карточке .react-flow__node-stage нельзя.
+ */
+async function waitForStageDetailReady(page: Page): Promise<void> {
   await page.waitForSelector('.react-flow__node-step');
   // Стартовый вьюпорт ставится в useEffect после измерения полотна.
   await page.waitForFunction(() => {
@@ -49,6 +60,25 @@ async function clickNode(page: Page, nodeId: string): Promise<void> {
     (box?.x ?? 0) + (box?.width ?? 0) / 2,
     (box?.y ?? 0) + (box?.height ?? 0) / 2,
   );
+}
+
+/**
+ * Открывает панель узла, только если она ещё не открыта.
+ *
+ * Нужен именно после page.reload(): если панель была открыта ДО перезагрузки,
+ * deep-link (?stage=&node=…, SPEC §4.7, process-map-0y2) сам восстанавливает
+ * её при монтировании. Безусловный повторный clickNode() в этот момент попал
+ * бы не по карточке, а по затемнению — scrim перекрывает ВСЁ полотно целиком
+ * (см. e2e/node-drawer.spec.ts: клик по (200,400) закрывает панель, хотя это
+ * далеко от самой панели) — и закрыл бы уже открытую панель вместо того,
+ * чтобы оставить её открытой.
+ */
+async function ensureDrawerOpen(page: Page, nodeId: string): Promise<void> {
+  if (await page.getByRole('dialog').isVisible()) {
+    return;
+  }
+  await clickNode(page, nodeId);
+  await expect(page.getByRole('dialog')).toBeVisible();
 }
 
 /** Включает режим «Редактор» (SPEC §4.4) настоящим кликом по тулбару. */
@@ -98,8 +128,8 @@ test('сохранённая ссылка переживает перезагр�
 
   // ── главная проверка задачи: перезагрузка ───────────────────────────────
   await page.reload();
-  await openStage(page, 0);
-  await clickNode(page, stepId);
+  await waitForStageDetailReady(page);
+  await ensureDrawerOpen(page, stepId);
 
   const reloaded = page.getByRole('dialog');
   await expect(reloaded.getByText(LINK.title)).toBeVisible();
@@ -151,8 +181,8 @@ test('удалённая ссылка не возвращается после �
   );
   await page.reload();
   await enterEditMode(page);
-  await openStage(page, 0);
-  await clickNode(page, stepId ?? '');
+  await waitForStageDetailReady(page);
+  await ensureDrawerOpen(page, stepId ?? '');
 
   const dialog = page.getByRole('dialog');
   await expect(dialog.getByText(LINK.title)).toBeVisible();
@@ -165,8 +195,8 @@ test('удалённая ссылка не возвращается после �
   expect(await storedOverrides(page)).toEqual({ [stepId ?? '']: { screen: null } });
 
   await page.reload();
-  await openStage(page, 0);
-  await clickNode(page, stepId ?? '');
+  await waitForStageDetailReady(page);
+  await ensureDrawerOpen(page, stepId ?? '');
 
   const reloaded = page.getByRole('dialog');
   await expect(reloaded.getByText('Ссылка не задана')).toBeVisible();

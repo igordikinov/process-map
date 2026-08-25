@@ -11,10 +11,21 @@
   gap: var(--scp-spacing-md);
 }
 
+/* Компактный режим — SPEC §4.5, артборд A4: 44 px, padding 16, заголовок 13 px. */
+.compact {
+  height: var(--pm-header-height-compact);
+  padding: 0 var(--scp-paddings-l);
+  gap: var(--pm-space-10);
+}
+
 .title {
   color: var(--scp-content-primary);
   font-size: var(--scp-font-sizes-14);
   font-weight: var(--scp-font-weight-semi-bold);
+}
+
+.compact .title {
+  font-size: var(--pm-font-size-13);
 }
 
 /* В макете это компонент Badge из ДС In.Plan; библиотека в проект не тянется

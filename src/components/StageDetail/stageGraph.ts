@@ -67,8 +67,17 @@ export const MAX_ZOOM = 2;
 // вдобавок fitView центрирует раскладку, и этап 1 (3528×296) открывался тонкой
 // полоской посреди пустого поля, а не с начала потока.
 //
-// Теперь стартовый вид считается сам: масштаб — читаемый, привязка — левый
-// верхний угол раскладки.
+// Теперь стартовый вид считается сам: масштаб — читаемый, привязка — ПЕРВАЯ
+// КАРТОЧКА ШАГА ПОТОКА (задача process-map-c18), а не левый верхний угол
+// габарита, как было сразу после process-map-l8a.
+//
+// Почему угол габарита оказался неверной привязкой: слева от потока стоит
+// колонка входных data-узлов (x = 0), за ней узлы-интеграции (x = 296), и на
+// этапах 2 и 4 при 1024×600 в первый кадр попадали только они — ни одной
+// карточки шага. Экран, который открывается, не показывая самого процесса,
+// не выполняет своё назначение (PRD: «увидеть процесс целиком за один
+// взгляд»). Колонка входов никуда не делась — она осталась слева за кадром и
+// доступна панорамированием.
 
 /** Кегль подписи шага в макете A2 (токен --pm-font-size-13). */
 const STEP_LABEL_FONT_PX = 13;
@@ -134,25 +143,60 @@ export interface ContainerSize {
 }
 
 /**
+ * Смещение по одной оси.
+ *
+ * · Раскладка влезает по оси целиком — центрирование. Этап 1 по вертикали
+ *   полоса 296 px при 668 доступных: прижатая к верху полоса с пустотой в
+ *   372 px снизу читается как поломка вёрстки.
+ * · Не влезает — привязка к соответствующему краю ЯКОРЯ (первой карточки
+ *   шага, см. pickStartAnchor), а не габарита. Результат зажимается в
+ *   пределы габарита: показывать пустоту до начала или после конца раскладки
+ *   стартовый вид не должен ни при каком якоре.
+ *
+ * @param containerSize размер полотна по этой оси, px экрана
+ * @param boundsMin,boundsSize габарит раскладки по этой оси, координаты графа
+ * @param anchorMin      начало якоря по этой оси, координаты графа
+ */
+function axisOffset(
+  containerSize: number,
+  boundsMin: number,
+  boundsSize: number,
+  anchorMin: number,
+  zoom: number,
+): number {
+  const scaled = boundsSize * zoom;
+  if (scaled <= containerSize - START_PADDING * 2) {
+    return (containerSize - scaled) / 2 - boundsMin * zoom;
+  }
+  // Пределы: не левее/выше начала габарита и не правее/ниже его конца.
+  const atBoundsStart = START_PADDING - boundsMin * zoom;
+  const atBoundsEnd = containerSize - START_PADDING - (boundsMin + boundsSize) * zoom;
+  const atAnchor = START_PADDING - anchorMin * zoom;
+  return Math.max(atBoundsEnd, Math.min(atBoundsStart, atAnchor));
+}
+
+/**
  * Стартовый вьюпорт полотна.
  *
  * Масштаб: сколько влезает целиком, но не мельче START_ZOOM_MIN и не крупнее
  * START_ZOOM_MAX.
  *
- * Смещение — гибрид, по осям по-разному:
- *   · X — ВСЕГДА привязка к левому краю раскладки. По горизонтали ни один этап
- *     в полотно не влезает (2152…3942 px при читаемом масштабе), и начало
- *     потока важнее его центра: пользователь должен увидеть первый шаг, а не
- *     середину.
- *   · Y — центрирование, когда раскладка влезает по высоте целиком, иначе
- *     привязка к верху. Этап 1 — полоса 296 px при 668 доступных: прижатая к
- *     верху полоса с пустотой в 372 px снизу читается как поломка вёрстки.
+ * Смещение считается по каждой оси функцией axisOffset выше: центрирование,
+ * когда раскладка влезает, иначе привязка к якорю с зажимом в габарит.
  *
- * Координаты левого верхнего угла раскладки бывают отрицательными (рамка группы
- * уходит выше и левее карточек, заголовок колонки — выше), поэтому смещение
- * считается от bounds.x/bounds.y, а не от нуля.
+ * Координаты раскладки бывают отрицательными (рамка группы уходит выше и левее
+ * карточек, заголовок колонки — выше), поэтому смещение считается от
+ * bounds.x/bounds.y и anchor.x/anchor.y, а не от нуля.
+ *
+ * @param anchor якорь стартового вида — `graph.startAnchor` из
+ *   buildStageGraph. По умолчанию сам габарит: так функция сохраняет прежнее
+ *   поведение для вызовов без якоря (и для этапа без единой карточки шага).
  */
-export function initialViewport(bounds: Box, container: ContainerSize): Viewport {
+export function initialViewport(
+  bounds: Box,
+  container: ContainerSize,
+  anchor: Box = bounds,
+): Viewport {
   // Полотно ещё не измерено (первый кадр, jsdom) — считать нечего, отдаём
   // читаемый масштаб без сдвига.
   if (container.width <= 0 || container.height <= 0 || bounds.width <= 0 || bounds.height <= 0) {
@@ -165,13 +209,9 @@ export function initialViewport(bounds: Box, container: ContainerSize): Viewport
   );
   const zoom = Math.min(START_ZOOM_MAX, Math.max(START_ZOOM_MIN, fit));
 
-  const scaledHeight = bounds.height * zoom;
-  const fitsVertically = scaledHeight <= container.height - START_PADDING * 2;
-  const topOffset = fitsVertically ? (container.height - scaledHeight) / 2 : START_PADDING;
-
   return {
-    x: START_PADDING - bounds.x * zoom,
-    y: topOffset - bounds.y * zoom,
+    x: axisOffset(container.width, bounds.x, bounds.width, anchor.x, zoom),
+    y: axisOffset(container.height, bounds.y, bounds.height, anchor.y, zoom),
     zoom,
   };
 }
@@ -217,6 +257,60 @@ export interface StageGraph {
    * см. initialViewport.
    */
   bounds: Box;
+  /**
+   * Якорь стартового вида — прямоугольник, левый верхний угол которого
+   * стартовый вид ставит в START_PADDING от края полотна (задача
+   * process-map-c18). См. pickStartAnchor.
+   */
+  startAnchor: Box;
+}
+
+/**
+ * Прямоугольник, к которому привязывается стартовый вид этапа.
+ *
+ * Правило детерминированное, без «первый в массиве»:
+ *   1. Берутся узлы `type === 'step'` — именно карточки шагов. НЕ data
+ *      (колонки входов/выходов — это данные, а не сам процесс), НЕ integration
+ *      (передача между системами) и НЕ warning (предупреждение о шаге):
+ *      ровно они и заполняли первый кадр вместо процесса до этой задачи.
+ *   2. Из них выбирается минимальный по (position.x, position.y, id).
+ *      Третий ключ — id: сортировка обязана быть полной, иначе при двух
+ *      карточках в одной точке результат зависел бы от порядка в JSON.
+ *   3. Якорь — dashed-рамка ГРУППЫ этой карточки, если карточка в группе:
+ *      рамка уходит на GROUP_PADDING левее и выше, и привязка к самой
+ *      карточке срезала бы у края полотна рамку вместе с её заголовком.
+ *      Карточка вне группы — якорем становится она сама.
+ *   4. Ни одной карточки шага на этапе нет (в текущих данных такого нет, но
+ *      схема этого не запрещает) — якоря нет, и initialViewport вернётся к
+ *      прежнему поведению «угол габарита».
+ */
+function pickStartAnchor(
+  stage: Stage,
+  groupOrigin: ReadonlyMap<string, Box>,
+  bounds: Box,
+): Box {
+  const steps = stage.nodes.filter((node) => node.type === 'step');
+  if (steps.length === 0) {
+    return bounds;
+  }
+
+  let first = steps[0] as ProcessNode;
+  for (const candidate of steps) {
+    if (
+      candidate.position.x < first.position.x ||
+      (candidate.position.x === first.position.x &&
+        (candidate.position.y < first.position.y ||
+          (candidate.position.y === first.position.y && candidate.id < first.id)))
+    ) {
+      first = candidate;
+    }
+  }
+
+  const groupBox = first.group === undefined ? undefined : groupOrigin.get(first.group);
+  if (groupBox !== undefined) {
+    return groupBox;
+  }
+  return { x: first.position.x, y: first.position.y, ...sizeOf(first) };
 }
 
 /** Тип узла React Flow по ProcessNode.type. `integration` рисуется карточкой шага. */
@@ -439,5 +533,14 @@ export function buildStageGraph(stage: Stage, showIntegrations = true): StageGra
           return { x: x0, y: y0, width: x1 - x0, height: y1 - y0 };
         })();
 
-  return { nodes: [...containers, ...children, ...loose], edges, bounds };
+  return {
+    nodes: [...containers, ...children, ...loose],
+    edges,
+    bounds,
+    // Якорь считается по ПОЛНОМУ набору узлов и групп, независимо от
+    // showIntegrations: выключенный toggle прячет карточки интеграций, но не
+    // должен двигать стартовый вид — иначе один и тот же этап открывался бы
+    // в разных местах в зависимости от состояния тулбара.
+    startAnchor: pickStartAnchor(stage, groupOrigin, bounds),
+  };
 }

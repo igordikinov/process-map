@@ -19,6 +19,14 @@
   gap: var(--scp-spacing-md);
 }
 
+/* Компактный режим — SPEC §4.5: та же шапка высотой 44 px, что и на уровне 1
+   (см. .compact в OverviewHeader.module.css). */
+.compact {
+  height: var(--pm-header-height-compact);
+  padding: 0 var(--scp-paddings-l);
+  gap: var(--pm-space-10);
+}
+
 /* Точный макет — квадрат 28×28. Ближайший существующий токен размера —
    --pm-stage-number-size (24px, используется для похожего квадратного
    контейнера в StageCard). Разница с макетом — см. отчёт задачи. */

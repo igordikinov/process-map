@@ -36,11 +36,25 @@
   outline: none;
 }
 
+/* Компактный режим — SPEC §4.5, артборд A4 (228×200, padding 14, gap 9).
+   Отличия от A1 только в размерах и кеглях: состав блоков задаёт StageCard.tsx
+   (два выхода вместо трёх, без «эйбра» и подписи «Этап»). */
+.compact {
+  width: var(--pm-stage-node-width-compact);
+  height: var(--pm-stage-node-height-compact);
+  padding: var(--pm-space-14);
+  gap: var(--pm-space-9);
+}
+
 .head {
   display: flex;
   flex: none;
   align-items: center;
   gap: var(--pm-space-10);
+}
+
+.compact .head {
+  gap: var(--pm-space-6);
 }
 
 .number {
@@ -61,6 +75,12 @@
 .card.active .number {
   background: var(--scp-accent-primary);
   color: var(--scp-content-constant);
+}
+
+.compact .number {
+  width: var(--pm-stage-number-size-compact);
+  height: var(--pm-stage-number-size-compact);
+  font-size: var(--pm-font-size-11-5);
 }
 
 .caption {
@@ -100,6 +120,11 @@
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
   display: -webkit-box;
+}
+
+.compact .title {
+  font-size: var(--scp-font-sizes-14);
+  line-height: var(--scp-line-height-18);
 }
 
 .divider {
@@ -142,11 +167,24 @@
   list-style: none;
 }
 
+/* Два пункта × 14 px строка + 5 px зазор = 33 px
+   (--pm-stage-outputs-max-height-compact). */
+.compact .outputs {
+  max-height: var(--pm-stage-outputs-max-height-compact);
+  font-size: var(--pm-font-size-11-5);
+  gap: var(--pm-space-5);
+  line-height: var(--pm-line-height-14);
+}
+
 .output {
   display: flex;
   min-width: 0;
   flex: none;
   gap: var(--pm-space-7);
+}
+
+.compact .output {
+  gap: var(--pm-space-6);
 }
 
 .outputText {

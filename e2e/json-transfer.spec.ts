@@ -33,6 +33,8 @@ interface ScreenLink {
 }
 interface ProcessNodeLike {
   id: string;
+  type: string;
+  position: { x: number; y: number };
   screen?: ScreenLink;
 }
 interface ProcessMapLike {
@@ -44,10 +46,25 @@ function readProcessJson(): { text: string; map: ProcessMapLike } {
   return { text, map: JSON.parse(text) as ProcessMapLike };
 }
 
-/** id первого узла первого этапа — на него ставим ссылку в импортируемом файле. */
+/**
+ * id узла, на который ставится ссылка в импортируемом файле.
+ *
+ * Именно ПЕРВАЯ КАРТОЧКА ШАГА (минимальная по x, y, id), а не `nodes[0]`:
+ * с задачи process-map-c18 стартовый вид этапа привязан к ней, а колонка
+ * входов и узлы-интеграций остаются слева за кадром. Кликнуть настоящей мышью
+ * по узлу за краем полотна нельзя — а весь смысл этого файла в настоящей мыши.
+ */
 function firstNodeId(map: ProcessMapLike): string {
-  const id = map.stages[0]?.nodes[0]?.id;
-  expect(id, 'в process.json нет узлов').toBeTruthy();
+  const steps = (map.stages[0]?.nodes ?? [])
+    .filter((node) => node.type === 'step')
+    .sort(
+      (a, b) =>
+        a.position.x - b.position.x ||
+        a.position.y - b.position.y ||
+        a.id.localeCompare(b.id, 'en'),
+    );
+  const id = steps[0]?.id;
+  expect(id, 'в process.json нет карточек шага').toBeTruthy();
   return id ?? '';
 }
 
@@ -260,7 +277,7 @@ test.describe('Импорт JSON', () => {
     const nodeId = firstNodeId(map);
     // Файл полной карты, в котором ссылка проставлена вручную.
     const edited = JSON.parse(text) as ProcessMapLike;
-    const target = edited.stages[0]?.nodes[0];
+    const target = edited.stages[0]?.nodes.find((node) => node.id === nodeId);
     expect(target).toBeDefined();
     if (target !== undefined) {
       target.screen = LINK;

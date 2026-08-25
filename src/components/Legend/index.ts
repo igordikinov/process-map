@@ -1,1 +1,1 @@
-export { Legend } from './Legend';
+export { Legend, type LegendProps } from './Legend';

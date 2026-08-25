@@ -30,6 +30,51 @@
   gap: var(--pm-legend-gap);
 }
 
+/* Компактный режим (SPEC §4.5, артборд A4): панель сжимается до квадрата под
+   кнопку-иконку 32×32 и растёт вправо, когда список раскрыт. Полоса под
+   полотном при этом остаётся — легенда НЕ возвращается на полотно, см.
+   комментарий выше и Legend.tsx. */
+.compact {
+  height: var(--pm-legend-height-compact);
+  /* Ноль, а не --pm-legend-padding-x: свёрнутая панель обязана быть КВАДРАТОМ
+     32×32 под кнопку-иконку (A4), любой боковой паддинг делает её прямоугольной. */
+  padding: 0;
+  gap: var(--pm-legend-gap-compact);
+}
+
+/* Раскрытый список упирался бы текстом в правую границу панели — паддинг
+   возвращается последнему пункту, а не панели, чтобы не раздувать свёрнутый
+   квадрат. */
+.compact .item:last-child {
+  padding-right: var(--pm-legend-padding-x);
+}
+
+.toggle {
+  display: flex;
+  width: var(--pm-legend-toggle-size);
+  height: var(--pm-legend-toggle-size);
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: var(--scp-border-radius-sm);
+  background: transparent;
+  cursor: pointer;
+}
+
+.toggle:hover,
+.toggle:focus-visible {
+  background: var(--scp-color-neutral-50);
+  outline: none;
+}
+
+.toggleIcon {
+  width: var(--pm-toolbar-fit-icon-size);
+  height: var(--pm-toolbar-fit-icon-size);
+  opacity: var(--pm-node-icon-opacity);
+}
+
 .item {
   display: flex;
   align-items: center;

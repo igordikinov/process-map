@@ -12,6 +12,13 @@ import { createInitialState, useProcessStore } from '../src/store/useProcessStor
 describe('App', () => {
   beforeEach(() => {
     useProcessStore.setState(createInitialState());
+    // App теперь читает location.search при монтировании (useDeepLink, SPEC
+    // §4.7, process-map-0y2). window.location переживает тесты внутри одного
+    // файла (jsdom не пересоздаёт его между it()), а useDeepLink пишет в URL
+    // через replaceState при каждой навигации — без сброса здесь следующий
+    // рендер <App/> подхватил бы ?stage=… от предыдущего теста и переопределил
+    // состояние стора, которое тест выставил сам. См. tests/useDeepLink.test.tsx.
+    window.history.replaceState({}, '', '/');
   });
 
   it('рендерит обзор: шапку и полотно', () => {

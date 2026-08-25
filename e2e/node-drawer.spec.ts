@@ -26,6 +26,17 @@ async function openStage(page: Page, index: number): Promise<void> {
     (box?.x ?? 0) + (box?.width ?? 0) / 2,
     (box?.y ?? 0) + (box?.height ?? 0) / 2,
   );
+  await waitForStageDetailReady(page);
+}
+
+/**
+ * Ждёт готовности полотна уровня 2, когда карточек уровня 1 на экране уже нет
+ * (используется вместо openStage()). Актуально после page.reload(): deep-link
+ * (?stage=…, SPEC §4.7, process-map-0y2) сам восстанавливает открытый этап —
+ * приложение открывается сразу на уровне 2, а не на обзоре, поэтому кликать
+ * по несуществующей карточке .react-flow__node-stage нельзя.
+ */
+async function waitForStageDetailReady(page: Page): Promise<void> {
   await page.waitForSelector('.react-flow__node-step');
   // Стартовый вьюпорт ставится в useEffect после измерения полотна.
   await page.waitForFunction(() => {
@@ -174,7 +185,7 @@ test('узел со ссылкой (overrides): заголовок и url в п�
     { key: OVERRIDES_KEY, id: stepId ?? '' },
   );
   await page.reload();
-  await openStage(page, 0);
+  await waitForStageDetailReady(page);
   await clickNode(page, `[data-id="${stepId ?? ''}"] button`);
 
   const dialog = page.getByRole('dialog');

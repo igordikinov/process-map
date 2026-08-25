@@ -10,15 +10,29 @@ export interface OverviewHeaderProps {
   stagesCount: number;
   /** map.updatedAt в виде ISO-строки. */
   updatedAt: string;
+  /** SPEC §4.5: шапка 44 px, дата обновления снята (артборд A4). */
+  compact?: boolean;
 }
 
-export function OverviewHeader({ title, stagesCount, updatedAt }: OverviewHeaderProps) {
+export function OverviewHeader({
+  title,
+  stagesCount,
+  updatedAt,
+  compact = false,
+}: OverviewHeaderProps) {
   return (
-    <header className={styles.header}>
+    <header className={compact ? `${styles.header} ${styles.compact}` : styles.header}>
       <h1 className={styles.title}>{title}</h1>
       <span className={styles.badge}>{ru.overview.stagesBadge(stagesCount)}</span>
-      <div className={styles.spacer} />
-      <span className={styles.updated}>{ru.overview.updatedAt(formatIsoDate(updatedAt))}</span>
+      {/* Дата обновления в компактном режиме не рисуется (артборд A4): в 44 px
+          остаётся только то, без чего экран не опознать — заголовок и число
+          этапов. Дата остаётся доступна, как только фрейм станет выше. */}
+      {!compact && (
+        <>
+          <div className={styles.spacer} />
+          <span className={styles.updated}>{ru.overview.updatedAt(formatIsoDate(updatedAt))}</span>
+        </>
+      )}
     </header>
   );
 }

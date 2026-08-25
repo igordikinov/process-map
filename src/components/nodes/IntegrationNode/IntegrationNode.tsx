@@ -5,12 +5,21 @@ import styles from './IntegrationNode.module.css';
 
 export interface IntegrationNodeData extends Record<string, unknown> {
   system: SystemCode;
+  /**
+   * Компактный режим (SPEC §4.5, артборд A4): одна карточка на этап собирает
+   * ВСЕ его системы, и в шапке карточки стоит список кодов «IO · ERP», а не
+   * один код. Поле необязательное — в обычном режиме карточка по-прежнему про
+   * одну систему и показывает `system`.
+   */
+  codes?: SystemCode[];
   /** Короткая подпись, видимая в карточке. */
   label: string;
   /** Полный список исходных ExternalIO.label — уходит в title (подсказку). */
   fullLabel: string;
   /** 'in' — система-источник (хэндл снизу), 'out' — приёмник (хэндл сверху). */
   direction: 'in' | 'out';
+  /** Компактный режим: карточка шире (по ширине карточки этапа), см. A4. */
+  compact?: boolean;
 }
 
 export type IntegrationNodeType = Node<IntegrationNodeData, 'system'>;
@@ -33,8 +42,11 @@ export function IntegrationNode({ data }: NodeProps<IntegrationNodeType>) {
           isConnectable={false}
         />
       )}
-      <div className={styles.card} title={data.fullLabel}>
-        <span className={styles.code}>{data.system}</span>
+      <div
+        className={data.compact === true ? `${styles.card} ${styles.compact}` : styles.card}
+        title={data.fullLabel}
+      >
+        <span className={styles.code}>{(data.codes ?? [data.system]).join(' · ')}</span>
         <span className={styles.label}>{data.label}</span>
       </div>
       {data.direction === 'in' && (

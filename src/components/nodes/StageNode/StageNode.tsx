@@ -6,6 +6,8 @@ import { StageCard } from './StageCard';
 
 export interface StageNodeData extends Record<string, unknown> {
   stage: Stage;
+  /** Компактный режим (SPEC §4.5): карточка 228×200 с двумя выходами. */
+  compact?: boolean;
 }
 
 export type StageNodeType = Node<StageNodeData, 'stage'>;
@@ -27,7 +29,7 @@ export function StageNode({ data }: NodeProps<StageNodeType>) {
     <>
       <Handle type="target" position={Position.Left} id={STAGE_HANDLE.left} isConnectable={false} />
       <Handle type="target" position={Position.Top} id={STAGE_HANDLE.top} isConnectable={false} />
-      <StageCard stage={data.stage} />
+      <StageCard stage={data.stage} compact={data.compact ?? false} />
       <Handle
         type="source"
         position={Position.Right}

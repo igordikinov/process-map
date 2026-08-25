@@ -327,6 +327,69 @@ const STEP_LABEL_FONT_PX = 13;
 /** Нижняя граница читаемости — --scp-font-body-s дизайн-системы. */
 const MIN_READABLE_FONT_PX = 12;
 
+describe('startAnchor — первая карточка шага (задача process-map-c18)', () => {
+  it('якорь совпадает с рамкой группы первой по (x, y, id) карточки шага', () => {
+    for (const stage of map.stages) {
+      const { startAnchor } = buildStageGraph(stage);
+      const rects = absoluteRects(stage);
+
+      const steps = stage.nodes
+        .filter((node) => node.type === 'step')
+        .sort(
+          (a, b) =>
+            a.position.x - b.position.x ||
+            a.position.y - b.position.y ||
+            a.id.localeCompare(b.id, 'en'),
+        );
+      const first = steps[0];
+      expect(first, `Этап ${stage.number} без карточек шага`).toBeDefined();
+      const firstStep = first as ProcessNode;
+
+      // Якорь — рамка группы этой карточки (у всех четырёх этапов первая
+      // карточка шага лежит в группе), поэтому он ОБЯЗАН накрывать карточку.
+      const rect = rects.get(firstStep.id);
+      expect(rect).toBeDefined();
+      const stepRect = rect as Rect;
+      expect(startAnchor.x).toBeLessThanOrEqual(stepRect.x);
+      expect(startAnchor.y).toBeLessThanOrEqual(stepRect.y);
+      expect(startAnchor.x + startAnchor.width).toBeGreaterThanOrEqual(stepRect.x + stepRect.width);
+      expect(startAnchor.y + startAnchor.height).toBeGreaterThanOrEqual(
+        stepRect.y + stepRect.height,
+      );
+
+      // И якорь — не колонка входов: она стоит левее любой карточки шага.
+      expect(startAnchor.x).toBeGreaterThan(0);
+    }
+  });
+
+  it('якорь не зависит от toggle «Показать интеграции» (SPEC §4.6)', () => {
+    for (const stage of map.stages) {
+      expect(buildStageGraph(stage, false).startAnchor).toEqual(
+        buildStageGraph(stage, true).startAnchor,
+      );
+    }
+  });
+
+  it('этап без карточек шага откатывается к габариту раскладки', () => {
+    const stage = map.stages[0] as Stage;
+    const dataOnly: Stage = {
+      ...stage,
+      groups: [],
+      edges: [],
+      nodes: stage.nodes.filter((node) => node.type === 'data'),
+    };
+    const { bounds, startAnchor } = buildStageGraph(dataOnly);
+    expect(startAnchor).toEqual(bounds);
+  });
+
+  it('порядок узлов в данных не влияет на якорь (сортировка полная)', () => {
+    for (const stage of map.stages) {
+      const reversed: Stage = { ...stage, nodes: [...stage.nodes].reverse() };
+      expect(buildStageGraph(reversed).startAnchor).toEqual(buildStageGraph(stage).startAnchor);
+    }
+  });
+});
+
 describe('initialViewport', () => {
   it.each([
     ['1280×720', CANVAS_1280],
@@ -347,43 +410,57 @@ describe('initialViewport', () => {
     ['1280×720', CANVAS_1280],
     ['1024×600', CANVAS_1024],
   ] as const)(
-    '%s: левый край раскладки прижат к START_PADDING (начало потока)',
+    '%s: левый край ЯКОРЯ прижат к START_PADDING (начало потока шагов)',
     (_size, container) => {
       for (const stage of map.stages) {
-        const { bounds } = buildStageGraph(stage);
-        const viewport = initialViewport(bounds, container);
+        const { bounds, startAnchor } = buildStageGraph(stage);
+        const viewport = initialViewport(bounds, container, startAnchor);
 
-        // Экранная координата левого края раскладки (включая рамку группы и
-        // заголовок колонки, которые уходят в отрицательные координаты).
-        const screenLeft = viewport.x + bounds.x * viewport.zoom;
+        // Ни один этап не влезает по ширине (2152…3942 px при читаемом
+        // масштабе), поэтому по X всегда работает привязка к якорю.
+        const screenLeft = viewport.x + startAnchor.x * viewport.zoom;
         expect(screenLeft).toBeCloseTo(START_PADDING, 6);
+        // И якорь заведомо ПРАВЕЕ угла габарита — иначе задача process-map-c18
+        // ничего не изменила бы.
+        expect(startAnchor.x).toBeGreaterThan(bounds.x);
       }
     },
   );
 
-  it('по вертикали: не влезает — привязка к верху, влезает — центрирование', () => {
+  it('по вертикали: не влезает — привязка к якорю, влезает — центрирование', () => {
     for (const stage of map.stages) {
-      const { bounds } = buildStageGraph(stage);
-      const viewport = initialViewport(bounds, CANVAS_1280);
-      const screenTop = viewport.y + bounds.y * viewport.zoom;
+      const { bounds, startAnchor } = buildStageGraph(stage);
+      const viewport = initialViewport(bounds, CANVAS_1280, startAnchor);
       const scaledHeight = bounds.height * viewport.zoom;
 
       if (scaledHeight <= CANVAS_1280.height - START_PADDING * 2) {
         // Этап 1 — полоса 296 px: центрируется, иначе снизу пустота в 372 px.
+        const screenTop = viewport.y + bounds.y * viewport.zoom;
         expect(screenTop).toBeCloseTo((CANVAS_1280.height - scaledHeight) / 2, 6);
         expect(screenTop).toBeGreaterThan(START_PADDING);
       } else {
-        expect(screenTop).toBeCloseTo(START_PADDING, 6);
+        // Верх якоря не выше START_PADDING: карточка видна с первой строки.
+        const anchorTop = viewport.y + startAnchor.y * viewport.zoom;
+        expect(anchorTop).toBeGreaterThanOrEqual(START_PADDING - 1e-6);
+        // …и кадр не вылезает за раскладку: этап 3 из-за этого зажимается по
+        // нижнему краю, и якорь оказывается ниже START_PADDING — так и надо.
+        const boundsTop = viewport.y + bounds.y * viewport.zoom;
+        const boundsBottom = viewport.y + (bounds.y + bounds.height) * viewport.zoom;
+        expect(boundsTop).toBeLessThanOrEqual(START_PADDING + 1e-6);
+        expect(boundsBottom).toBeGreaterThanOrEqual(CANVAS_1280.height - START_PADDING - 1e-6);
       }
     }
   });
 
-  it('этап 1 центрируется по вертикали, этапы 2–4 прижаты к верху', () => {
+  it('этап 1 центрируется по вертикали, этапы 2–4 привязаны к якорю', () => {
     const verdicts = map.stages.map((stage) => {
-      const { bounds } = buildStageGraph(stage);
-      const viewport = initialViewport(bounds, CANVAS_1280);
-      const screenTop = viewport.y + bounds.y * viewport.zoom;
-      return { number: stage.number, centred: screenTop > START_PADDING + 1 };
+      const { bounds, startAnchor } = buildStageGraph(stage);
+      const viewport = initialViewport(bounds, CANVAS_1280, startAnchor);
+      const scaledHeight = bounds.height * viewport.zoom;
+      return {
+        number: stage.number,
+        centred: scaledHeight <= CANVAS_1280.height - START_PADDING * 2,
+      };
     });
 
     expect(verdicts).toEqual([
@@ -394,13 +471,27 @@ describe('initialViewport', () => {
     ]);
   });
 
+  it('привязка к якорю не показывает пустоту за пределами раскладки', () => {
+    // Якорь у правого нижнего края: наивная привязка увела бы кадр за конец
+    // раскладки, и пол-экрана заняла бы пустая сетка.
+    const bounds = { x: 0, y: 0, width: 4000, height: 4000 };
+    const anchor = { x: 3900, y: 3900, width: 100, height: 100 };
+    const viewport = initialViewport(bounds, CANVAS_1280, anchor);
+
+    const right = viewport.x + (bounds.x + bounds.width) * viewport.zoom;
+    const bottom = viewport.y + (bounds.y + bounds.height) * viewport.zoom;
+    expect(right).toBeCloseTo(CANVAS_1280.width - START_PADDING, 6);
+    expect(bottom).toBeCloseTo(CANVAS_1280.height - START_PADDING, 6);
+  });
+
   it('маленькая раскладка не увеличивается выше макета (потолок 1.0)', () => {
     const bounds = { x: 0, y: 0, width: 400, height: 200 };
     const viewport = initialViewport(bounds, CANVAS_1280);
 
     expect(viewport.zoom).toBe(START_ZOOM_MAX);
-    expect(viewport.x + bounds.x * viewport.zoom).toBeCloseTo(START_PADDING, 6);
-    // Влезает по высоте — центрируется.
+    // Влезает по обеим осям — центрируется по обеим (правило одно на ось:
+    // влезло — центр, не влезло — якорь).
+    expect(viewport.x + bounds.x * viewport.zoom).toBeCloseTo((CANVAS_1280.width - 400) / 2, 6);
     expect(viewport.y + bounds.y * viewport.zoom).toBeCloseTo((CANVAS_1280.height - 200) / 2, 6);
   });
 
@@ -433,6 +524,53 @@ describe('initialViewport', () => {
     // Пустая раскладка (этап без узлов) — тот же путь.
     const empty = initialViewport({ x: 0, y: 0, width: 0, height: 0 }, CANVAS_1280);
     expect(Number.isFinite(empty.zoom)).toBe(true);
+  });
+
+  // ─── задача process-map-c18: главное утверждение ───
+  //
+  // Не «вьюпорт равен такому-то числу», а «первый кадр показывает процесс».
+  // До правки этап 4 при 1024×600 не показывал НИ ОДНОЙ карточки шага
+  // (в кадр попадали колонка входов и узлы интеграций), этап 2 — ни одной
+  // целиком. Проверка считает пересечение экранного прямоугольника с
+  // прямоугольниками карточек шага в координатах графа.
+  it.each([
+    ['1280×720', CANVAS_1280],
+    ['1024×600', CANVAS_1024],
+  ] as const)('%s: в стартовом кадре каждого этапа видны карточки шагов', (_size, container) => {
+    for (const stage of map.stages) {
+      const { bounds, startAnchor } = buildStageGraph(stage);
+      const viewport = initialViewport(bounds, container, startAnchor);
+      const rects = absoluteRects(stage);
+
+      // Видимая область в координатах графа.
+      const view = {
+        left: -viewport.x / viewport.zoom,
+        top: -viewport.y / viewport.zoom,
+        right: (container.width - viewport.x) / viewport.zoom,
+        bottom: (container.height - viewport.y) / viewport.zoom,
+      };
+
+      const stepsInFrame = stage.nodes.filter((node) => {
+        if (node.type !== 'step') {
+          return false;
+        }
+        const rect = rects.get(node.id);
+        if (rect === undefined) {
+          return false;
+        }
+        return (
+          rect.x >= view.left &&
+          rect.y >= view.top &&
+          rect.x + rect.width <= view.right &&
+          rect.y + rect.height <= view.bottom
+        );
+      });
+
+      expect(
+        stepsInFrame.length,
+        `Этап ${stage.number}: первый кадр не показывает ни одной карточки шага целиком`,
+      ).toBeGreaterThanOrEqual(2);
+    }
   });
 
   it('bounds покрывает и узлы, и контейнеры групп/колонок', () => {

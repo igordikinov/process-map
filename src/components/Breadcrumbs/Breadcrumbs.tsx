@@ -16,6 +16,14 @@ export interface BreadcrumbsProps {
   /** `loadProcessMap().stages` — передаётся снаружи, чтобы не грузить JSON
    *  повторно на каждый ререндер и не плодить источники данных (см. loader.ts). */
   stages: ReturnType<typeof loadProcessMap>['stages'];
+  /**
+   * SPEC §4.5: шапка 44 px. Артборд A4 показывает только уровень 1, но
+   * требование «шапка 44 px» относится к режиму, а не к экрану: две разные
+   * высоты шапки на двух уровнях одного низкого фрейма — это дефект, а не
+   * замысел. Счётчик узлов справа при этом остаётся: он и есть содержимое
+   * шапки уровня 2, а не украшение.
+   */
+  compact?: boolean;
 }
 
 // Путь иконки изолирован в одной константе: реестр иконок (src/assets/icons)
@@ -24,7 +32,7 @@ export interface BreadcrumbsProps {
 // src/assets/icons/index.ts про BASE_URL и `base: './'`.
 const RETURN_ICON_SRC = iconUrl('return-back');
 
-export function Breadcrumbs({ stages }: BreadcrumbsProps) {
+export function Breadcrumbs({ stages, compact = false }: BreadcrumbsProps) {
   const currentStageId = useProcessStore((state) => state.currentStageId);
   const back = useProcessStore((state) => state.back);
 
@@ -41,7 +49,7 @@ export function Breadcrumbs({ stages }: BreadcrumbsProps) {
   const counts = countStageNodes(stage);
 
   return (
-    <header className={styles.header}>
+    <header className={compact ? `${styles.header} ${styles.compact}` : styles.header}>
       <button
         type="button"
         className={styles.backButton}

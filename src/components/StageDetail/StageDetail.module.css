@@ -61,3 +61,16 @@
   border-top: 1px solid var(--scp-border-neutral-tertiary);
   background: var(--scp-background-primary);
 }
+
+/* ── Компактный режим (SPEC §4.5) ─────────────────────────────────────────
+   Как и на уровне 1 (Overview.module.css): модификатор на .root, высоты
+   полотна и полосы легенды считаются потомками — они обязаны меняться
+   одновременно с высотой шапки. */
+.root.compact .canvas {
+  height: calc(100vh - var(--pm-header-height-compact) - var(--pm-legend-strip-height-compact));
+}
+
+.root.compact .legendStrip {
+  height: var(--pm-legend-strip-height-compact);
+  padding: 0 var(--scp-paddings-l);
+}

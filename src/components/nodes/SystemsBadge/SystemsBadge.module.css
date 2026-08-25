@@ -1,0 +1,44 @@
+/*
+ * Строка-бейдж внешних систем, компактный режим (SPEC §4.5, артборд A4:
+ * left 20 / top 16, высота 30, паддинг 12, белая плашка с рамкой #eaeaea).
+ * Только var(...) из src/theme/tokens.css — CLAUDE.md «Кодовые правила».
+ */
+
+.badge {
+  display: flex;
+  height: var(--pm-systems-badge-height);
+  align-items: center;
+  padding: 0 var(--scp-paddings-m);
+  border: 1px solid var(--scp-border-neutral-tertiary);
+  border-radius: var(--scp-border-radius-md);
+  background: var(--scp-background-primary);
+  gap: var(--pm-space-10);
+  white-space: nowrap;
+}
+
+.eyebrow {
+  color: var(--scp-color-neutral-500);
+  font-size: var(--pm-font-size-10-5);
+  font-weight: var(--scp-font-weight-semi-bold);
+  letter-spacing: var(--pm-tracking-eyebrow);
+  text-transform: uppercase;
+}
+
+.codes {
+  display: flex;
+  gap: var(--pm-space-6);
+}
+
+.code {
+  padding: var(--pm-systems-badge-code-padding-y) var(--pm-space-6);
+  border-radius: var(--pm-radius-pill);
+  background: var(--pm-integration-bg);
+  color: var(--pm-integration);
+  font-size: var(--pm-font-size-11-5);
+  font-weight: var(--scp-font-weight-semi-bold);
+}
+
+.hint {
+  color: var(--scp-content-secondary);
+  font-size: var(--pm-font-size-11);
+}

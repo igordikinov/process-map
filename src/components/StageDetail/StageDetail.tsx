@@ -9,6 +9,7 @@ import {
   type NodeTypes,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
+import { useFrameSize } from '../../hooks/useFrameSize';
 import { useProcessMap } from '../../hooks/useProcessMap';
 import { ru } from '../../i18n/ru';
 import { useProcessStore } from '../../store/useProcessStore';
@@ -51,6 +52,9 @@ export function StageDetail() {
   const showIntegrations = useProcessStore((state) => state.showIntegrations);
   const selectedNodeId = useProcessStore((state) => state.selectedNodeId);
 
+  // SPEC §4.5: режим решает высота КОНТЕЙНЕРА (приложение в iframe, SPEC §6).
+  const { ref: rootRef, compact } = useFrameSize();
+
   // Карта с наложенными overrides, реактивно к правкам редактора (SPEC §4.4):
   // сохранённая в панели ссылка сразу появляется и в самой панели, и иконкой
   // link-external на карточке шага (SPEC §4.2). См. src/hooks/useProcessMap.ts.
@@ -84,8 +88,8 @@ export function StageDetail() {
   const drawerOpen = visibleNodes.some((node) => node.id === selectedNodeId);
 
   return (
-    <div className={styles.root}>
-      <Breadcrumbs stages={map.stages} />
+    <div className={compact ? `${styles.root} ${styles.compact}` : styles.root} ref={rootRef}>
+      <Breadcrumbs stages={map.stages} compact={compact} />
       {/* role="region", а не "application" — см. комментарий в Overview.tsx. */}
       <div className={styles.canvas} role="region" aria-label={ru.stageDetail.canvasLabel}>
         {/* key по этапу на самом провайдере (не только на <ReactFlow> ниже):
@@ -115,7 +119,11 @@ export function StageDetail() {
               minZoom={MIN_ZOOM}
               maxZoom={MAX_ZOOM}
             >
-              <StartViewport bounds={graph.bounds} />
+              <StartViewport
+                bounds={graph.bounds}
+                anchor={graph.startAnchor}
+                compact={compact}
+              />
               <Background variant={BackgroundVariant.Dots} gap={GRID_GAP} size={GRID_DOT_SIZE} />
             </ReactFlow>
           </EdgeMarkers>
@@ -135,8 +143,10 @@ export function StageDetail() {
           4 этапах (см. Legend.module.css) — плавающая панель гарантированно
           перекрыла бы что-нибудь. Легенде не нужен React Flow, поэтому она
           и не внутри .canvas/<ReactFlowProvider>. */}
+      {/* Компактный режим (SPEC §4.5) ужимает полосу под кнопку-иконку,
+          но не возвращает легенду на полотно — см. Legend.tsx. */}
       <div className={styles.legendStrip}>
-        <Legend />
+        <Legend compact={compact} />
       </div>
     </div>
   );

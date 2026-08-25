@@ -9,6 +9,7 @@ import {
   type NodeTypes,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
+import { useFrameSize } from '../../hooks/useFrameSize';
 import { useProcessMap } from '../../hooks/useProcessMap';
 import { ru } from '../../i18n/ru';
 import { useProcessStore } from '../../store/useProcessStore';
@@ -17,6 +18,7 @@ import { Legend } from '../Legend';
 import { IntegrationNode } from '../nodes/IntegrationNode';
 import { LaneNode } from '../nodes/LaneNode';
 import { StageNode } from '../nodes/StageNode';
+import { SystemsBadge } from '../nodes/SystemsBadge';
 import { Toolbar } from '../Toolbar';
 import { OverviewHeader } from './OverviewHeader';
 import {
@@ -27,6 +29,7 @@ import {
   MAX_ZOOM,
   MIN_ZOOM,
 } from './overviewGraph';
+import { RefitViewport } from './RefitViewport';
 import styles from './Overview.module.css';
 
 // Объекты объявлены на уровне модуля: React Flow предупреждает, если nodeTypes
@@ -35,6 +38,7 @@ const nodeTypes = {
   lane: LaneNode,
   system: IntegrationNode,
   stage: StageNode,
+  systemsBadge: SystemsBadge,
 } as unknown as NodeTypes;
 
 const edgeTypes = {
@@ -47,6 +51,10 @@ const fitViewOptions = { padding: FIT_VIEW_PADDING };
 export function Overview() {
   const showIntegrations = useProcessStore((state) => state.showIntegrations);
 
+  // SPEC §4.5: режим решает высота КОНТЕЙНЕРА, а не окна — приложение живёт в
+  // iframe (SPEC §6). Измеряется корень экрана: он занимает всю высоту врезки.
+  const { ref: rootRef, compact } = useFrameSize();
+
   // Карта = process.json + overrides из localStorage. useProcessMap()
   // подписывает экран на правки редактора (SPEC §4.4): после записи ссылки
   // ссылка обязана появиться сразу, без перезагрузки страницы. Ссылка на
@@ -54,13 +62,18 @@ export function Overview() {
   // пересчитывается на каждый рендер — см. src/hooks/useProcessMap.ts.
   const map = useProcessMap();
   const { nodes, edges } = useMemo(
-    () => buildOverviewGraph(map, showIntegrations),
-    [map, showIntegrations],
+    () => buildOverviewGraph(map, showIntegrations, compact),
+    [map, showIntegrations, compact],
   );
 
   return (
-    <div className={styles.root}>
-      <OverviewHeader title={map.title} stagesCount={map.stages.length} updatedAt={map.updatedAt} />
+    <div className={compact ? `${styles.root} ${styles.compact}` : styles.root} ref={rootRef}>
+      <OverviewHeader
+        title={map.title}
+        stagesCount={map.stages.length}
+        updatedAt={map.updatedAt}
+        compact={compact}
+      />
       {/* role="region", а не "application": схема статична, а application
           переводит скринридер в режим прямого прохода клавиш и глушит
           навигацию по элементам. */}
@@ -90,6 +103,9 @@ export function Overview() {
               maxZoom={MAX_ZOOM}
             >
               <Background variant={BackgroundVariant.Dots} gap={GRID_GAP} size={GRID_DOT_SIZE} />
+              {/* SPEC §4.5: при смене режима вид подгоняется заново — карточки
+                  этапов меняют и размер, и координаты. */}
+              <RefitViewport compact={compact} fitViewOptions={fitViewOptions} />
             </ReactFlow>
           </EdgeMarkers>
           {/* Тот же fitViewOptions, что и автозапуск fitView выше (SPEC §4.6):
@@ -102,8 +118,10 @@ export function Overview() {
           Legend.module.css (плавающая панель рано или поздно перекрывает
           содержимое панорамируемого/масштабируемого полотна). Легенде не
           нужен React Flow, поэтому она и не внутри .canvas. */}
+      {/* Компактный режим (SPEC §4.5) не убирает полосу, а ужимает её под
+          кнопку-иконку: легенда остаётся вне полотна — см. Legend.tsx. */}
       <div className={styles.legendStrip}>
-        <Legend />
+        <Legend compact={compact} />
       </div>
     </div>
   );

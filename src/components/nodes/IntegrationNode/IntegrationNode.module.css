@@ -17,6 +17,13 @@
   gap: var(--pm-space-9);
 }
 
+/* Компактный режим (SPEC §4.5, артборд A4): одна карточка на этап, шириной
+   ровно с карточку этапа — они стоят друг под другом. Высота прежняя
+   (--pm-io-node-height), см. IO_SIZE_COMPACT в overviewGraph.ts. */
+.compact {
+  width: var(--pm-stage-node-width-compact);
+}
+
 .code {
   flex: none;
   color: var(--pm-integration);

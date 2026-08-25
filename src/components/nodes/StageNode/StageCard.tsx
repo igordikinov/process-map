@@ -14,19 +14,32 @@ import styles from './StageCard.module.css';
 // без завершающего слэша. Подробности — в src/assets/icons/index.ts.
 const WARNING_ICON = iconUrl('warning-triangle');
 
+/**
+ * Компактный режим (SPEC §4.5, артборд A4) показывает ДВА ключевых выхода
+ * вместо трёх. Число живёт здесь, а не в CSS: список обрезается в разметке —
+ * скрытый третий пункт остался бы в дереве доступности и был бы прочитан
+ * скринридером, хотя на экране его нет.
+ */
+const COMPACT_KEY_OUTPUTS = 2;
+
 export interface StageCardProps {
   stage: Stage;
+  /** SPEC §4.5: карточка 228×200, два выхода, без «эйбра» и подписи «Этап». */
+  compact?: boolean;
 }
 
-export function StageCard({ stage }: StageCardProps) {
+export function StageCard({ stage, compact = false }: StageCardProps) {
   const navigateToStage = useProcessStore((state) => state.navigateToStage);
   const isActive = useProcessStore((state) => state.currentStageId === stage.id);
   const warningsCount = stage.warningsCount ?? 0;
+  const outputs = compact ? stage.keyOutputs.slice(0, COMPACT_KEY_OUTPUTS) : stage.keyOutputs;
 
   return (
     <button
       type="button"
-      className={isActive ? `${styles.card} ${styles.active}` : styles.card}
+      className={[styles.card, isActive ? styles.active : '', compact ? styles.compact : '']
+        .filter(Boolean)
+        .join(' ')}
       aria-label={ru.stageNode.ariaLabel(stage.number, stage.title)}
       aria-current={isActive ? 'step' : undefined}
       onClick={() => {
@@ -36,14 +49,26 @@ export function StageCard({ stage }: StageCardProps) {
       <div className={styles.head}>
         <span className={styles.number}>{stage.number}</span>
         {warningsCount > 0 ? (
-          <span className={styles.warnings}>
-            <img src={WARNING_ICON} alt="" className={styles.warningsIcon} />
-            {ru.stageNode.warnings(warningsCount)}
+          // В компактном режиме (A4) от счётчика остаётся одна иконка: места на
+          // подпись нет. Число не пропадает — оно уходит в title/alt, то есть
+          // остаётся и в подсказке, и для скринридера.
+          <span className={styles.warnings} title={ru.stageNode.warnings(warningsCount)}>
+            <img
+              src={WARNING_ICON}
+              alt={compact ? ru.stageNode.warnings(warningsCount) : ''}
+              className={styles.warningsIcon}
+            />
+            {!compact && ru.stageNode.warnings(warningsCount)}
           </span>
         ) : (
-          <span className={styles.caption}>
-            {isActive ? ru.stageNode.captionActive : ru.stageNode.caption}
-          </span>
+          // Подпись «Этап»/«Выбранный этап» в компактном режиме не рисуется
+          // (A4), но состояние карточки остаётся видимым: рамка, верхняя
+          // полоска и фон номера — и aria-current на самой кнопке.
+          !compact && (
+            <span className={styles.caption}>
+              {isActive ? ru.stageNode.captionActive : ru.stageNode.caption}
+            </span>
+          )
         )}
       </div>
 
@@ -51,10 +76,12 @@ export function StageCard({ stage }: StageCardProps) {
         {stage.title}
       </div>
       <div className={styles.divider} />
-      <div className={styles.outputsTitle}>{ru.stageNode.keyOutputs}</div>
+      {/* «Эйбр» блока в компактном режиме снят (A4): в 200 px высоты он занимал
+          строку, которую забирает сам список выходов. */}
+      {!compact && <div className={styles.outputsTitle}>{ru.stageNode.keyOutputs}</div>}
 
       <ul className={styles.outputs}>
-        {stage.keyOutputs.map((output) => (
+        {outputs.map((output) => (
           // Карточка 274×210 фиксирована по SPEC §4.1, а формулировки в данных
           // длиннее макетных, поэтому пункт обрезается многоточием, а не срезом
           // по краю карточки; полный текст доступен в подсказке.

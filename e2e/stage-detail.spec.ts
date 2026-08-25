@@ -25,6 +25,17 @@ async function openStage(page: Page, index: number): Promise<void> {
   await page.waitForSelector('.react-flow__node-step');
 }
 
+/**
+ * Ждёт готовности полотна уровня 2, когда карточек уровня 1 на экране уже нет
+ * (используется вместо openStage()). Актуально после page.reload(): deep-link
+ * (?stage=…, SPEC §4.7, process-map-0y2) сам восстанавливает открытый этап —
+ * приложение открывается сразу на уровне 2, а не на обзоре, поэтому кликать
+ * по несуществующей карточке .react-flow__node-stage нельзя.
+ */
+async function waitForStageDetailReady(page: Page): Promise<void> {
+  await page.waitForSelector('.react-flow__node-step');
+}
+
 test.beforeEach(async ({ page }) => {
   await page.setViewportSize(VIEWPORT);
 });
@@ -86,7 +97,20 @@ test('клик по карточке данных в колонке входов
   await page.goto('/');
   await openStage(page, 0);
 
+  // Колонка входов с задачи process-map-c18 остаётся слева ЗА КАДРОМ: стартовый
+  // вид привязан к первой карточке шага, а не к углу габарита. Она доступна
+  // панорамированием — им сюда и добираемся (panOnScroll включён), иначе
+  // кликать было бы не по чему.
   const card = page.locator('.react-flow__node-data button').first();
+  await page.mouse.move(640, 400);
+  await expect
+    .poll(async () => {
+      await page.mouse.wheel(-200, 0);
+      const box = await card.boundingBox();
+      return box === null ? -1 : box.x;
+    })
+    .toBeGreaterThan(0);
+
   const box = await card.boundingBox();
   await page.mouse.click(
     (box?.x ?? 0) + (box?.width ?? 0) / 2,
@@ -124,7 +148,7 @@ test('иконка link-external появляется при screen и не от
   );
 
   await page.reload();
-  await openStage(page, 0);
+  await waitForStageDetailReady(page);
 
   const linkButton = page.locator(`[data-id="${stepId}"] button[aria-label^="Открыть экран"]`);
   await expect(linkButton).toHaveCount(1);
@@ -211,7 +235,12 @@ for (const index of [0, 1, 2, 3]) {
   });
 }
 
-test('этап открывается от начала потока: самый левый узел виден слева', async ({ page }) => {
+// Переписан в задаче process-map-c18. Прежнее утверждение («самый левый узел
+// графа виден слева») выполнялось буквально: слева оказывалась колонка входных
+// данных и узлы-интеграции, а карточек шага в кадре не было ни одной — экран
+// открывался, не показывая процесса. Теперь привязка идёт к первой карточке
+// шага, и проверяется именно она.
+test('этап открывается на первой карточке шага, а не на колонке входов', async ({ page }) => {
   await page.goto('/');
   await openStage(page, 0);
   await page.waitForFunction(() => {
@@ -219,26 +248,30 @@ test('этап открывается от начала потока: самый
     return Number(/scale\(([^)]+)\)/.exec(viewport?.style.transform ?? '')?.[1] ?? '0') > 0.5;
   });
 
-  // Узел с минимальной координатой X в графе обязан попасть в левую четверть
-  // экрана — при fitView он оказывался в центре сжатой полоски.
-  const left = await page.evaluate(() => {
+  // Селектор по aria-label, а не по классу: узлы-интеграции и предупреждения
+  // рисуются той же карточкой `.react-flow__node-step` (stageGraph.ts), и без
+  // фильтра «Шаг: …» проверка снова считала бы за процесс то, что процессом
+  // не является — ровно ту ошибку, которую чинит эта задача.
+  const first = await page.evaluate(() => {
     let best: { id: string; x: number } | null = null;
-    document.querySelectorAll('.react-flow__node').forEach((el) => {
-      const id = el.getAttribute('data-id') ?? '';
-      if (id.startsWith('group:') || id.startsWith('column:')) {
+    document.querySelectorAll('.react-flow__node-step').forEach((el) => {
+      if (el.querySelector('button[aria-label^="Шаг: "]') === null) {
         return;
       }
       const rect = el.getBoundingClientRect();
       if (best === null || rect.x < best.x) {
-        best = { id, x: rect.x };
+        best = { id: el.getAttribute('data-id') ?? '', x: rect.x };
       }
     });
     return best as { id: string; x: number } | null;
   });
 
-  expect(left).not.toBeNull();
-  expect(left?.x ?? 0).toBeGreaterThanOrEqual(0);
-  expect(left?.x ?? 0).toBeLessThan(1280 / 4);
+  expect(first).not.toBeNull();
+  // Самая левая карточка ШАГА стоит в левой четверти экрана…
+  expect(first?.x ?? 0).toBeGreaterThanOrEqual(0);
+  expect(first?.x ?? 0).toBeLessThan(1280 / 4);
+  // …и это именно первая карточка потока (минимальная по x в данных).
+  expect(first?.id).toBe('sohranenie-predyduschih-versiy-planov');
 });
 
 test('компактное окно 1024×600: стартовый вид тоже читаем (SPEC §4.5)', async ({ page }) => {

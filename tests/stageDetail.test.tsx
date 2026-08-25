@@ -34,6 +34,13 @@ function firstOfType(stage: Stage, type: ProcessNode['type']): ProcessNode {
 
 beforeEach(() => {
   useProcessStore.setState(createInitialState());
+  // App теперь читает location.search при монтировании (useDeepLink, SPEC
+  // §4.7, process-map-0y2), а сам же пишет в URL через replaceState при
+  // навигации. window.location переживает тесты внутри файла — без сброса
+  // здесь следующий рендер <App/> подхватил бы ?stage=… от предыдущего теста
+  // и переопределил currentStageId, выставленный этим тестом напрямую через
+  // navigateToStage() до рендера. См. tests/useDeepLink.test.tsx.
+  window.history.replaceState({}, '', '/');
 });
 
 describe('StageDetail', () => {

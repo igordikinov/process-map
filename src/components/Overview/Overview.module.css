@@ -62,3 +62,17 @@
   border-top: 1px solid var(--scp-border-neutral-tertiary);
   background: var(--scp-background-primary);
 }
+
+/* ── Компактный режим (SPEC §4.5, артборд A4) ─────────────────────────────
+   Модификатор стоит на .root, а высоты полотна и полосы легенды считаются
+   от него потомками: три места (шапка, полотно, полоса) обязаны меняться
+   одновременно — иначе полотно либо вылезет за фрейм, либо оставит пустую
+   ленту снизу. Сами карточки этапов уменьшает overviewGraph.ts. */
+.root.compact .canvas {
+  height: calc(100vh - var(--pm-header-height-compact) - var(--pm-legend-strip-height-compact));
+}
+
+.root.compact .legendStrip {
+  height: var(--pm-legend-strip-height-compact);
+  padding: 0 var(--scp-paddings-l);
+}
