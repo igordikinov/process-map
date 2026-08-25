@@ -9,11 +9,15 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { ReactFlowProvider } from '@xyflow/react';
 import { Toolbar } from '../src/components/Toolbar';
+import { getMergedProcessMap, readStoredOverrides, setNodeOverride } from '../src/data/loader';
+import { refreshProcessMap } from '../src/hooks/useProcessMap';
 import { ru } from '../src/i18n/ru';
 import { createInitialState, useProcessStore } from '../src/store/useProcessStore';
 
 beforeEach(() => {
   useProcessStore.setState(createInitialState());
+  localStorage.clear();
+  refreshProcessMap();
 });
 
 function renderToolbar() {
@@ -90,6 +94,76 @@ describe('Toolbar', () => {
 
     // Ни своего ключа, ни записи в ключе overrides — режим живёт только в памяти.
     expect(localStorage.length).toBe(0);
+  });
+
+  // ── Кнопки редактора: экспорт/импорт/сброс (SPEC §4.4, process-map-6q0) ──
+  //
+  // Настоящее скачивание файла и выбор файла в <input type="file"> в jsdom не
+  // воспроизводятся — их проверяет e2e/json-transfer.spec.ts. Здесь только
+  // видимость по режиму и сброс, который никакого браузерного API не требует.
+  const EDITOR_BUTTONS = [
+    ru.toolbar.exportJson,
+    ru.toolbar.importJson,
+    ru.toolbar.resetOverrides,
+  ] as const;
+
+  it('в режиме «Просмотр» кнопок экспорта/импорта/сброса нет', () => {
+    renderToolbar();
+
+    for (const name of EDITOR_BUTTONS) {
+      expect(screen.queryByRole('button', { name })).toBeNull();
+    }
+    // И скрытого file input тоже нет: в просмотре импортировать нечего.
+    expect(document.querySelector('input[type="file"]')).toBeNull();
+  });
+
+  it('в режиме «Редактор» появляются все три кнопки SPEC §4.4', () => {
+    renderToolbar();
+    fireEvent.click(screen.getByRole('button', { name: ru.toolbar.modeEdit }));
+
+    for (const name of EDITOR_BUTTONS) {
+      const button = screen.getByRole('button', { name });
+      expect(button).toBeInTheDocument();
+      expect(button).toHaveAttribute('type', 'button');
+      expect(button).not.toHaveAttribute('tabindex', '-1');
+    }
+  });
+
+  it('возврат в «Просмотр» снова убирает кнопки редактора', () => {
+    renderToolbar();
+    fireEvent.click(screen.getByRole('button', { name: ru.toolbar.modeEdit }));
+    expect(screen.getByRole('button', { name: ru.toolbar.exportJson })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: ru.toolbar.modeView }));
+
+    expect(screen.queryByRole('button', { name: ru.toolbar.exportJson })).toBeNull();
+  });
+
+  it('скрытый file input не попадает в обход Tab и не читается скринридером', () => {
+    renderToolbar();
+    fireEvent.click(screen.getByRole('button', { name: ru.toolbar.modeEdit }));
+
+    const input = document.querySelector('input[type="file"]');
+    expect(input).not.toBeNull();
+    expect(input).toHaveAttribute('tabindex', '-1');
+    expect(input).toHaveAttribute('aria-hidden', 'true');
+  });
+
+  it('«Сбросить правки» очищает overrides и обновляет карту (без подтверждения)', () => {
+    const nodeId = getMergedProcessMap().stages[0]?.nodes[0]?.id ?? '';
+    setNodeOverride(nodeId, { title: 'Экран', url: 'https://example.com/a' });
+    refreshProcessMap();
+
+    renderToolbar();
+    fireEvent.click(screen.getByRole('button', { name: ru.toolbar.modeEdit }));
+    fireEvent.click(screen.getByRole('button', { name: ru.toolbar.resetOverrides }));
+
+    expect(readStoredOverrides()).toEqual({});
+    // Карта перечитана через commitOverrides — иначе открытые экраны остались
+    // бы с удалённой правкой.
+    expect(
+      getMergedProcessMap().stages[0]?.nodes.find((node) => node.id === nodeId)?.screen,
+    ).toBeUndefined();
   });
 
   it('рендерит кнопки зума и процент масштаба, доступные по aria-label', () => {

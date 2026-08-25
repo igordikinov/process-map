@@ -21,6 +21,7 @@ import { useReactFlow, useViewport, type FitViewOptions } from '@xyflow/react';
 import { iconUrl } from '../../assets/icons';
 import { ru } from '../../i18n/ru';
 import { useProcessStore } from '../../store/useProcessStore';
+import { EditorActions } from './EditorActions';
 import styles from './Toolbar.module.css';
 
 const MINUS_ICON = iconUrl('minus');
@@ -94,6 +95,13 @@ export function Toolbar({ fitViewOptions, drawerOpen = false }: ToolbarProps) {
           {ru.toolbar.modeEdit}
         </button>
       </div>
+
+      {/* «Экспорт JSON» / «Импорт JSON» / «Сбросить правки» — SPEC §4.4 прямо
+          говорит «в тулбаре РЕДАКТОРА», поэтому группа не рендерится в режиме
+          просмотра вовсе (а не прячется disabled'ом): читателю вики нечего
+          делать ни с одной из трёх кнопок, а «Сбросить правки» ему ещё и
+          опасна. */}
+      {mode === 'edit' && <EditorActions />}
 
       <button
         type="button"

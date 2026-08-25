@@ -1,0 +1,48 @@
+/*
+ * Кнопки тулбара режима «Редактор» (SPEC §4.4).
+ * Сегментированная группа тех же пропорций, что .modeGroup/.zoomGroup в
+ * Toolbar.module.css: один 32px-контрол, та же рамка, тот же радиус.
+ * Только var(...) из src/theme/tokens.css — CLAUDE.md «Кодовые правила».
+ */
+
+.group {
+  display: flex;
+  height: var(--pm-toolbar-control-size);
+  flex: none;
+  overflow: hidden;
+  border: 1px solid var(--scp-color-neutral-200);
+  border-radius: var(--scp-radius-button);
+  background: var(--scp-background-primary);
+}
+
+.button {
+  display: flex;
+  height: 100%;
+  align-items: center;
+  padding: 0 var(--scp-paddings-m);
+  border: 0;
+  border-right: 1px solid var(--scp-border-neutral-tertiary);
+  background: transparent;
+  color: var(--scp-color-neutral-700);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: var(--scp-font-sizes-12);
+  white-space: nowrap;
+}
+
+.button:last-of-type {
+  border-right: 0;
+}
+
+.button:hover,
+.button:focus-visible {
+  background: var(--scp-color-neutral-50);
+  outline: none;
+}
+
+/* Настоящий <input type="file"> не показывается: его открывает кнопка
+   «Импорт JSON». display:none не мешает ни programmatic click(), ни
+   Playwright setInputFiles. */
+.fileInput {
+  display: none;
+}
