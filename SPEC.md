@@ -171,10 +171,17 @@ interface ProcessMap {
 
 ```html
 <iframe src="https://<host>/process-map/?stage=1"
-        style="width:100%;height:720px;border:0" loading="lazy"
-        allow="clipboard-write"></iframe>
+        style="width:100%;height:720px;border:0" loading="lazy"></iframe>
 ```
 `vite.config.ts`: `base: './'` — чтобы бандл работал из любого подкаталога. В `dist/` не должно быть абсолютных путей. Сервер не должен отдавать `X-Frame-Options: DENY`; при необходимости `Content-Security-Policy: frame-ancestors https://*.company.ru`.
+
+Атрибут `allow="clipboard-write"` из версии 1.0 убран: в v1 приложение с буфером обмена не работает (`process-map-dps`, проверено grep'ом по `src/`).
+
+Три условия работоспособности, найденные при реализации. Развёрнуто — в `README.md`, там же чек-лист приёмки на стенде.
+
+1. **Завершающий слэш обязателен** (`process-map-phd`). При `base: './'` `index.html` ссылается на `./assets/…` относительно URL документа, поэтому по адресу `/process-map` (без слэша) браузер запросит `/assets/…` в корне хоста и получит 404 — не загрузится сам бандл. Лечится только редиректом 301 на стороне хостинга; требование к хостингу, не к приложению.
+2. **`sandbox` ломает `_top`-навигацию молча** (`process-map-6ap`). Фолбэк `_top → _blank` в `openScreen` (§4.8) срабатывает по `SecurityError`, а `sandbox` без `allow-top-navigation` браузер применяет **без исключения** — переход просто не происходит. Требование к встраивающей стороне: либо без `sandbox`, либо с `allow-top-navigation-by-user-activation` (плюс `allow-popups`, `allow-scripts`, `allow-same-origin` — без последнего недоступен `localStorage` для overrides §3).
+3. **Только https** (PRD §9): http-фрейм в https-вики блокируется как mixed content.
 
 ## 7. Тестирование
 

@@ -256,7 +256,9 @@ test.describe('Тулбар, уровень 2 (детализация)', () => {
     const card = page.locator('.react-flow__node-stage button').nth(index);
     const box = await card.boundingBox();
     await page.mouse.click((box?.x ?? 0) + (box?.width ?? 0) / 2, (box?.y ?? 0) + (box?.height ?? 0) / 2);
-    await page.waitForSelector('.react-flow__node-step');
+    // Карточка ШАГА, а не любой `.react-flow__node-step`: тем же классом
+    // рисуются интеграции и предупреждения (общий StepCard).
+    await page.waitForSelector('.react-flow__node-step button[aria-label^="Шаг: "]');
     await page.waitForFunction(() => {
       const viewport = document.querySelector('.react-flow__viewport') as HTMLElement | null;
       return Number(/scale\(([^)]+)\)/.exec(viewport?.style.transform ?? '')?.[1] ?? '0') > 0.5;

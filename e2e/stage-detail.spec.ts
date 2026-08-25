@@ -12,6 +12,14 @@ const VIEWPORT = { width: 1280, height: 720 };
 /** Ключ и формат overrides — SPEC §3, src/data/schema.ts. */
 const OVERRIDES_KEY = 'inplan-process-map:overrides:v1';
 
+/**
+ * Карточка ШАГА, а не любой узел `.react-flow__node-step`: тем же классом
+ * рисуются узлы типов `integration` и `warning` (общий StepCard в StepNode.tsx
+ * и WarningNode.tsx). «Первый .react-flow__node-step» — это первый узел в DOM,
+ * и на этапе 2 им оказывается интеграция, а не шаг процесса.
+ */
+const STEP_CARD = '.react-flow__node-step button[aria-label^="Шаг: "]';
+
 /** Переход обзор → детализация настоящим кликом мыши по карточке этапа. */
 async function openStage(page: Page, index: number): Promise<void> {
   await page.waitForSelector('.react-flow__node-stage');
@@ -22,7 +30,7 @@ async function openStage(page: Page, index: number): Promise<void> {
     (box?.x ?? 0) + (box?.width ?? 0) / 2,
     (box?.y ?? 0) + (box?.height ?? 0) / 2,
   );
-  await page.waitForSelector('.react-flow__node-step');
+  await page.waitForSelector(STEP_CARD);
 }
 
 /**
@@ -33,7 +41,7 @@ async function openStage(page: Page, index: number): Promise<void> {
  * по несуществующей карточке .react-flow__node-stage нельзя.
  */
 async function waitForStageDetailReady(page: Page): Promise<void> {
-  await page.waitForSelector('.react-flow__node-step');
+  await page.waitForSelector(STEP_CARD);
 }
 
 test.beforeEach(async ({ page }) => {
@@ -57,7 +65,7 @@ test('центр карточки шага принимает события м�
   await page.goto('/');
   await openStage(page, 0);
 
-  const card = page.locator('.react-flow__node-step button').first();
+  const card = page.locator(STEP_CARD).first();
   const box = await card.boundingBox();
   expect(box).not.toBeNull();
 
@@ -81,7 +89,7 @@ test('настоящий клик мышью по узлу выбирает ег
   await page.goto('/');
   await openStage(page, 0);
 
-  const card = page.locator('.react-flow__node-step button').first();
+  const card = page.locator(STEP_CARD).first();
   await expect(card).not.toHaveAttribute('aria-current', 'true');
 
   const box = await card.boundingBox();
@@ -132,8 +140,11 @@ test('иконка link-external появляется при screen и не от
 
   // id узла берём из уже отрисованного приложения, чтобы тест не зависел от
   // конкретных строк в process.json.
-  const stepId = await page.locator('.react-flow__node-step').first().getAttribute('data-id');
-  expect(stepId).not.toBeNull();
+  const stepId = await page
+    .locator(STEP_CARD)
+    .first()
+    .evaluate((el) => el.closest('.react-flow__node')?.getAttribute('data-id') ?? null);
+  expect(stepId, 'на полотне нет ни одной карточки шага').not.toBeNull();
 
   await page.evaluate(
     ({ key, id }) => {

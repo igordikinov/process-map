@@ -37,6 +37,17 @@ const SCREEN_LINK = {
 /** Индекс этапа 2 в обзоре — сценарий SPEC §7 идёт именно через него. */
 const STAGE_2_INDEX = 1;
 
+/**
+ * Карточка ШАГА, а не любой узел `.react-flow__node-step`.
+ *
+ * Этим же классом React Flow рисует узлы типов `integration` и `warning`
+ * (StepNode.tsx, WarningNode.tsx рендерят общий StepCard), и на этапе 2 первым
+ * в DOM идёт именно интеграция. Поэтому «первый шаг» без фильтра по aria-label
+ * — это не шаг, и сценарий SPEC §7 («обзор → этап 2 → ШАГ → Drawer») проходил
+ * бы мимо своего предмета.
+ */
+const STEP_CARD = '.react-flow__node-step button[aria-label^="Шаг: "]';
+
 /** Ждёт стартовый вьюпорт уровня 2: он ставится в useEffect после измерения полотна. */
 async function waitForStartViewport(page: Page): Promise<void> {
   await page.waitForFunction(() => {
@@ -59,7 +70,10 @@ async function clickCenter(page: Page, locator: ReturnType<Page['locator']>): Pr
 async function openStage(page: Page, index: number): Promise<void> {
   await page.waitForSelector('.react-flow__node-stage');
   await clickCenter(page, page.locator('.react-flow__node-stage button').nth(index));
-  await page.waitForSelector('.react-flow__node-step');
+  // Ждём именно карточку шага: узлы-интеграции появляются в DOM тем же классом,
+  // и ожидание по «любому .react-flow__node-step» доказывало бы меньше, чем
+  // обещает имя функции.
+  await page.waitForSelector(STEP_CARD);
   await waitForStartViewport(page);
 }
 
@@ -119,8 +133,18 @@ async function openCalls(page: Page): Promise<OpenCall[]> {
 async function seedScreenLinkOnFirstStep(page: Page): Promise<string> {
   await page.goto('/');
   await openStage(page, STAGE_2_INDEX);
-  const stepId = await page.locator('.react-flow__node-step').first().getAttribute('data-id');
+  const stepCard = page.locator(STEP_CARD).first();
+  const stepId = await stepCard.evaluate(
+    (el) => el.closest('.react-flow__node')?.getAttribute('data-id') ?? null,
+  );
   expect(stepId, 'у этапа 2 не нашлось ни одного узла-шага').not.toBeNull();
+  // Явно фиксируем, что взят ШАГ: до фильтра по aria-label здесь оказывался
+  // первый в DOM узел этапа 2 — интеграция «Оптимальный страховой запас…», и
+  // весь сценарий SPEC §7 шёл по ней, а не по шагу процесса.
+  await expect(page.locator(`[data-id="${stepId ?? ''}"] button`).first()).toHaveAttribute(
+    'aria-label',
+    /^Шаг: /,
+  );
 
   await page.addInitScript(
     ({ key, id, screen }) => {
@@ -153,14 +177,17 @@ test('обзор → этап 2 → шаг → Drawer → «Открыть в м
   const stageCard = page.locator('.react-flow__node-stage button').nth(STAGE_2_INDEX);
   await expect(stageCard).toHaveAttribute('aria-label', /^Этап 2: /);
   await clickCenter(page, stageCard);
-  await page.waitForSelector('.react-flow__node-step');
+  await page.waitForSelector(STEP_CARD);
   await waitForStartViewport(page);
   await expect(page.getByText('E2E-процесс')).toBeVisible();
   await expect(page.getByText('Этап 2', { exact: true })).toBeVisible();
   await expect(page.locator('.react-flow__node-stage')).toHaveCount(0);
 
-  // 3. Шаг: карточка выбирается настоящим кликом, а не fireEvent.
+  // 3. Шаг: карточка выбирается настоящим кликом, а не fireEvent. Это именно
+  //    ШАГ процесса (aria-label «Шаг: …»), а не интеграция/предупреждение,
+  //    которые рисуются той же карточкой — SPEC §7 называет шаг.
   const stepCard = page.locator(`[data-id="${stepId}"] button`).first();
+  await expect(stepCard).toHaveAttribute('aria-label', /^Шаг: /);
   const stepLabel = await stepCard.locator('span').first().textContent();
   await expect(stepCard).not.toHaveAttribute('aria-current', 'true');
   await clickCenter(page, stepCard);
@@ -251,7 +278,11 @@ test.describe('открытая панель не отменяет осталь�
         return null;
       }
       for (const button of document.querySelectorAll('.react-flow__node button[aria-label]')) {
-        if (button.getAttribute('aria-label')?.startsWith('Интеграция:') === true) {
+        // Именно «Шаг: …», а не «всё, кроме интеграции»: прежний фильтр
+        // пропускал и узлы-предупреждения (тот же .react-flow__node-step), и
+        // карточки данных — то есть функция с именем openDrawerOnFirstStep
+        // могла открыть панель вовсе не на шаге.
+        if (button.getAttribute('aria-label')?.startsWith('Шаг: ') !== true) {
           continue;
         }
         const rect = button.getBoundingClientRect();
@@ -266,7 +297,7 @@ test.describe('открытая панель не отменяет осталь�
       }
       return null;
     });
-    expect(stepId, 'на полотне этапа 2 не видно ни одной не-интеграционной карточки').not.toBeNull();
+    expect(stepId, 'на полотне этапа 2 не видно ни одной карточки шага целиком').not.toBeNull();
 
     await clickCenter(page, page.locator(`[data-id="${stepId ?? ''}"] button`).first());
     await expect(page.getByRole('dialog')).toBeVisible();

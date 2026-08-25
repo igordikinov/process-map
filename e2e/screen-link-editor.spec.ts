@@ -16,6 +16,14 @@ const VIEWPORT = { width: 1280, height: 720 };
 /** Ключ и формат overrides — SPEC §3, src/data/schema.ts. */
 const OVERRIDES_KEY = 'inplan-process-map:overrides:v1';
 
+/**
+ * Карточка ШАГА, а не любой узел `.react-flow__node-step`: тем же классом
+ * рисуются узлы типов `integration` и `warning` (общий StepCard). Сценарий
+ * SPEC §7 («редактор: сохранить ссылку, перезагрузить») должен идти по шагу
+ * процесса, а не по тому, что первым попало в DOM.
+ */
+const STEP_CARD = '.react-flow__node-step button[aria-label^="Шаг: "]';
+
 const LINK = {
   title: 'Планирование поставок › Объёмный план',
   url: 'https://example.com/plan',
@@ -41,7 +49,7 @@ async function openStage(page: Page, index: number): Promise<void> {
  * по несуществующей карточке .react-flow__node-stage нельзя.
  */
 async function waitForStageDetailReady(page: Page): Promise<void> {
-  await page.waitForSelector('.react-flow__node-step');
+  await page.waitForSelector(STEP_CARD);
   // Стартовый вьюпорт ставится в useEffect после измерения полотна.
   await page.waitForFunction(() => {
     const viewport = document.querySelector('.react-flow__viewport') as HTMLElement | null;
@@ -88,14 +96,23 @@ async function enterEditMode(page: Page): Promise<void> {
   await expect(button).toHaveAttribute('aria-pressed', 'true');
 }
 
+/** id первой карточки ШАГА на полотне уровня 2 (не интеграции, не данных). */
+async function firstStepId(page: Page): Promise<string> {
+  const stepId = await page
+    .locator(STEP_CARD)
+    .first()
+    .evaluate((el) => el.closest('.react-flow__node')?.getAttribute('data-id') ?? null);
+  expect(stepId, 'на полотне нет ни одной карточки шага').not.toBeNull();
+  return stepId ?? '';
+}
+
 /** Открывает панель первого шага этапа 1 и возвращает его data-id. */
 async function openFirstStep(page: Page): Promise<string> {
   await openStage(page, 0);
-  const stepId = await page.locator('.react-flow__node-step').first().getAttribute('data-id');
-  expect(stepId).not.toBeNull();
-  await clickNode(page, stepId ?? '');
+  const stepId = await firstStepId(page);
+  await clickNode(page, stepId);
   await expect(page.getByRole('dialog')).toBeVisible();
-  return stepId ?? '';
+  return stepId;
 }
 
 /** Что лежит в overrides сейчас (сырое значение: null и «нет записи» различаются). */
@@ -169,20 +186,19 @@ test('ссылка появляется на карточке шага икон�
 test('удалённая ссылка не возвращается после перезагрузки', async ({ page }) => {
   await page.goto('/');
   await openStage(page, 0);
-  const stepId = await page.locator('.react-flow__node-step').first().getAttribute('data-id');
-  expect(stepId).not.toBeNull();
+  const stepId = await firstStepId(page);
 
   // Ссылка уже есть — кладём её штатным путём, через overrides.
   await page.evaluate(
     ({ key, id, link }) => {
       window.localStorage.setItem(key, JSON.stringify({ [id]: { screen: link } }));
     },
-    { key: OVERRIDES_KEY, id: stepId ?? '', link: LINK },
+    { key: OVERRIDES_KEY, id: stepId, link: LINK },
   );
   await page.reload();
   await enterEditMode(page);
   await waitForStageDetailReady(page);
-  await ensureDrawerOpen(page, stepId ?? '');
+  await ensureDrawerOpen(page, stepId);
 
   const dialog = page.getByRole('dialog');
   await expect(dialog.getByText(LINK.title)).toBeVisible();
@@ -192,18 +208,18 @@ test('удалённая ссылка не возвращается после �
 
   // В хранилище остаётся ЗАПИСЬ со screen: null — это «пользователь удалил
   // ссылку», а не «правок нет» (три состояния override, SPEC §3 и loader.ts).
-  expect(await storedOverrides(page)).toEqual({ [stepId ?? '']: { screen: null } });
+  expect(await storedOverrides(page)).toEqual({ [stepId]: { screen: null } });
 
   await page.reload();
   await waitForStageDetailReady(page);
-  await ensureDrawerOpen(page, stepId ?? '');
+  await ensureDrawerOpen(page, stepId);
 
   const reloaded = page.getByRole('dialog');
   await expect(reloaded.getByText('Ссылка не задана')).toBeVisible();
   await expect(reloaded.getByText(LINK.title)).toHaveCount(0);
   await expect(reloaded.getByRole('button', { name: 'Открыть в модуле' })).toBeDisabled();
   // Запись после перезагрузки не «схлопнулась» в отсутствие записи.
-  expect(await storedOverrides(page)).toEqual({ [stepId ?? '']: { screen: null } });
+  expect(await storedOverrides(page)).toEqual({ [stepId]: { screen: null } });
 });
 
 test('режим не персистится: после перезагрузки снова «Просмотр» (SPEC §4.4)', async ({ page }) => {

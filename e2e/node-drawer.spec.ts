@@ -14,6 +14,14 @@ const OVERRIDES_KEY = 'inplan-process-map:overrides:v1';
 /** Ширина панели — SPEC §4.3 и токен --pm-drawer-width. */
 const DRAWER_WIDTH = 360;
 
+/**
+ * Карточка ШАГА, а не любой узел `.react-flow__node-step`: этим же классом
+ * React Flow рисует узлы типов `integration` и `warning` (общий StepCard в
+ * StepNode.tsx / WarningNode.tsx). Без фильтра по aria-label «первый шаг» —
+ * это просто первый узел в DOM, и на этапе 2 им оказывается интеграция.
+ */
+const STEP_CARD = '.react-flow__node-step button[aria-label^="Шаг: "]';
+
 /** Узел этапа 1 с многострочным описанием (9 строк списка) — см. process.json. */
 const NODE_WITH_DESCRIPTION = 'dezagregaciya-prognoza-po-produktu';
 
@@ -37,7 +45,7 @@ async function openStage(page: Page, index: number): Promise<void> {
  * по несуществующей карточке .react-flow__node-stage нельзя.
  */
 async function waitForStageDetailReady(page: Page): Promise<void> {
-  await page.waitForSelector('.react-flow__node-step');
+  await page.waitForSelector(STEP_CARD);
   // Стартовый вьюпорт ставится в useEffect после измерения полотна.
   await page.waitForFunction(() => {
     const viewport = document.querySelector('.react-flow__viewport') as HTMLElement | null;
@@ -58,14 +66,23 @@ async function clickNode(page: Page, selector: string): Promise<void> {
   );
 }
 
+/** id первой карточки ШАГА на полотне уровня 2 (не интеграции, не данных). */
+async function firstStepId(page: Page): Promise<string> {
+  const stepId = await page
+    .locator(STEP_CARD)
+    .first()
+    .evaluate((el) => el.closest('.react-flow__node')?.getAttribute('data-id') ?? null);
+  expect(stepId, 'на полотне нет ни одной карточки шага').not.toBeNull();
+  return stepId ?? '';
+}
+
 /** Открывает панель на первом шаге этапа 1 и возвращает его data-id. */
 async function openFirstStepDrawer(page: Page): Promise<string> {
   await openStage(page, 0);
-  const stepId = await page.locator('.react-flow__node-step').first().getAttribute('data-id');
-  expect(stepId).not.toBeNull();
-  await clickNode(page, `[data-id="${stepId ?? ''}"] button`);
+  const stepId = await firstStepId(page);
+  await clickNode(page, `[data-id="${stepId}"] button`);
   await expect(page.getByRole('dialog')).toBeVisible();
-  return stepId ?? '';
+  return stepId;
 }
 
 test.beforeEach(async ({ page }) => {
@@ -167,7 +184,7 @@ test('узел со ссылкой (overrides): заголовок и url в п�
 
   // Ссылок в process.json нет ни у одного узла — подкладываем штатным путём,
   // через overrides в localStorage (их накладывает src/data/loader.ts).
-  const stepId = await page.locator('.react-flow__node-step').first().getAttribute('data-id');
+  const stepId = await firstStepId(page);
   await page.evaluate(
     ({ key, id }) => {
       window.localStorage.setItem(
@@ -182,11 +199,11 @@ test('узел со ссылкой (overrides): заголовок и url в п�
         }),
       );
     },
-    { key: OVERRIDES_KEY, id: stepId ?? '' },
+    { key: OVERRIDES_KEY, id: stepId },
   );
   await page.reload();
   await waitForStageDetailReady(page);
-  await clickNode(page, `[data-id="${stepId ?? ''}"] button`);
+  await clickNode(page, `[data-id="${stepId}"] button`);
 
   const dialog = page.getByRole('dialog');
   await expect(dialog.getByText('Планирование поставок › Объёмный план')).toBeVisible();

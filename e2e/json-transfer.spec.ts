@@ -22,6 +22,9 @@ const OVERRIDES_KEY = 'inplan-process-map:overrides:v1';
 /** Файл-источник истины: playwright запускается из корня репозитория. */
 const PROCESS_JSON = 'src/data/process.json';
 
+/** Карточка шага уровня 2 — см. комментарий в openStage ниже. */
+const STEP_CARD = '.react-flow__node-step button[aria-label^="Шаг: "]';
+
 const LINK = {
   title: 'Планирование поставок › Объёмный план',
   url: 'https://example.com/plan',
@@ -145,7 +148,9 @@ async function openStage(page: Page, index: number): Promise<void> {
     (box?.x ?? 0) + (box?.width ?? 0) / 2,
     (box?.y ?? 0) + (box?.height ?? 0) / 2,
   );
-  await page.waitForSelector('.react-flow__node-step');
+  // Карточка ШАГА, а не любой `.react-flow__node-step`: тем же классом рисуются
+  // узлы интеграций и предупреждений (общий StepCard в StepNode.tsx).
+  await page.waitForSelector(STEP_CARD);
 }
 
 test.beforeEach(async ({ page }) => {
@@ -195,7 +200,7 @@ test.describe('Тулбар редактора: три кнопки SPEC §4.4',
     await page.waitForSelector('.react-flow__node-stage');
     await enterEditMode(page);
     await openStage(page, 0);
-    await page.locator('.react-flow__node-step button').first().click();
+    await page.locator(STEP_CARD).first().click();
     await expect(page.getByRole('dialog')).toBeVisible();
 
     for (const name of ['Просмотр', 'Редактор', 'Экспорт JSON', 'Импорт JSON', 'Сбросить правки']) {

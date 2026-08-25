@@ -15,6 +15,25 @@ const VIEWPORT = { width: 1280, height: 720 };
 // работают deep-link»).
 const STAGE_2_NUMBER = 2;
 const STAGE_2_NODE = 'raschet-potrebnosti-na-kazhdoy-lokacii-netting';
+/**
+ * Заголовок панели этого узла (label из process.json).
+ *
+ * Проверять только «панель открыта» мало: приложение обязано открыть панель
+ * ИМЕННО запрошенного узла. Без этой проверки тест проходил бы и на реализации,
+ * которая выбирает первый попавшийся узел этапа, — а порядок
+ * navigateToStage → selectNode (см. useDeepLink.ts) ловится тогда лишь наполовину.
+ */
+const STAGE_2_NODE_LABEL = 'Расчет потребности на каждой локации (неттинг)';
+
+/** Панель открыта ровно на узле STAGE_2_NODE: заголовок и подсветка карточки. */
+async function expectDrawerOnStage2Node(page: Page): Promise<void> {
+  const dialog = page.getByRole('dialog');
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole('heading', { level: 2 })).toHaveText(STAGE_2_NODE_LABEL);
+  await expect(page.locator(`[data-id="${STAGE_2_NODE}"] button[aria-current="true"]`)).toHaveCount(
+    1,
+  );
+}
 
 const STAGE_1_NUMBER = 1;
 
@@ -43,7 +62,7 @@ test('?stage=2&node=<id> открывает уровень 2 с открытым
   await page.goto(`/?stage=${STAGE_2_NUMBER}&node=${STAGE_2_NODE}`);
   await waitForStageDetail(page);
 
-  await expect(page.getByRole('dialog')).toBeVisible();
+  await expectDrawerOnStage2Node(page);
 });
 
 test.describe('устойчивость', () => {
@@ -71,7 +90,7 @@ test.describe('устойчивость', () => {
     await page.goto(`/?node=${STAGE_2_NODE}`);
     await waitForStageDetail(page);
 
-    await expect(page.getByRole('dialog')).toBeVisible();
+    await expectDrawerOnStage2Node(page);
     // URL синхронизирован обратно: node сам восстановил недостающий stage.
     const params = new URL(page.url()).searchParams;
     expect(params.get('stage')).toBe(String(STAGE_2_NUMBER));
@@ -83,7 +102,7 @@ test.describe('устойчивость', () => {
     await page.goto(`/?stage=${STAGE_1_NUMBER}&node=${STAGE_2_NODE}`);
     await waitForStageDetail(page);
 
-    await expect(page.getByRole('dialog')).toBeVisible();
+    await expectDrawerOnStage2Node(page);
     const params = new URL(page.url()).searchParams;
     // Открылся именно этап узла (2), а не этап 1 из query.
     expect(params.get('stage')).toBe(String(STAGE_2_NUMBER));

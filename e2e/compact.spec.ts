@@ -75,7 +75,10 @@ async function openStage(page: Page, index: number): Promise<void> {
     (box?.x ?? 0) + (box?.width ?? 0) / 2,
     (box?.y ?? 0) + (box?.height ?? 0) / 2,
   );
-  await page.waitForSelector('.react-flow__node-step');
+  // Ждём именно карточку ШАГА: класс `.react-flow__node-step` носят также узлы
+  // интеграций и предупреждений (см. fullyVisibleSteps выше), и ожидание по
+  // голому классу могло бы завершиться на узле, который процессом не является.
+  await page.waitForSelector('.react-flow__node-step button[aria-label^="Шаг: "]');
 }
 
 // ─────────────────────────── обзор, компактный режим ───────────────────────────
@@ -166,6 +169,114 @@ test.describe('компактный режим 1024×600 (артборд A4)', (
     const header = await layoutSize(page, 'header');
     expect(header.h).toBe(HEADER_HEIGHT_COMPACT);
   });
+});
+
+// ───────── переключение режима на живой странице (SPEC §4.5) ─────────
+//
+// Все проверки выше ставят размер окна ДО page.goto, поэтому компактный режим
+// у них определяется одним синхронным измерением при монтировании
+// (useFrameSize делает его до подписки). Из-за этого они проходили бы и на
+// хуке, который вовсе не вызывает observer.observe(): наблюдения никто не
+// проверял — ровно та дыра, что уже находилась в process-map-5l3 на уровне
+// юнит-теста. Здесь размер меняется ПОСЛЕ загрузки, без reload, поэтому
+// переключить раскладку может только настоящий ResizeObserver.
+//
+// Вторая половина проверки — «fitView вызывается заново» из SPEC §4.5
+// (src/components/Overview/RefitViewport.tsx). Компактная раскладка другого
+// размера и с другим составом узлов; без повторного fitView вид остаётся
+// подогнанным под прежний режим и часть карточек этапов уходит за край
+// полотна. Поэтому проверяется, что после переключения ВСЕ 4 карточки видны
+// целиком.
+
+/** Масштаб полотна из transform контейнера .react-flow__viewport. */
+async function viewportZoom(page: Page): Promise<number> {
+  return page.evaluate(() => {
+    const viewport = document.querySelector('.react-flow__viewport') as HTMLElement | null;
+    return Number(/scale\(([^)]+)\)/.exec(viewport?.style.transform ?? '')?.[1] ?? '0');
+  });
+}
+
+/** Весь transform целиком: смена режима обязана его переписать. */
+async function viewportTransform(page: Page): Promise<string | null> {
+  return page.evaluate(
+    () =>
+      (document.querySelector('.react-flow__viewport') as HTMLElement | null)?.style.transform ??
+      null,
+  );
+}
+
+/** Сколько карточек этапов целиком помещается в рамку полотна. */
+async function fullyVisibleStages(page: Page): Promise<number> {
+  return page.evaluate(() => {
+    const canvas = document.querySelector('.react-flow');
+    if (canvas === null) {
+      return -1;
+    }
+    const frame = canvas.getBoundingClientRect();
+    return [...document.querySelectorAll('.react-flow__node-stage')].filter((node) => {
+      const rect = node.getBoundingClientRect();
+      return (
+        rect.width > 0 &&
+        rect.left >= frame.left - 0.5 &&
+        rect.top >= frame.top - 0.5 &&
+        rect.right <= frame.right + 0.5 &&
+        rect.bottom <= frame.bottom + 0.5
+      );
+    }).length;
+  });
+}
+
+test('уменьшение окна БЕЗ перезагрузки включает компактный режим и пересчитывает вид', async ({
+  page,
+}) => {
+  await page.setViewportSize(FULL);
+  await page.goto('/');
+  await page.waitForSelector('.react-flow__node-stage');
+
+  // Исходное состояние — обычный режим (артборд A1).
+  expect((await layoutSize(page, 'header')).h).toBe(HEADER_HEIGHT);
+  await expect(page.locator('.react-flow__node-lane')).toHaveCount(2);
+  await expect(page.getByRole('group', { name: 'Внешние системы процесса' })).toHaveCount(0);
+
+  const transformBefore = await viewportTransform(page);
+  await page.setViewportSize(COMPACT);
+
+  // Раскладка переключилась сама, без reload: сработал ResizeObserver.
+  await expect.poll(async () => (await layoutSize(page, 'header')).h).toBe(HEADER_HEIGHT_COMPACT);
+  await expect(page.locator('.react-flow__node-lane')).toHaveCount(0);
+  await expect(page.getByRole('group', { name: 'Внешние системы процесса' })).toBeVisible();
+  const compactCard = await page.evaluate(() => {
+    const el = document.querySelector('.react-flow__node-stage button');
+    return { w: (el as HTMLElement).offsetWidth, h: (el as HTMLElement).offsetHeight };
+  });
+  expect(compactCard).toEqual({ w: STAGE_CARD_COMPACT.width, h: STAGE_CARD_COMPACT.height });
+
+  // И вид пересчитан под новую раскладку (SPEC §4.5: «fitView вызывается заново»).
+  //
+  // Проверяется не «все карточки видны» — это выполнялось и БЕЗ повторного
+  // fitView (проверено мутацией: с убранным RefitViewport транзформ полотна
+  // оставался байт в байт прежним, а карточки всё равно помещались в кадр).
+  // Проверяется то, что действительно отличает пересчитанный вид от
+  // непересчитанного:
+  //   1) transform полотна изменился — прежний остался бы дословно тем же;
+  //   2) вид УЖЕ подогнан: ручное «Уместить в экран» не меняет масштаб.
+  //      Без повторного fitView масштаб здесь 0.974 (подогнан под раскладку
+  //      обычного режима), а кнопка ставит 0.984 — разница видна сразу.
+  await expect.poll(async () => viewportTransform(page), { timeout: 5000 }).not.toBe(
+    transformBefore,
+  );
+  await expect.poll(async () => fullyVisibleStages(page), { timeout: 5000 }).toBe(4);
+
+  const zoomAfterSwitch = await viewportZoom(page);
+  await page.getByRole('button', { name: 'Уместить в экран' }).click();
+  await page.waitForTimeout(400);
+  expect(Math.abs((await viewportZoom(page)) - zoomAfterSwitch)).toBeLessThan(0.002);
+
+  // Возврат к прежнему размеру так же обратим — и тоже без перезагрузки.
+  await page.setViewportSize(FULL);
+  await expect.poll(async () => (await layoutSize(page, 'header')).h).toBe(HEADER_HEIGHT);
+  await expect(page.locator('.react-flow__node-lane')).toHaveCount(2);
+  await expect.poll(async () => fullyVisibleStages(page), { timeout: 5000 }).toBe(4);
 });
 
 // ───────────────────── обычный режим не задет компактным ─────────────────────

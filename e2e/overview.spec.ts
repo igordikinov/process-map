@@ -61,7 +61,12 @@ test('настоящий клик мышью по карточке уводит 
   await card.click();
 
   await expect(page.locator('.react-flow__node-stage')).toHaveCount(0);
-  await expect(page.locator('.react-flow__node-step').first()).toBeVisible();
+  // Фильтр по aria-label обязателен: класс `.react-flow__node-step` носят и
+  // узлы-интеграции, и предупреждения (общий StepCard), поэтому «виден хоть
+  // один .react-flow__node-step» ещё не значит «виден процесс».
+  await expect(
+    page.locator('.react-flow__node-step button[aria-label^="Шаг: "]').first(),
+  ).toBeVisible();
   await expect(page.getByText('E2E-процесс')).toBeVisible();
 });
 
