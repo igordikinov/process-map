@@ -106,11 +106,18 @@ export function StageDetail() {
               стартовый вид (SPEC §4.6) — см. комментарий у TOOLBAR_FIT_VIEW_OPTIONS
               в stageGraph.ts. */}
           <Toolbar fitViewOptions={TOOLBAR_FIT_VIEW_OPTIONS} />
-          <Legend />
         </ReactFlowProvider>
         {/* Боковая панель узла — внутри .canvas, чтобы затемнение начиналось
             под шапкой крошек, как в артборде A3 (SPEC §4.3). */}
         <NodeDrawer nodes={stage.nodes} />
+      </div>
+      {/* Легенда — строка ПОД полотном, не поверх него: раскладка потока
+          шагов на реальных данных занимает весь угол/край полотна на всех
+          4 этапах (см. Legend.module.css) — плавающая панель гарантированно
+          перекрыла бы что-нибудь. Легенде не нужен React Flow, поэтому она
+          и не внутри .canvas/<ReactFlowProvider>. */}
+      <div className={styles.legendStrip}>
+        <Legend />
       </div>
     </div>
   );

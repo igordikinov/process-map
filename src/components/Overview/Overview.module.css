@@ -14,9 +14,12 @@
 /* Высота ЯВНАЯ, не flex:1. React Flow ставит себе width/height: 100% инлайном,
    а проценты не разрешаются относительно flex-элемента, высота которого
    получена из flex-grow: полотно схлопывалось в 0 и рисовалось пустым. */
+/* Высота уменьшена на --pm-legend-strip-height: легенда — своя строка ПОД
+   полотном (.legendStrip ниже), не абсолютная панель поверх него — см.
+   обоснование в src/components/Legend/Legend.module.css. */
 .canvas {
   position: relative;
-  height: calc(100vh - var(--pm-header-height));
+  height: calc(100vh - var(--pm-header-height) - var(--pm-legend-strip-height));
   background: var(--pm-canvas-bg);
 }
 
@@ -45,4 +48,17 @@
 
 .canvas :global(.react-flow__node-lane) {
   z-index: 0 !important;
+}
+
+/* Строка легенды под полотном — flex-item фиксированной высоты (та же
+   причина, что у явной высоты .canvas выше: содержимому строки не нужен
+   flex:1, а полотну нужна ИЗВЕСТНАЯ высота, а не остаток). */
+.legendStrip {
+  display: flex;
+  height: var(--pm-legend-strip-height);
+  flex: none;
+  align-items: center;
+  padding: 0 var(--scp-spacing-xl);
+  border-top: 1px solid var(--scp-border-neutral-tertiary);
+  background: var(--scp-background-primary);
 }

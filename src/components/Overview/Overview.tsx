@@ -93,8 +93,14 @@ export function Overview() {
               на уровне 1 пола читаемости нет, кнопка «Уместить в экран» просто
               повторяет исходный вид. */}
           <Toolbar fitViewOptions={fitViewOptions} />
-          <Legend />
         </ReactFlowProvider>
+      </div>
+      {/* Легенда — строка ПОД полотном, не поверх него: см. обоснование в
+          Legend.module.css (плавающая панель рано или поздно перекрывает
+          содержимое панорамируемого/масштабируемого полотна). Легенде не
+          нужен React Flow, поэтому она и не внутри .canvas. */}
+      <div className={styles.legendStrip}>
+        <Legend />
       </div>
     </div>
   );

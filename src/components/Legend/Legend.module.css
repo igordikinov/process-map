@@ -1,13 +1,24 @@
 /*
- * Легенда полотна (макет — левый нижний угол артбордов A1/A2).
- * Только var(...) из src/theme/tokens.css — CLAUDE.md «Кодовые правила».
+ * Легенда полотна. Только var(...) из src/theme/tokens.css — CLAUDE.md
+ * «Кодовые правила».
+ *
+ * НЕ position:absolute поверх React Flow. Раньше легенда плавала в углу
+ * полотна (макет: левый нижний угол) — по факту (задача process-map-jl8,
+ * ревью координатора) любой угол на любом реальном этапе рано или поздно
+ * оказывается занят содержимым: подсчитано, что ни левый нижний, ни правый
+ * нижний, ни левый верхний угол не свободны ни на одном из этапов 2/3/4 ни
+ * при 1280×720, ни при 1024×600 — раскладка dagre заполняет почти всю
+ * ширину и высоту полотна, а полотно ещё и панорамируется/масштабируется
+ * пользователем. Плавающая панель над таким полотном не может быть
+ * гарантированно свободна от перекрытия — только «пока никто не потрогал».
+ *
+ * Поэтому легенда монтируется вне .canvas — отдельной строкой ПОД полотном
+ * (см. .legendStrip в Overview.module.css/StageDetail.module.css). Родитель
+ * (строка) задаёт позицию и отступы, сама .legend — просто панель во
+ * внутреннем потоке (flex), без position/z-index/left/right/bottom.
  */
 
 .legend {
-  position: absolute;
-  z-index: 5;
-  left: var(--scp-spacing-xl);
-  bottom: var(--scp-spacing-lg);
   display: flex;
   height: var(--pm-legend-height);
   align-items: center;
@@ -28,25 +39,42 @@
   white-space: nowrap;
 }
 
-.bar {
-  width: var(--pm-node-accent-bar);
-  height: var(--pm-legend-bar-height);
+.swatch {
   flex: none;
+  height: var(--pm-legend-bar-height);
   border-radius: var(--pm-legend-bar-radius);
 }
 
-.barStep {
+.swatchProcess,
+.swatchStep {
+  width: var(--pm-node-accent-bar);
   background: var(--scp-accent-primary);
 }
 
-.barData {
+.swatchData {
+  width: var(--pm-node-accent-bar);
   background: var(--scp-color-neutral-500);
 }
 
-.barIntegration {
+.swatchIntegration {
+  width: var(--pm-node-accent-bar);
   background: var(--pm-integration);
 }
 
-.barWarning {
+.swatchWarning {
+  width: var(--pm-node-accent-bar);
   background: var(--pm-warning-stroke);
+}
+
+/* Мини-карточка внешней системы (а не просто чёрточка) — тот же приём
+   border-left + белая заливка, что у настоящей карточки системы уровня 1
+   (IntegrationNode.module.css), чтобы «Система» визуально не сливалась с
+   «Интеграция» (у обеих один и тот же синий — они об одной границе). */
+.swatchSystem {
+  box-sizing: border-box;
+  width: var(--pm-legend-system-swatch-size);
+  height: var(--pm-legend-system-swatch-size);
+  border-left: var(--pm-stage-accent-bar) solid var(--pm-integration);
+  border-radius: var(--scp-border-radius-sm);
+  background: var(--scp-background-primary);
 }

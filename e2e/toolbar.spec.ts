@@ -39,6 +39,88 @@ async function mouseClickCenter(
   return hit;
 }
 
+/** Оба размера окна из SPEC (обычный и компактный §4.5, задача process-map-jl8). */
+const VIEWPORT_SIZES = [
+  { name: '1280x720', width: 1280, height: 720 },
+  { name: '1024x600', width: 1024, height: 600 },
+] as const;
+
+interface Rect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+function rectsOverlap(a: Rect, b: Rect): boolean {
+  return a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
+}
+
+/**
+ * Легенда — своя строка ПОД полотном (Legend.module.css), а не абсолютная
+ * панель поверх него, поэтому пересечение проверяется со ВСЕМИ узлами
+ * полотна любого типа (`.react-flow__node`) — карточки, контейнеры групп,
+ * заголовки колонок, а не один селектор (см. ревью координатора: узкая
+ * проверка по `.react-flow__node-data` пропустила перекрытие контейнера
+ * группы и карточки шага, которых в выборку не попало).
+ *
+ * getBoundingClientRect() узла — это его ГЕОМЕТРИЯ (с учётом transform
+ * панорамирования/зума), а не то, что реально нарисовано: `.react-flow`
+ * сам вырезает своё содержимое `overflow:hidden`, поэтому длинная колонка
+ * или широкая группа геометрически продолжается далеко за пределы видимой
+ * области (это и поймал первый прогон — ложные срабатывания на узлах,
+ * которые физически некуда красить, они обрезаны). Поэтому каждый rect
+ * обрезается по рамке самого `.react-flow` ПЕРЕД сравнением с легендой —
+ * так проверяется то, что видит пользователь, а не сырая геометрия DOM.
+ */
+async function assertLegendDoesNotOverlapCanvas(page: Page): Promise<void> {
+  const legend = page.getByRole('group', { name: 'Условные обозначения' });
+  await expect(legend).toBeVisible();
+  const legendBox = await legend.boundingBox();
+  expect(legendBox).not.toBeNull();
+  if (legendBox === null) {
+    return;
+  }
+
+  const canvasBox = await page.locator('.react-flow').boundingBox();
+  expect(canvasBox).not.toBeNull();
+  if (canvasBox === null) {
+    return;
+  }
+
+  const nodeBoxes = await page.locator('.react-flow__node').evaluateAll((nodes) =>
+    nodes.map((node) => {
+      const rect = node.getBoundingClientRect();
+      return {
+        id: node.getAttribute('data-id'),
+        x: rect.x,
+        y: rect.y,
+        width: rect.width,
+        height: rect.height,
+      };
+    }),
+  );
+  expect(nodeBoxes.length).toBeGreaterThan(0);
+
+  const clipToCanvas = (rect: Rect): Rect | null => {
+    const x0 = Math.max(rect.x, canvasBox.x);
+    const y0 = Math.max(rect.y, canvasBox.y);
+    const x1 = Math.min(rect.x + rect.width, canvasBox.x + canvasBox.width);
+    const y1 = Math.min(rect.y + rect.height, canvasBox.y + canvasBox.height);
+    // Полностью вне рамки .react-flow — обрезано целиком, красить нечего.
+    return x1 > x0 && y1 > y0 ? { x: x0, y: y0, width: x1 - x0, height: y1 - y0 } : null;
+  };
+
+  const overlapping = nodeBoxes
+    .map((box) => ({ id: box.id, visible: clipToCanvas(box) }))
+    .filter(
+      (entry): entry is { id: string | null; visible: Rect } =>
+        entry.visible !== null && rectsOverlap(entry.visible, legendBox),
+    );
+
+  expect(overlapping, `узлы полотна под легендой: ${JSON.stringify(overlapping)}`).toHaveLength(0);
+}
+
 test.beforeEach(async ({ page }) => {
   await page.setViewportSize(VIEWPORT);
 });
@@ -60,6 +142,38 @@ test.describe('Тулбар и легенда, уровень 1 (обзор)', (
     const hit = await mouseClickCenter(page, fitButton);
     expect(hit.isPane).toBe(false);
   });
+
+  test('легенда показывает то, что реально есть на обзоре, а не типы узлов уровня 2', async ({
+    page,
+  }) => {
+    // Ревью координатора: макет по ошибке показывал «Шаг/Данные/Предупреждение»
+    // и на обзоре, где узлов этих типов нет вовсе.
+    await page.goto('/');
+    await page.waitForSelector('.react-flow__node-stage');
+
+    const legend = page.getByRole('group', { name: 'Условные обозначения' });
+    await expect(legend.getByText('Процесс')).toBeVisible();
+    await expect(legend.getByText('Интеграция')).toBeVisible();
+    await expect(legend.getByText('Система')).toBeVisible();
+    await expect(legend.getByText('Шаг')).toHaveCount(0);
+    await expect(legend.getByText('Данные')).toHaveCount(0);
+    await expect(legend.getByText('Предупреждение')).toHaveCount(0);
+
+    // Пункт «Интеграция»/«Система» пропадает вместе с самими интеграциями.
+    await mouseClickCenter(page, page.getByRole('switch', { name: 'Показать интеграции' }));
+    await expect(legend.getByText('Процесс')).toBeVisible();
+    await expect(legend.getByText('Интеграция')).toHaveCount(0);
+    await expect(legend.getByText('Система')).toHaveCount(0);
+  });
+
+  for (const size of VIEWPORT_SIZES) {
+    test(`легенда не перекрывает ни один узел полотна (${size.name})`, async ({ page }) => {
+      await page.setViewportSize(size);
+      await page.goto('/');
+      await page.waitForSelector('.react-flow__node-stage');
+      await assertLegendDoesNotOverlapCanvas(page);
+    });
+  }
 
   test('плюс/минус реально меняют масштаб полотна, процент в тулбаре синхронен', async ({
     page,
@@ -201,5 +315,85 @@ test.describe('Тулбар, уровень 2 (детализация)', () => {
 
     await mouseClickCenter(page, page.getByRole('switch', { name: 'Показать интеграции' }));
     await expect(integrationCards).toHaveCount(before);
+  });
+
+  test('легенда показывает типы узлов, «Интеграция» пропадает вместе с интеграциями', async ({
+    page,
+  }) => {
+    await page.goto('/');
+    await openStage(page, 1);
+
+    const legend = page.getByRole('group', { name: 'Условные обозначения' });
+    await expect(legend.getByText('Шаг')).toBeVisible();
+    await expect(legend.getByText('Данные')).toBeVisible();
+    await expect(legend.getByText('Интеграция')).toBeVisible();
+    await expect(legend.getByText('Предупреждение')).toBeVisible();
+    // Пункты уровня 1 здесь не показываются.
+    await expect(legend.getByText('Процесс')).toHaveCount(0);
+    await expect(legend.getByText('Система')).toHaveCount(0);
+
+    await mouseClickCenter(page, page.getByRole('switch', { name: 'Показать интеграции' }));
+    await expect(legend.getByText('Интеграция')).toHaveCount(0);
+    // Типы узлов, не связанные с интеграциями, остаются.
+    await expect(legend.getByText('Шаг')).toBeVisible();
+    await expect(legend.getByText('Данные')).toBeVisible();
+    await expect(legend.getByText('Предупреждение')).toBeVisible();
+  });
+
+  // Ревью координатора (два круга): сначала легенда слева снизу (как в
+  // макете) перекрывала колонку входов (этап 4: 16 карточек до самого низа
+  // полотна); после переноса в правый нижний угол — перекрывала контейнер
+  // группы и карточку шага на том же этапе 4, потому что проверка смотрела
+  // только на `.react-flow__node-data`. Оба раза причина одна: легенда
+  // ПЛАВАЛА поверх панорамируемого/масштабируемого полотна, а свободного
+  // угла на реальных данных не существует (посчитано отдельно: ни один из
+  // левый-низ/право-низ/лево-верх углов не свободен ни на одном из этапов
+  // 2/3/4 ни при 1280×720, ни при 1024×600 — см. отчёт задачи).
+  //
+  // Поэтому легенда теперь НЕ элемент полотна: это отдельная строка под
+  // .canvas (см. Legend.module.css, .legendStrip в StageDetail.module.css).
+  // Здесь это проверяется на всех 4 этапах и в обоих размерах окна, по ВСЕМ
+  // узлам полотна (не только data), а не по одному стечению обстоятельств.
+  for (const stageIndex of [0, 1, 2, 3]) {
+    for (const size of VIEWPORT_SIZES) {
+      test(`легенда не перекрывает ни один узел полотна: этап ${stageIndex + 1} (${size.name})`, async ({
+        page,
+      }) => {
+        await page.setViewportSize(size);
+        await page.goto('/');
+        await openStage(page, stageIndex);
+        await assertLegendDoesNotOverlapCanvas(page);
+      });
+    }
+  }
+
+  // Честный ответ на «а что после панорамирования» (см. задание к ревью):
+  // легенда — строка ПОД .canvas, а не панель НАД ним, а сам React Flow
+  // клиппует своё содержимое собственным overflow:hidden (см. комментарий
+  // в Legend.module.css). Поэтому пан/зум ВНУТРИ полотна не может визуально
+  // вынести содержимое за его нижнюю границу — гарантия структурная, не
+  // «пока не потрогали». Проверяется явно: тащим полотно мышью далеко вверх
+  // (открывая содержимое снизу раскладки) и пересчитываем то же пересечение.
+  test('легенда не перекрывается и после панорамирования мышью (этап 4)', async ({ page }) => {
+    await page.goto('/');
+    await openStage(page, 3);
+
+    const pane = page.locator('.react-flow__pane');
+    const box = await pane.boundingBox();
+    expect(box).not.toBeNull();
+    if (box === null) {
+      return;
+    }
+    const startX = box.x + box.width / 2;
+    const startY = box.y + box.height / 2;
+    await page.mouse.move(startX, startY);
+    await page.mouse.down();
+    // Большой перенос вверх и в стороны — заведомо избыточный пан, чтобы
+    // раскладка сдвинулась максимально далеко от исходного положения.
+    await page.mouse.move(startX - 400, startY - 500, { steps: 15 });
+    await page.mouse.up();
+    await page.waitForTimeout(200);
+
+    await assertLegendDoesNotOverlapCanvas(page);
   });
 });
