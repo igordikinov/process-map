@@ -29,17 +29,23 @@
 }
 
 /* В макете это компонент Badge из ДС In.Plan; библиотека в проект не тянется
-   (CLAUDE.md — без UI-китов), поэтому pill свёрстан локально на токенах. */
+   (CLAUDE.md — без UI-китов), поэтому pill свёрстан локально на токенах.
+   Цвета — токены самого Badge (--scp-badge-*, перенесены в tokens.css из
+   design/_ds/.../tokens/components.css): замер отрендеренного макета даёт
+   заливку #f5f6f8 и текст #af47ff, а не фиолетовую плашку. Кегль/интерлиньяж
+   и высота — из инлайнового `pillProps` артборда (600 11px/16px, minHeight
+   20), они перекрывают дефолт ДС (700 16px/24px, 24px). */
 .badge {
   display: inline-flex;
   height: var(--pm-badge-height);
   align-items: center;
-  padding: 0 var(--scp-paddings-s);
-  border-radius: var(--pm-radius-pill);
-  background: var(--scp-color-brand-100);
-  color: var(--scp-text-brand-primary);
-  font-size: var(--scp-font-sizes-12);
+  padding: var(--scp-badge-padding);
+  border-radius: var(--scp-badge-border-radius);
+  background: var(--scp-badge-bg);
+  color: var(--scp-badge-color);
+  font-size: var(--pm-font-size-11);
   font-weight: var(--scp-font-weight-semi-bold);
+  line-height: var(--scp-line-height-16);
   white-space: nowrap;
 }
 

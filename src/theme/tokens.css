@@ -349,7 +349,7 @@
   /* ---------------------------------------------------------------- */
   /* Components — design/_ds/.../tokens/components.css (только то,   */
   /* что реально используется приложением: скроллбар для custom      */
-  /* scrollbar-стилей в global.css)                                  */
+  /* scrollbar-стилей в global.css и Badge для pill-бейджей шапок)   */
   /* ---------------------------------------------------------------- */
 
   --scp-scrollbar-size: 8px;
@@ -357,6 +357,20 @@
   --scp-scrollbar-thumb-color: #d9d9d9;
   --scp-scrollbar-track-color: transparent;
   --scp-scrollbar-padding: 2px;
+
+  /* Badge — компонент ДС `InPlanDesignSystem_0a4cef.Badge`, который макет
+     использует в шапках A1 («4 этапа») и A2 («Этап 2»). Сам компонент в
+     проект не тянется (CLAUDE.md — без UI-китов), поэтому pill свёрстан
+     локально, но ЦВЕТА обязаны быть его: замер отрендеренного макета даёт
+     background #f5f6f8 и color #af47ff, а не фиолетовую заливку. Значения
+     перенесены из tokens/components.css один в один.
+     --scp-badge-font и --scp-badge-size здесь НЕ переносятся: макет
+     перекрывает их инлайном (`600 11px/16px`, minHeight 20) — см.
+     .badge в OverviewHeader.module.css / Breadcrumbs.module.css. */
+  --scp-badge-bg: #f5f6f8;
+  --scp-badge-color: #af47ff;
+  --scp-badge-border-radius: 9999px;
+  --scp-badge-padding: 0 8px;
 
   /* ================================================================ */
   /* App-уровневые токены In.Plan Process Map (SPEC.md §5, §4.1–§4.5). */
@@ -495,6 +509,15 @@
      .1/.5/.9, поэтому значение заводится здесь). */
   --pm-node-icon-size: 16px;
   --pm-node-icon-opacity: 0.55;
+
+  /* Кнопка «Назад» в шапке A2: квадрат 28×28, иконка 16×16 с opacity .8.
+     Раньше переиспользовался --pm-stage-number-size (24px) и
+     --scp-opacity-high (.9) «как ближайшие» — замер артборда показал
+     расхождение и по стороне, и по прозрачности, поэтому числа макета
+     заведены своими токенами (задача process-map-30v). Совпадение 28px с
+     --pm-drawer-close-size случайно: это разные контролы разных экранов. */
+  --pm-back-button-size: 28px;
+  --pm-back-icon-opacity: 0.8;
 
   /* Тени карточек A2: у шага .06, у data-узла .05. */
   --pm-shadow-node: 0 1px 2px rgb(0 0 0 / 6%);

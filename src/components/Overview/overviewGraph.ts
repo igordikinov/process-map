@@ -96,9 +96,15 @@ export function stageSystemsEdgeId(stageId: string): string {
   return `ov-compact-${stageId}`;
 }
 
-/** Точечная сетка полотна — SPEC §4.1 задаёт gap=16 явно. */
+/**
+ * Точечная сетка полотна — SPEC §4.1 задаёт gap=16 явно.
+ * Размер точки в макете задан градиентом `radial-gradient(#dfdfe0 1px, ...)`,
+ * то есть РАДИУСОМ 1px = диаметр 2px, а `size` у <Background> React Flow —
+ * это диаметр (r = size / 2). При size=1 точка выходила вдвое мельче макета и
+ * на #dfdfe0 почти пропадала (process-map-30v).
+ */
 export const GRID_GAP = 16;
-export const GRID_DOT_SIZE = 1;
+export const GRID_DOT_SIZE = 2;
 /** Отступ fitView, чтобы свимлейны не упирались в края полотна. */
 export const FIT_VIEW_PADDING = 0.06;
 export const MIN_ZOOM = 0.3;

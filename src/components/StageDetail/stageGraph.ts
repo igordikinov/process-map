@@ -48,9 +48,10 @@ export const GROUP_PADDING = { x: 16, top: 40, bottom: 20 } as const;
 /** Высота заголовка колонки над её первой карточкой (макет A2: 108 − 84). */
 export const COLUMN_TITLE_HEIGHT = 24;
 
-/** Точечная сетка полотна — та же, что на уровне 1 (SPEC §4.1). */
+/** Точечная сетка полотна — та же, что на уровне 1 (SPEC §4.1);
+ *  про диаметр точки см. комментарий в Overview/overviewGraph.ts. */
 export const GRID_GAP = 16;
-export const GRID_DOT_SIZE = 1;
+export const GRID_DOT_SIZE = 2;
 /**
  * Границы РУЧНОГО зума (колесо, тулбар M3). Нижняя граница меньше, чем на
  * уровне 1 (там 0.3): раскладки этапов до 3942 px шириной, и пользователь

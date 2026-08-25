@@ -53,8 +53,10 @@
   gap: var(--pm-space-10);
 }
 
+/* В A4 строка «номер + иконка предупреждения» идёт с зазором 8, а не 10 как
+   в A1 (замер артборда, process-map-30v). */
 .compact .head {
-  gap: var(--pm-space-6);
+  gap: var(--scp-spacing-sm);
 }
 
 .number {
