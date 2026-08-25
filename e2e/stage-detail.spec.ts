@@ -136,8 +136,14 @@ test('иконка link-external появляется при screen и не от
   );
 
   // Открытие ссылки — задача process-map-lfj; здесь важно только, что клик по
-  // иконке НЕ выбрал узел.
+  // иконке НЕ выбрал узел и НЕ открыл панель. Проверяется и то, и другое:
+  // aria-current — состояние в store, панель — то, что видит пользователь
+  // (SPEC §4.2). Само отсутствие всплытия события к обёртке узла проверяется
+  // юнит-тестом в tests/stageDetail.test.tsx: соседство кнопок в разметке
+  // делает проверку «узел не выбран» истинной и без stopPropagation.
   await expect(page.locator(`[data-id="${stepId}"] button[aria-current="true"]`)).toHaveCount(0);
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(page.locator('[data-testid="drawer-scrim"]')).toHaveCount(0);
 
   await page.evaluate((key) => {
     window.localStorage.removeItem(key);

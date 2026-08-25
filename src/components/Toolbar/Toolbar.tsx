@@ -39,16 +39,23 @@ export interface ToolbarProps {
    *     эффект задачи process-map-l8a (см. её комментарии в stageGraph.ts).
    */
   fitViewOptions: FitViewOptions;
+  /**
+   * `true` — над полотном открыта боковая панель узла (SPEC §4.3). Тулбар
+   * сдвигается влево на её ширину, иначе панель накрывает его целиком и все
+   * кнопки SPEC §4.6 становятся недостижимы (см. .shifted в Toolbar.module.css).
+   * Уровень 1 панели не имеет и проп не передаёт.
+   */
+  drawerOpen?: boolean;
 }
 
-export function Toolbar({ fitViewOptions }: ToolbarProps) {
+export function Toolbar({ fitViewOptions, drawerOpen = false }: ToolbarProps) {
   const { zoomIn, zoomOut, fitView } = useReactFlow();
   const { zoom } = useViewport();
   const showIntegrations = useProcessStore((state) => state.showIntegrations);
   const toggleIntegrations = useProcessStore((state) => state.toggleIntegrations);
 
   return (
-    <div className={styles.toolbar}>
+    <div className={drawerOpen ? `${styles.toolbar} ${styles.shifted}` : styles.toolbar}>
       <button
         type="button"
         role="switch"

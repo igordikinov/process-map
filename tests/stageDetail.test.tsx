@@ -6,7 +6,7 @@
 // document.elementFromPoint — в e2e/stage-detail.spec.ts; здесь проверяется
 // сам стиль обёртки (pointerEvents), как в tests/App.test.tsx.
 import { beforeEach, describe, expect, it } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import App from '../src/App';
 import { StepCard } from '../src/components/nodes/StepNode';
 import { loadBaseProcessMap } from '../src/data/loader';
@@ -135,6 +135,64 @@ describe('StageDetail', () => {
     );
     expect(useProcessStore.getState().selectedNodeId).toBe(warning.id);
   });
+
+  // Стык двух задач M2: toggle тулбара (process-map-jl8) и панель узла
+  // (process-map-lo7). Каждая проверена по отдельности, а вместе давали
+  // висящую панель: карточка узла-интеграции уходила с полотна, панель с его
+  // описанием оставалась. Теперь StageDetail отдаёт NodeDrawer только
+  // отрисованные узлы. Геометрия (тулбар из-под панели) — в e2e/journey.spec.ts.
+  it('панель не переживает исчезновение своего узла из-за toggle интеграций', () => {
+    const stage = map.stages.find((candidate) =>
+      candidate.nodes.some((node) => node.type === 'integration'),
+    );
+    expect(stage, 'в process.json нет ни одного узла-интеграции').toBeDefined();
+    if (stage === undefined) {
+      return;
+    }
+    const integration = firstOfType(stage, 'integration');
+
+    useProcessStore.getState().navigateToStage(stage.id);
+    const { container } = render(<App />);
+    fireEvent.click(
+      screen.getByRole('button', { name: ru.stepNode.ariaLabelIntegration(integration.label) }),
+    );
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+
+    act(() => {
+      useProcessStore.getState().toggleIntegrations();
+    });
+
+    expect(container.querySelector(`[data-id="${integration.id}"]`)).toBeNull();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    // Затемнение уходит вместе с панелью — иначе полотно осталось бы
+    // приглушённым без видимой причины.
+    expect(container.querySelector('[data-testid="drawer-scrim"]')).toBeNull();
+
+    // Toggle обратим целиком: вернулся узел — вернулась и панель.
+    act(() => {
+      useProcessStore.getState().toggleIntegrations();
+    });
+    expect(container.querySelector(`[data-id="${integration.id}"]`)).not.toBeNull();
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+  });
+
+  it('панель обычного шага переживает toggle интеграций', () => {
+    const stage = stageAt(1);
+    const step = firstOfType(stage, 'step');
+    useProcessStore.getState().navigateToStage(stage.id);
+    render(<App />);
+
+    fireEvent.click(screen.getByRole('button', { name: ru.stepNode.ariaLabel(step.label) }));
+    const title = screen.getByRole('dialog').querySelector('h2')?.textContent;
+    expect(title).toBe(step.label);
+
+    act(() => {
+      useProcessStore.getState().toggleIntegrations();
+    });
+
+    expect(screen.getByRole('dialog').querySelector('h2')?.textContent).toBe(step.label);
+    expect(useProcessStore.getState().selectedNodeId).toBe(step.id);
+  });
 });
 
 describe('StepCard', () => {
@@ -150,17 +208,46 @@ describe('StepCard', () => {
     expect(screen.getAllByRole('button')).toHaveLength(1);
   });
 
-  it('с node.screen кнопка ссылки есть, а её клик НЕ открывает Drawer (stopPropagation)', () => {
+  // Прежняя версия этой проверки кликала по кнопке ссылки и убеждалась, что
+  // selectedNodeId остался null. Она была пустой: кнопка ссылки — СОСЕД
+  // карточки, а не её потомок (см. комментарий в StepCard.tsx), поэтому её клик
+  // не дошёл бы до onClick карточки и вовсе без stopPropagation — тест прошёл
+  // бы и после удаления обоих обработчиков. Проверять надо ровно то, что делает
+  // код: событие не уходит ВВЕРХ, к обёртке узла React Flow (она и слушает
+  // pointer-события). Поэтому карточка рендерится внутри родителя со
+  // счётчиками, и клик по ссылке сравнивается с кликом по самой карточке.
+  it('клик по кнопке ссылки не всплывает к обёртке узла (stopPropagation)', () => {
     const screenLink = { title: 'Объёмный план', url: 'https://example.com/plan' };
-    render(<StepCard node={{ ...baseNode, screen: screenLink }} variant="step" />);
+    const seen = { click: 0, pointerDown: 0 };
+    render(
+      <div
+        data-testid="node-wrapper"
+        onClick={() => {
+          seen.click += 1;
+        }}
+        onPointerDown={() => {
+          seen.pointerDown += 1;
+        }}
+      >
+        <StepCard node={{ ...baseNode, screen: screenLink }} variant="step" />
+      </div>,
+    );
 
     const link = screen.getByRole('button', { name: ru.stepNode.openScreen(screenLink.title) });
+    fireEvent.pointerDown(link);
     fireEvent.click(link);
 
+    expect(seen, 'событие с кнопки ссылки дошло до обёртки узла').toEqual({
+      click: 0,
+      pointerDown: 0,
+    });
     // Само открытие ссылки — заглушка до process-map-lfj (utils/url.ts).
     expect(useProcessStore.getState().selectedNodeId).toBeNull();
 
+    // Контроль того, что счётчики вообще работают: клик по самой карточке
+    // всплывает как обычно и при этом выбирает узел.
     fireEvent.click(screen.getByRole('button', { name: ru.stepNode.ariaLabel(baseNode.label) }));
+    expect(seen.click).toBe(1);
     expect(useProcessStore.getState().selectedNodeId).toBe(baseNode.id);
   });
 

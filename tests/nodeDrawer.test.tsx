@@ -133,12 +133,17 @@ describe('NodeDrawer', () => {
     const node = nodeById(STEP_WITH_LIST);
     expect(node.inputs).toBeUndefined();
     expect(node.owner).toBeUndefined();
+    // system заполнен только у 8 узлов из 103 — этот к ним не относится.
+    expect(node.system).toBeUndefined();
+    expect(node.outputs).toBeUndefined();
 
     openDrawer([node], node.id);
 
     const titles = sectionTitles(screen.getByRole('dialog'));
     expect(titles).not.toContain(ru.drawer.inputs);
     expect(titles).not.toContain(ru.drawer.owner);
+    expect(titles).not.toContain(ru.drawer.system);
+    expect(titles).not.toContain(ru.drawer.outputs);
     // «Экран в системе» показывается всегда — у неё есть пустое состояние.
     expect(titles).toContain(ru.drawer.screenSection);
   });

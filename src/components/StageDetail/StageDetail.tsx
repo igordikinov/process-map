@@ -49,6 +49,7 @@ const edgeTypes = {
 export function StageDetail() {
   const currentStageId = useProcessStore((state) => state.currentStageId);
   const showIntegrations = useProcessStore((state) => state.showIntegrations);
+  const selectedNodeId = useProcessStore((state) => state.selectedNodeId);
 
   // Данные статичны в пределах сессии просмотра (см. Overview.tsx).
   const map = useMemo(() => loadProcessMap(), []);
@@ -65,6 +66,20 @@ export function StageDetail() {
   if (stage === undefined || graph === undefined) {
     return null;
   }
+
+  // Панели отдаются только те узлы, которые СЕЙЧАС нарисованы на полотне, а не
+  // все узлы этапа. Иначе выключенный toggle «Показать интеграции» (SPEC §4.6)
+  // убирал карточку узла-интеграции с полотна, но оставлял открытой панель с
+  // его описанием: подсветки нет, затемнение лежит на пустом месте, и вернуть
+  // фокус на карточку при закрытии тоже некуда. Это тот же принцип, что уже
+  // записан в store (navigateToStage/back сбрасывают selectedNodeId): панель
+  // не переживает исчезновение своего узла с экрана. Список берётся из
+  // graph.nodes, а не пересобирается своим фильтром, — правило видимости
+  // остаётся одно, в buildStageGraph. Контейнеры групп/колонок отсеиваются
+  // сами: их id (`group:…`, `column:…`) не совпадают ни с одним ProcessNode.
+  const renderedIds = new Set(graph.nodes.map((node) => node.id));
+  const visibleNodes = stage.nodes.filter((node) => renderedIds.has(node.id));
+  const drawerOpen = visibleNodes.some((node) => node.id === selectedNodeId);
 
   return (
     <div className={styles.root}>
@@ -105,11 +120,13 @@ export function StageDetail() {
           {/* Кнопка «Уместить в экран» уважает тот же пол читаемости, что и
               стартовый вид (SPEC §4.6) — см. комментарий у TOOLBAR_FIT_VIEW_OPTIONS
               в stageGraph.ts. */}
-          <Toolbar fitViewOptions={TOOLBAR_FIT_VIEW_OPTIONS} />
+          {/* drawerOpen: панель шириной 360 накрывает правый верхний угол
+              полотна вместе со всем тулбаром — см. .shifted в Toolbar.module.css. */}
+          <Toolbar fitViewOptions={TOOLBAR_FIT_VIEW_OPTIONS} drawerOpen={drawerOpen} />
         </ReactFlowProvider>
         {/* Боковая панель узла — внутри .canvas, чтобы затемнение начиналось
             под шапкой крошек, как в артборде A3 (SPEC §4.3). */}
-        <NodeDrawer nodes={stage.nodes} />
+        <NodeDrawer nodes={visibleNodes} />
       </div>
       {/* Легенда — строка ПОД полотном, не поверх него: раскладка потока
           шагов на реальных данных занимает весь угол/край полотна на всех
