@@ -5,7 +5,7 @@
 // доказывает про реальный браузер. Настоящий клик мышью и
 // document.elementFromPoint — в e2e/stage-detail.spec.ts; здесь проверяется
 // сам стиль обёртки (pointerEvents), как в tests/App.test.tsx.
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import App from '../src/App';
 import { StepCard } from '../src/components/nodes/StepNode';
@@ -219,6 +219,10 @@ describe('StepCard', () => {
   it('клик по кнопке ссылки не всплывает к обёртке узла (stopPropagation)', () => {
     const screenLink = { title: 'Объёмный план', url: 'https://example.com/plan' };
     const seen = { click: 0, pointerDown: 0 };
+    // window.open в jsdom не реализован и на каждый вызов пишет в stderr;
+    // заодно шпион показывает, что кнопка действительно зовёт openScreen
+    // (SPEC §4.8). Оба пути самого openScreen — в tests/url.test.ts.
+    const openSpy = vi.spyOn(window, 'open').mockReturnValue(null);
     render(
       <div
         data-testid="node-wrapper"
@@ -241,8 +245,10 @@ describe('StepCard', () => {
       click: 0,
       pointerDown: 0,
     });
-    // Само открытие ссылки — заглушка до process-map-lfj (utils/url.ts).
+    // Ссылка открылась, а панель узла при этом НЕ выбралась.
+    expect(openSpy).toHaveBeenCalledWith(screenLink.url, expect.any(String));
     expect(useProcessStore.getState().selectedNodeId).toBeNull();
+    openSpy.mockRestore();
 
     // Контроль того, что счётчики вообще работают: клик по самой карточке
     // всплывает как обычно и при этом выбирает узел.

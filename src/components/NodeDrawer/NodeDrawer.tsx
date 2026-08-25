@@ -15,6 +15,7 @@ import { iconUrl } from '../../assets/icons';
 import type { ProcessNode } from '../../data/schema';
 import { ru } from '../../i18n/ru';
 import { useProcessStore } from '../../store/useProcessStore';
+import { openScreen } from '../../utils/url';
 import { descriptionParagraphs } from './descriptionParagraphs';
 import { ScreenLinkSection } from './ScreenLinkSection';
 import { Section } from './Section';
@@ -225,10 +226,14 @@ function NodeDrawerPanel({ node, onClose }: NodeDrawerPanelProps) {
             disabled={screen === undefined}
             title={screen === undefined ? ru.drawer.openInModuleEmpty : ru.drawer.openInModule}
             onClick={() => {
-              // ЗАГЛУШКА, как в StepCard.tsx: открытие ссылки — это
-              // utils/url.ts::openScreen (задача process-map-lfj, M3, SPEC §4.8)
-              // с linkTarget из config.ts и фолбэком '_top' → '_blank'.
-              // Свой window.open здесь разошёлся бы с tests/url.test.ts.
+              // Кнопка disabled без ссылки, но сужение типа этого не знает:
+              // проверка нужна компилятору и на случай программного клика.
+              if (screen === undefined) {
+                return;
+              }
+              // Открытие — только через utils/url.ts::openScreen (SPEC §4.8):
+              // там linkTarget из config.ts и фолбэк '_top' → '_blank'.
+              openScreen(screen.url);
             }}
           >
             {ru.drawer.openInModule}

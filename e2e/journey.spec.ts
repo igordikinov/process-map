@@ -8,11 +8,20 @@
 // открытая панель + смена уровня. Именно там ломалось (см. отчёт задачи: панель
 // целиком накрывала тулбар).
 //
-// Открытие ссылки (window.open) здесь НЕ проверяется: utils/url.ts::openScreen —
-// задача process-map-lfj (M3, SPEC §4.8), кнопка «Открыть в модуле» пока
-// заглушка. Проверяется то, что уже обязано работать: кнопка активна при
-// наличии ссылки и физически доступна мышью и с клавиатуры.
+// Открытие ссылки (SPEC §7: «перехват window.open») проверяется здесь же:
+// window.open подменяется в addInitScript ДО загрузки приложения и складывает
+// аргументы в window.__openCalls. Подмена обязательна не только ради проверки:
+// настоящий window.open(url, '_top') увёл бы всю страницу теста на example.com.
 import { expect, test, type Page } from '@playwright/test';
+
+/** Аргументы перехваченных вызовов window.open: [url, target]. */
+type OpenCall = [string, string];
+
+declare global {
+  interface Window {
+    __openCalls?: OpenCall[];
+  }
+}
 
 const VIEWPORT = { width: 1280, height: 720 };
 
@@ -80,6 +89,27 @@ async function labelAtCenter(
 }
 
 /**
+ * Перехват window.open на всё время жизни страницы.
+ *
+ * Ставится через addInitScript, то есть до первого скрипта приложения: модуль
+ * utils/url.ts читает window.open в момент вызова, поэтому подмена работает.
+ */
+async function interceptWindowOpen(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    window.__openCalls = [];
+    window.open = (url?: string | URL, target?: string): Window | null => {
+      window.__openCalls?.push([String(url), String(target)]);
+      return null;
+    };
+  });
+}
+
+/** Что успел перехватить interceptWindowOpen. */
+async function openCalls(page: Page): Promise<OpenCall[]> {
+  return page.evaluate(() => window.__openCalls ?? []);
+}
+
+/**
  * Открывает этап 2 один раз, чтобы узнать id первого шага, и подкладывает ему
  * ссылку через overrides — тем же путём, каким её положит редактор M3
  * (SPEC §4.4, накладывает src/data/loader.ts). addInitScript ставит запись ДО
@@ -98,6 +128,7 @@ async function seedScreenLinkOnFirstStep(page: Page): Promise<string> {
     },
     { key: OVERRIDES_KEY, id: stepId ?? '', screen: SCREEN_LINK },
   );
+  await interceptWindowOpen(page);
   return stepId ?? '';
 }
 
@@ -154,7 +185,8 @@ test('обзор → этап 2 → шаг → Drawer → «Открыть в м
 
   // 6. «Открыть в модуле»: активна и физически доступна — мышью (в её точке
   //    лежит она сама, а не другой слой) и с клавиатуры (Tab-ловушка панели её
-  //    достигает). Само открытие ссылки — process-map-lfj (M3, SPEC §4.8).
+  //    достигает), — и настоящий клик по ней открывает подложенный url
+  //    (SPEC §4.8, utils/url.ts::openScreen).
   const openInModule = dialog.getByRole('button', { name: 'Открыть в модуле' });
   await expect(openInModule).toBeEnabled();
   await expect(openInModule).toHaveAttribute('title', 'Открыть в модуле');
@@ -162,10 +194,32 @@ test('обзор → этап 2 → шаг → Drawer → «Открыть в м
   expect(await page.evaluate(() => document.activeElement?.textContent ?? null)).toBe(
     'Открыть в модуле',
   );
+  expect(await openCalls(page), 'ссылка открылась до клика').toEqual([]);
   await clickCenter(page, openInModule);
-  // Заглушка не должна ни ронять приложение, ни закрывать панель.
+  // Страница-тест не в iframe, значит window.top свой и target остаётся '_top'
+  // (config.linkTarget). Фолбэк на '_blank' — случай кросс-доменного iframe
+  // (SPEC §6), он проверяется в tests/url.test.ts.
+  expect(await openCalls(page)).toEqual([[SCREEN_LINK.url, '_top']]);
+  // Открытие ссылки не должно ни ронять приложение, ни закрывать панель.
   await expect(dialog).toBeVisible();
   await expect(stepCard).toHaveAttribute('aria-current', 'true');
+
+  // 7. Та же ссылка со второго входа — иконка link-external на карточке шага
+  //    (SPEC §4.2). Панель закрыта, чтобы затемнение не перекрывало карточку.
+  await page.keyboard.press('Escape');
+  await expect(dialog).toHaveCount(0);
+
+  const linkButton = page.locator(
+    `[data-id="${stepId}"] button[aria-label^="Открыть экран в In.Plan"]`,
+  );
+  await expect(linkButton).toHaveCount(1);
+  await clickCenter(page, linkButton);
+  expect(await openCalls(page)).toEqual([
+    [SCREEN_LINK.url, '_top'],
+    [SCREEN_LINK.url, '_top'],
+  ]);
+  // stopPropagation на карточке: клик по иконке ссылки не открывает панель.
+  await expect(page.getByRole('dialog')).toHaveCount(0);
 });
 
 // ──────────────── стыки: открытая панель + остальной интерфейс ────────────────

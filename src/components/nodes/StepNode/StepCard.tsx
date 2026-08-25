@@ -13,6 +13,7 @@ import { iconUrl, type IconName } from '../../../assets/icons';
 import type { ProcessNode } from '../../../data/schema';
 import { ru } from '../../../i18n/ru';
 import { useProcessStore } from '../../../store/useProcessStore';
+import { openScreen } from '../../../utils/url';
 import styles from './StepCard.module.css';
 
 /** Вариант оформления = ProcessNode.type для всех типов, кроме `data`. */
@@ -54,6 +55,10 @@ export function StepCard({ node, variant }: StepCardProps) {
   // сохраняются: title рендерится браузером с учётом \n.
   const hint = node.description === undefined ? node.label : `${node.label}\n\n${node.description}`;
 
+  // Отдельная const, а не node.screen по месту: сужение типа у свойства не
+  // переживает границу колбэка, у const — переживает.
+  const screen = node.screen;
+
   return (
     // Кнопка ссылки — СОСЕД карточки, а не потомок: вложенный <button> невалиден
     // и ломает и клавиатуру, и скринридеры. Отсюда обёртка с position: relative.
@@ -78,24 +83,24 @@ export function StepCard({ node, variant }: StepCardProps) {
       {/* SPEC §4.2: иконка link-external показывается ТОЛЬКО при node.screen.
           В process.json screen не заполнен ни у одного узла — ссылки приходят
           из overrides редактора (M3, SPEC §4.4). */}
-      {node.screen !== undefined && (
+      {screen !== undefined && (
         <button
           type="button"
           className={styles.linkButton}
-          aria-label={ru.stepNode.openScreen(node.screen.title)}
-          title={ru.stepNode.openScreen(node.screen.title)}
+          aria-label={ru.stepNode.openScreen(screen.title)}
+          title={ru.stepNode.openScreen(screen.title)}
           // stopPropagation и на pointerdown: React Flow слушает pointer-события
           // на обёртке узла, одного onClick мало.
           onPointerDown={(event) => {
             event.stopPropagation();
           }}
           onClick={(event) => {
+            // stopPropagation обязателен и здесь: без него клик всплывёт до
+            // карточки и вместе со ссылкой откроется Drawer.
             event.stopPropagation();
-            // ЗАГЛУШКА. Открытие ссылки — utils/url.ts::openScreen, задача
-            // process-map-lfj (M3, SPEC §4.8): там window.open с linkTarget из
-            // config.ts и фолбэком '_top' → '_blank' при SecurityError.
-            // Собственную логику window.open здесь заводить нельзя — она
-            // разойдётся с той, что покрыта tests/url.test.ts.
+            // Своей логики window.open тут нет намеренно: она разошлась бы с
+            // utils/url.ts::openScreen (SPEC §4.8) и с tests/url.test.ts.
+            openScreen(screen.url);
           }}
         >
           <img className={styles.linkIcon} src={LINK_EXTERNAL_ICON} alt="" />
