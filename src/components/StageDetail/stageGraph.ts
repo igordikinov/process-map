@@ -7,7 +7,7 @@
 //   · переводит абсолютные координаты в координаты относительно контейнера,
 //   · строит сами контейнеры (группы и колонки),
 //   · выбирает хэндлы рёбер.
-import type { Edge as FlowEdge } from '@xyflow/react';
+import type { Edge as FlowEdge, FitViewOptions } from '@xyflow/react';
 import type { ProcessNode, Stage } from '../../data/schema';
 import { ru } from '../../i18n/ru';
 import { DATA_NODE_SIZE, STEP_NODE_SIZE, type NodeSize } from '../../theme/sizes';
@@ -99,6 +99,28 @@ export const START_ZOOM_MAX = 1;
 
 /** Отступ раскладки от краёв полотна в стартовом виде, px экрана. */
 export const START_PADDING = 24;
+
+/**
+ * Опции fitView для кнопки тулбара «Уместить в экран» (SPEC §4.6).
+ *
+ * padding — своя, независимая от START_PADDING величина: START_PADDING в px
+ * (initialViewport считает вьюпорт сам, вручную), а fitView() React Flow
+ * принимает padding долей от габарита полотна. 0.05 — тот же порядок, что
+ * FIT_VIEW_PADDING на уровне 1 (Overview/overviewGraph.ts).
+ *
+ * minZoom/maxZoom = START_ZOOM_MIN/MAX — тот же пол читаемости, что у
+ * стартового вида. Без них fitView() ушёл бы к своему обычному результату
+ * 0.25…0.53 (см. комментарий выше про fitView и process-map-l8a) и кнопка
+ * fit отменяла бы то, что чинит initialViewport. В отличие от него, здесь
+ * применяется штатный fitView() React Flow: он центрирует раскладку — это
+ * уместнее для явного действия пользователя «показать всё целиком», чем
+ * привязка к левому краю потока, нужная только самому первому кадру.
+ */
+export const TOOLBAR_FIT_VIEW_OPTIONS: FitViewOptions = {
+  padding: 0.05,
+  minZoom: START_ZOOM_MIN,
+  maxZoom: START_ZOOM_MAX,
+};
 
 export interface Viewport {
   x: number;
@@ -253,8 +275,18 @@ function containerNode(
  *
  * Порядок массива значим: React Flow требует, чтобы родительский узел шёл
  * раньше своих детей.
+ *
+ * @param showIntegrations toggle тулбара (SPEC §4.6). По умолчанию true —
+ *   существующие вызовы (тесты, до появления тулбара) продолжают видеть
+ *   прежнюю картину без правок. false прячет узлы `ProcessNode.type ===
+ *   'integration'` и рёбра `kind === 'integration'`, а также любое ребро,
+ *   у которого скрытый интеграционный узел остался бы висящим концом (у
+ *   такого ребра `kind` может быть 'process' — сам переход к интеграции,
+ *   а не она сама). Геометрия (боксы групп/колонок, bounds) считается по
+ *   ПОЛНОМУ набору узлов независимо от toggle: раскладка не должна дрожать
+ *   при переключении, должны исчезать только сами карточка/линия.
  */
-export function buildStageGraph(stage: Stage): StageGraph {
+export function buildStageGraph(stage: Stage, showIntegrations = true): StageGraph {
   const containers: GroupNodeType[] = [];
   const children: StageDetailNode[] = [];
   const loose: StageDetailNode[] = [];
@@ -327,6 +359,13 @@ export function buildStageGraph(stage: Stage): StageGraph {
 
   // ── сами узлы ──
   for (const node of stage.nodes) {
+    // SPEC §4.6: выключенный toggle прячет узлы-интеграции наравне со
+    // свимлейнами/системами уровня 1 (overviewGraph.ts). Геометрия групп
+    // выше уже посчитана по полному набору — здесь только не кладём карточку
+    // в children/loose, дырка в контейнере остаётся, раскладка не прыгает.
+    if (node.type === 'integration' && !showIntegrations) {
+      continue;
+    }
     if (node.type === 'data') {
       const direction = inputIds.has(node.id) ? 'in' : 'out';
       const origin = columnOrigin.get(direction);
@@ -350,6 +389,15 @@ export function buildStageGraph(stage: Stage): StageGraph {
     const source = nodeById.get(edge.source);
     const target = nodeById.get(edge.target);
     if (source === undefined || target === undefined) {
+      continue;
+    }
+    // Скрытый toggle прячет и само ребро-интеграцию (kind: 'integration'),
+    // и любое другое ребро, зависшее на удалённом узле-интеграции — иначе
+    // React Flow получил бы edge.source/target без соответствующего node.id.
+    if (
+      !showIntegrations &&
+      (edge.kind === 'integration' || source.type === 'integration' || target.type === 'integration')
+    ) {
       continue;
     }
     // Раскладка идёт слева направо, поэтому основная пара хэндлов right → left.

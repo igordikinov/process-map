@@ -1,0 +1,84 @@
+/*
+ * Секция «Экран в системе» боковой панели (SPEC §4.3).
+ * В артборде A3 этой секции нет (макет показывает панель узла без ссылки на
+ * экран), поэтому оформление повторяет соседние секции того же артборда:
+ * плитка на фоне --scp-background-secondary, скруглении 4px, кегль 12.5px.
+ * Только var(...) из src/theme/tokens.css (CLAUDE.md «Кодовые правила»).
+ */
+
+/* Ссылка целиком в одну строку: заголовок и url усекаются многоточием
+   (SPEC §4.3 — «в одну строку с text-overflow»). */
+.row {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  padding: var(--pm-space-7) var(--pm-space-10);
+  border-radius: var(--scp-radius-button);
+  background: var(--scp-background-secondary);
+  gap: var(--scp-spacing-sm);
+}
+
+.icon {
+  width: var(--pm-node-icon-size);
+  height: var(--pm-node-icon-size);
+  flex: none;
+  opacity: var(--scp-opacity-high);
+}
+
+/* Заголовок ужимается только после url: он важнее для узнавания экрана. */
+.title {
+  overflow: hidden;
+  flex: 0 1 auto;
+  color: var(--scp-content-primary);
+  font-size: var(--pm-font-size-12-5);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* flex: 0 1 auto у обоих — заголовок и url ужимаются пропорционально своей
+   длине, поэтому в 360 px видно и то, и другое («Планирование пост… →
+   https://inplan.compan…»). Вариант flex-basis: 0 у url проверен и отвергнут:
+   при длинном заголовке url сжимался до нуля и исчезал вовсе. */
+.url {
+  overflow: hidden;
+  min-width: 0;
+  flex: 0 1 auto;
+  color: var(--scp-content-secondary);
+  font-size: var(--pm-font-size-11);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Состояние «ссылки нет» — в текущем process.json оно у всех узлов
+   (ссылки появляются только через редактор M3). */
+.empty {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--scp-spacing-sm);
+}
+
+.emptyText {
+  color: var(--scp-content-secondary);
+  font-size: var(--pm-font-size-12-5);
+}
+
+/* Текстовое действие «Добавить» — видно только в режиме редактора. */
+.add {
+  padding: 0;
+  border: 0;
+  border-radius: var(--scp-radius-button);
+  background: none;
+  color: var(--scp-text-brand-primary);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: var(--pm-font-size-12-5);
+  font-weight: var(--scp-font-weight-semi-bold);
+}
+
+.add:hover,
+.add:focus-visible {
+  color: var(--scp-accent-hover);
+  outline: none;
+  text-decoration: underline;
+}

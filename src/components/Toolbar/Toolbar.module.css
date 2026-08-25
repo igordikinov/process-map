@@ -1,0 +1,130 @@
+/*
+ * Тулбар полотна (SPEC §4.6, макет — правый верхний угол артбордов A1/A2).
+ * Только var(...) из src/theme/tokens.css — CLAUDE.md «Кодовые правила».
+ */
+
+.toolbar {
+  position: absolute;
+  z-index: 5;
+  top: var(--scp-spacing-lg);
+  right: var(--scp-spacing-xl);
+  display: flex;
+  align-items: center;
+  gap: var(--scp-spacing-sm);
+}
+
+.toggle {
+  display: flex;
+  height: var(--pm-toolbar-control-size);
+  flex: none;
+  align-items: center;
+  padding: 0 var(--scp-paddings-m);
+  border: 1px solid var(--scp-color-neutral-200);
+  border-radius: var(--scp-radius-button);
+  margin: 0;
+  background: var(--scp-background-primary);
+  cursor: pointer;
+  gap: var(--scp-spacing-sm);
+}
+
+.toggle:hover,
+.toggle:focus-visible {
+  border-color: var(--scp-border-neutral-hover);
+  outline: none;
+}
+
+.switchTrack {
+  position: relative;
+  display: block;
+  width: var(--pm-switch-width);
+  height: var(--pm-switch-height);
+  flex: none;
+  border-radius: var(--pm-radius-pill);
+  background: var(--scp-color-neutral-300);
+  transition: background-color 120ms ease;
+}
+
+.toggle[aria-checked='true'] .switchTrack {
+  background: var(--scp-accent-primary);
+}
+
+.switchKnob {
+  position: absolute;
+  top: var(--pm-switch-knob-offset);
+  left: var(--pm-switch-knob-offset);
+  width: var(--pm-switch-knob-size);
+  height: var(--pm-switch-knob-size);
+  border-radius: var(--pm-radius-pill);
+  background: var(--scp-background-primary);
+  transition: transform 120ms ease;
+}
+
+.toggle[aria-checked='true'] .switchKnob {
+  transform: translateX(
+    calc(var(--pm-switch-width) - var(--pm-switch-knob-size) - var(--pm-switch-knob-offset) * 2)
+  );
+}
+
+.toggleLabel {
+  color: var(--scp-content-primary);
+  font-size: var(--scp-font-sizes-12);
+  white-space: nowrap;
+}
+
+.zoomGroup {
+  display: flex;
+  height: var(--pm-toolbar-control-size);
+  flex: none;
+  overflow: hidden;
+  border: 1px solid var(--scp-color-neutral-200);
+  border-radius: var(--scp-radius-button);
+  background: var(--scp-background-primary);
+}
+
+.zoomButton {
+  display: flex;
+  width: var(--pm-toolbar-control-size);
+  height: 100%;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-right: 1px solid var(--scp-border-neutral-tertiary);
+  background: transparent;
+  cursor: pointer;
+}
+
+.zoomButton:last-child {
+  border-right: 0;
+}
+
+.zoomButton:hover,
+.zoomButton:focus-visible {
+  background: var(--scp-color-neutral-50);
+  outline: none;
+}
+
+.zoomIcon {
+  width: var(--pm-toolbar-icon-size);
+  height: var(--pm-toolbar-icon-size);
+  opacity: var(--pm-toolbar-icon-opacity);
+}
+
+.zoomIconFit {
+  width: var(--pm-toolbar-fit-icon-size);
+  height: var(--pm-toolbar-fit-icon-size);
+  opacity: var(--pm-toolbar-icon-opacity);
+}
+
+.zoomDisplay {
+  display: flex;
+  width: var(--pm-toolbar-zoom-display-width);
+  height: 100%;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  border-right: 1px solid var(--scp-border-neutral-tertiary);
+  color: var(--scp-color-neutral-700);
+  font-size: var(--scp-font-sizes-12);
+}

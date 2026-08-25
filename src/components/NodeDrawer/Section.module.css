@@ -1,0 +1,26 @@
+/*
+ * Секция боковой панели: «эйбров»-заголовок + содержимое (артборд A3).
+ * Только var(...) из src/theme/tokens.css — ни цветов, ни размеров литералами
+ * (CLAUDE.md «Кодовые правила»).
+ */
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--scp-spacing-sm);
+}
+
+/* В макете A3 у полей «Система, модуль» и «Ответственный» зазор меньше (6px),
+   чем у секций со списками (8px). */
+.tight {
+  gap: var(--pm-space-6);
+}
+
+.title {
+  margin: 0;
+  color: var(--scp-text-neutral-secondary);
+  font-size: var(--pm-font-size-10-5);
+  font-weight: var(--scp-font-weight-semi-bold);
+  letter-spacing: var(--pm-tracking-eyebrow);
+  text-transform: uppercase;
+}

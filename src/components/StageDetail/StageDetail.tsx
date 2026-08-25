@@ -4,6 +4,7 @@ import {
   Background,
   BackgroundVariant,
   ReactFlow,
+  ReactFlowProvider,
   type EdgeTypes,
   type NodeTypes,
 } from '@xyflow/react';
@@ -13,11 +14,21 @@ import { ru } from '../../i18n/ru';
 import { useProcessStore } from '../../store/useProcessStore';
 import { Breadcrumbs } from '../Breadcrumbs';
 import { EdgeMarkers, IntegrationEdge, ProcessEdge } from '../edges';
+import { Legend } from '../Legend';
+import { NodeDrawer } from '../NodeDrawer';
 import { DataNode } from '../nodes/DataNode';
 import { GroupNode } from '../nodes/GroupNode';
 import { StepNode } from '../nodes/StepNode';
 import { WarningNode } from '../nodes/WarningNode';
-import { buildStageGraph, GRID_DOT_SIZE, GRID_GAP, MAX_ZOOM, MIN_ZOOM } from './stageGraph';
+import { Toolbar } from '../Toolbar';
+import {
+  buildStageGraph,
+  GRID_DOT_SIZE,
+  GRID_GAP,
+  MAX_ZOOM,
+  MIN_ZOOM,
+  TOOLBAR_FIT_VIEW_OPTIONS,
+} from './stageGraph';
 import { StartViewport } from './StartViewport';
 import styles from './StageDetail.module.css';
 
@@ -37,11 +48,15 @@ const edgeTypes = {
 
 export function StageDetail() {
   const currentStageId = useProcessStore((state) => state.currentStageId);
+  const showIntegrations = useProcessStore((state) => state.showIntegrations);
 
   // Данные статичны в пределах сессии просмотра (см. Overview.tsx).
   const map = useMemo(() => loadProcessMap(), []);
   const stage = map.stages.find((candidate) => candidate.id === currentStageId);
-  const graph = useMemo(() => (stage === undefined ? undefined : buildStageGraph(stage)), [stage]);
+  const graph = useMemo(
+    () => (stage === undefined ? undefined : buildStageGraph(stage, showIntegrations)),
+    [stage, showIntegrations],
+  );
 
   // Уровень выбирает App.tsx по currentStageId, поэтому сюда можно попасть
   // только с существующим этапом. Рассинхрон (например, id из старого
@@ -56,35 +71,46 @@ export function StageDetail() {
       <Breadcrumbs stages={map.stages} />
       {/* role="region", а не "application" — см. комментарий в Overview.tsx. */}
       <div className={styles.canvas} role="region" aria-label={ru.stageDetail.canvasLabel}>
-        <EdgeMarkers>
-          <ReactFlow
-            // key по этапу: смена этапа пересобирает полотно целиком и заново
-            // считает стартовый вид (StartViewport ниже) — иначе после перехода
-            // остаётся вьюпорт предыдущего этапа, а раскладки различаются в
-            // разы (3942×1088 у этапа 2 против 3528×296 у этапа 1).
-            key={stage.id}
-            nodes={graph.nodes}
-            edges={graph.edges}
-            nodeTypes={nodeTypes}
-            edgeTypes={edgeTypes}
-            nodesDraggable={false}
-            nodesConnectable={false}
-            elementsSelectable={false}
-            // Фокус несут <button> карточек узлов (см. overviewGraph.ts).
-            nodesFocusable={false}
-            edgesFocusable={false}
-            panOnScroll
-            // fitView намеренно НЕ используется: он опускал масштаб до 0.25…0.53
-            // и делал подписи нечитаемыми. Стартовый вид — StartViewport.
-            // minZoom/maxZoom здесь остаются границами РУЧНОГО зума (колесо,
-            // тулбар M3): отдалить схему целиком пользователь по-прежнему может.
-            minZoom={MIN_ZOOM}
-            maxZoom={MAX_ZOOM}
-          >
-            <StartViewport bounds={graph.bounds} />
-            <Background variant={BackgroundVariant.Dots} gap={GRID_GAP} size={GRID_DOT_SIZE} />
-          </ReactFlow>
-        </EdgeMarkers>
+        {/* key по этапу на самом провайдере (не только на <ReactFlow> ниже):
+            смена этапа обязана пересобрать ОБЩИЙ store React Flow целиком,
+            иначе Toolbar (сиблинг <ReactFlow>, читает viewport из того же
+            store — см. Toolbar.tsx) на миг унаследовал бы масштаб/сдвиг
+            предыдущего этапа, пока StartViewport его не перезапишет. Раскладки
+            отличаются в разы (3942×1088 у этапа 2 против 3528×296 у этапа 1). */}
+        <ReactFlowProvider key={stage.id}>
+          <EdgeMarkers>
+            <ReactFlow
+              nodes={graph.nodes}
+              edges={graph.edges}
+              nodeTypes={nodeTypes}
+              edgeTypes={edgeTypes}
+              nodesDraggable={false}
+              nodesConnectable={false}
+              elementsSelectable={false}
+              // Фокус несут <button> карточек узлов (см. overviewGraph.ts).
+              nodesFocusable={false}
+              edgesFocusable={false}
+              panOnScroll
+              // fitView намеренно НЕ используется: он опускал масштаб до 0.25…0.53
+              // и делал подписи нечитаемыми. Стартовый вид — StartViewport.
+              // minZoom/maxZoom здесь остаются границами РУЧНОГО зума (колесо,
+              // тулбар): отдалить схему целиком пользователь по-прежнему может.
+              minZoom={MIN_ZOOM}
+              maxZoom={MAX_ZOOM}
+            >
+              <StartViewport bounds={graph.bounds} />
+              <Background variant={BackgroundVariant.Dots} gap={GRID_GAP} size={GRID_DOT_SIZE} />
+            </ReactFlow>
+          </EdgeMarkers>
+          {/* Кнопка «Уместить в экран» уважает тот же пол читаемости, что и
+              стартовый вид (SPEC §4.6) — см. комментарий у TOOLBAR_FIT_VIEW_OPTIONS
+              в stageGraph.ts. */}
+          <Toolbar fitViewOptions={TOOLBAR_FIT_VIEW_OPTIONS} />
+          <Legend />
+        </ReactFlowProvider>
+        {/* Боковая панель узла — внутри .canvas, чтобы затемнение начиналось
+            под шапкой крошек, как в артборде A3 (SPEC §4.3). */}
+        <NodeDrawer nodes={stage.nodes} />
       </div>
     </div>
   );

@@ -506,4 +506,64 @@
 
   /* Зазор между строками внутри data-узла (3px) — промежуточного токена нет. */
   --pm-space-3: 3px;
+
+  /* ---------------------------------------------------------------- */
+  /* Значения артборда A3 «Боковая панель узла» (SPEC §4.3), которых    */
+  /* нет в шкале ДС. Взяты как есть из                                  */
+  /* design/Supply Planning Process Map.dc.html (артборд A3) и из       */
+  /* компонента Drawer дизайн-системы                                   */
+  /* (design/_ds/.../_ds_bundle.js, components/overlay/Drawer.jsx) —    */
+  /* сам компонент в проект не тянется (CLAUDE.md: без UI-китов).       */
+  /* Ширина панели — --pm-drawer-width выше, размеры узлов сюда не      */
+  /* добавляются (они из src/theme/sizes.ts).                           */
+  /* ---------------------------------------------------------------- */
+
+  /* Зазор между секциями панели (в макете 14px; в шкале --scp-spacing-*
+     только 12 и 16). */
+  --pm-space-14: 14px;
+
+  /* Кнопка-крестик в шапке панели. */
+  --pm-drawer-close-size: 28px;
+
+  /* Кнопки футера — .scp-btn--sm (32px) и .scp-drawer__footer .scp-btn
+     (min-width 100px) из ДС; в шкале токенов этих чисел нет. */
+  --pm-drawer-button-height: 32px;
+  --pm-drawer-button-min-width: 100px;
+
+  /* Тень панели — .scp-drawer дизайн-системы; токенов теней в ДС нет. */
+  --pm-shadow-drawer: -2px 0 8px rgb(0 0 0 / 15%);
+
+  /* ---------------------------------------------------------------- */
+  /* Тулбар и легенда (SPEC §4.6). Из макетов design/Supply Planning     */
+  /* Process Map.dc.html и design/StageDetail.dc.html (тулбар и легенда */
+  /* в обоих идентичны) — значений нет в шкале ДС, заведены отдельно,   */
+  /* даже когда число совпадает со шкалой (та же логика, что у          */
+  /* --pm-badge-height выше: это высота компонента хрома, а не отступ). */
+  /* ---------------------------------------------------------------- */
+
+  /* Высота/сторона квадратных кнопок toggle и зум-группы — 32px в макете. */
+  --pm-toolbar-control-size: 32px;
+  /* Иконки minus/plus — 14×14, fit — 15×15 (макет задаёт их по-разному). */
+  --pm-toolbar-icon-size: 14px;
+  --pm-toolbar-fit-icon-size: 15px;
+  /* opacity иконок тулбара — .7, в шкале --scp-opacity-* только .1/.5/.9. */
+  --pm-toolbar-icon-opacity: 0.7;
+  /* Ширина ячейки с процентом зума. */
+  --pm-toolbar-zoom-display-width: 44px;
+
+  /* Переключатель «Показать интеграции» — пилюля 26×14, ползунок 10px с
+     отступом 2px от края (макет). */
+  --pm-switch-width: 26px;
+  --pm-switch-height: 14px;
+  --pm-switch-knob-size: 10px;
+  --pm-switch-knob-offset: 2px;
+
+  /* Легенда — блок 36px высотой, внутренний паддинг 14px, зазор 18px между
+     пунктами; --pm-legend-bar-height/radius — размер цветной чёрточки
+     (ширина берёт готовый --pm-node-accent-bar). */
+  --pm-legend-height: 36px;
+  --pm-legend-padding-x: 14px;
+  --pm-legend-gap: 18px;
+  --pm-legend-bar-height: 14px;
+  --pm-legend-bar-radius: 2px;
 }

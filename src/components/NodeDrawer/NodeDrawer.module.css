@@ -1,0 +1,205 @@
+/*
+ * Боковая панель узла, уровень 2 (SPEC §4.3, артборд A3
+ * «Боковая панель узла», design/Supply Planning Process Map.dc.html).
+ * Хром панели (шапка/контент/футер, отступы 16×24, кегль заголовка 18/500,
+ * тень -2px 0 8px) повторяет компонент Drawer дизайн-системы
+ * (design/_ds/.../_ds_bundle.js, components/overlay/Drawer.jsx) — в проект он
+ * не тянется (CLAUDE.md: без UI-китов), поэтому перенесён стилями.
+ * Только var(...) из src/theme/tokens.css — ни цветов, ни размеров литералами.
+ */
+
+/* Затемнение полотна. Панель не перекрывается: справа отступ в её ширину —
+   ровно как в артборде A3 (left:0;top:52px;right:360px;bottom:0).
+   Верх/низ задаёт контейнер .canvas экрана детализации, шапка крошек
+   остаётся светлой. z-index 4/5 — выше слоёв React Flow (узлы/рёбра
+   держатся в пределах 0…3), но это локальная лесенка панели. */
+.scrim {
+  position: absolute;
+  z-index: 4;
+  inset: 0 var(--pm-drawer-width) 0 0;
+  background: var(--pm-canvas-dim);
+}
+
+.panel {
+  position: absolute;
+  z-index: 5;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  overflow: hidden;
+  width: var(--pm-drawer-width);
+  box-sizing: border-box;
+  flex-direction: column;
+  background: var(--scp-background-modal);
+  box-shadow: var(--pm-shadow-drawer);
+}
+
+/* Панель получает фокус при открытии (role="dialog" + tabIndex=-1), но рамку
+   вокруг всей панели показывать не нужно — это не интерактивный элемент. */
+.panel:focus {
+  outline: none;
+}
+
+.header {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--scp-spacing-lg) var(--scp-spacing-2xl);
+  gap: var(--scp-spacing-sm);
+}
+
+/* Заголовок панели — label узла; подписи длинные, поэтому максимум 2 строки. */
+.title {
+  overflow: hidden;
+  margin: 0;
+  color: var(--scp-content-primary);
+  font-size: var(--scp-font-sizes-18);
+  font-weight: var(--scp-font-weight-medium);
+  line-height: var(--scp-line-height-24);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  display: -webkit-box;
+}
+
+.close {
+  display: flex;
+  width: var(--pm-drawer-close-size);
+  height: var(--pm-drawer-close-size);
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: var(--scp-radius-button);
+  background: none;
+  cursor: pointer;
+}
+
+.close:hover,
+.close:focus-visible {
+  background: var(--scp-color-neutral-50);
+  outline: none;
+}
+
+/* Иконка x-close.svg рисуется currentColor, но подключается как <img>
+   (реестр src/assets/icons), поэтому серый цвет ДС (#a6a6a6) отдаётся
+   прозрачностью — ближайший токен --scp-opacity-md (.5). */
+.closeIcon {
+  width: var(--scp-spacing-lg);
+  height: var(--scp-spacing-lg);
+  opacity: var(--scp-opacity-md);
+}
+
+.content {
+  display: flex;
+  overflow-y: auto;
+  flex: 1;
+  flex-direction: column;
+  padding: var(--scp-spacing-lg) var(--scp-spacing-2xl);
+  gap: var(--pm-space-14);
+}
+
+.description {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pm-space-6);
+}
+
+/* Каждая строка description — отдельный абзац: в данных это таблицы
+   «причина → действие» и списки с маркерами (см. descriptionParagraphs.ts). */
+.paragraph {
+  margin: 0;
+  color: var(--scp-content-sub-primary);
+  font-size: var(--pm-font-size-12-5);
+  line-height: var(--scp-line-height-18);
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  margin: 0;
+  gap: var(--pm-space-6);
+  list-style: none;
+}
+
+.listItem {
+  display: flex;
+  align-items: center;
+  padding: var(--pm-space-7) var(--pm-space-10);
+  border-radius: var(--scp-radius-button);
+  background: var(--scp-background-secondary);
+  color: var(--scp-content-primary);
+  font-size: var(--pm-font-size-12-5);
+  gap: var(--scp-spacing-sm);
+  line-height: var(--scp-line-height-18);
+}
+
+.fieldValue {
+  color: var(--scp-content-primary);
+  font-size: var(--pm-font-size-12-5);
+}
+
+.footer {
+  display: flex;
+  flex: none;
+  justify-content: flex-end;
+  padding: var(--scp-spacing-lg) var(--scp-spacing-2xl);
+  gap: var(--scp-spacing-sm);
+}
+
+/* Кнопки — .scp-btn--sm дизайн-системы: 32px, 14px/600, радиус 4,
+   min-width 100px внутри .scp-drawer__footer. */
+.button {
+  display: inline-flex;
+  height: var(--pm-drawer-button-height);
+  min-width: var(--pm-drawer-button-min-width);
+  align-items: center;
+  justify-content: center;
+  padding: 0 var(--scp-paddings-m);
+  border: 1px solid transparent;
+  border-radius: var(--scp-radius-button);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: var(--scp-font-sizes-14);
+  font-weight: var(--scp-font-weight-semi-bold);
+  transition:
+    background-color 200ms ease,
+    color 200ms ease,
+    border-color 200ms ease;
+  white-space: nowrap;
+}
+
+/* «Подробнее» — modifier stroked, color sub-primary. */
+.buttonStroked {
+  border-color: var(--scp-neutral-default-border);
+  background: var(--scp-background-primary);
+  color: var(--scp-main-font-color);
+}
+
+.buttonStroked:hover,
+.buttonStroked:focus-visible {
+  background: var(--scp-background-action-neutral-secondary-default);
+  outline: none;
+}
+
+/* «Открыть в модуле» — color primary. */
+.buttonPrimary {
+  background: var(--scp-background-action-brand-primary-default);
+  color: var(--scp-content-constant);
+}
+
+.buttonPrimary:hover:not(:disabled),
+.buttonPrimary:focus-visible:not(:disabled) {
+  background: var(--scp-background-action-brand-primary-hover);
+  outline: none;
+}
+
+/* SPEC §4.3: без ссылки кнопка disabled. */
+.buttonPrimary:disabled {
+  background: var(--scp-background-action-brand-primary-disable);
+  color: var(--scp-text-neutral-disable);
+  cursor: default;
+}

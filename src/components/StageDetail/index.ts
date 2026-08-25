@@ -11,6 +11,7 @@ export {
   START_PADDING,
   START_ZOOM_MAX,
   START_ZOOM_MIN,
+  TOOLBAR_FIT_VIEW_OPTIONS,
   type Box,
   type ContainerSize,
   type StageDetailNode,
