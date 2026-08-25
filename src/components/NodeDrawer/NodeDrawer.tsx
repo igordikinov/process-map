@@ -61,7 +61,6 @@ interface NodeDrawerPanelProps {
 
 function NodeDrawerPanel({ node, onClose }: NodeDrawerPanelProps) {
   const panelRef = useRef<HTMLDivElement>(null);
-  const descriptionRef = useRef<HTMLDivElement>(null);
   const titleId = useId();
 
   const paragraphs = useMemo(() => descriptionParagraphs(node.description), [node.description]);
@@ -178,7 +177,7 @@ function NodeDrawerPanel({ node, onClose }: NodeDrawerPanelProps) {
             системе»: у неё есть осмысленное пустое состояние. */}
         <div className={styles.content}>
           {hasDescription && (
-            <div className={styles.description} ref={descriptionRef}>
+            <div className={styles.description}>
               {paragraphs.map((paragraph, index) => (
                 <p className={styles.paragraph} key={`${index}-${paragraph}`}>
                   {paragraph}
@@ -194,7 +193,12 @@ function NodeDrawerPanel({ node, onClose }: NodeDrawerPanelProps) {
 
           {node.system !== undefined && (
             <Section title={ru.drawer.system} tight>
-              <span className={styles.fieldValue}>{node.system}</span>
+              {/* Расшифровка появится в ru.systems, когда её пришлёт владелец
+                  процесса (process-map-b67, SPEC §4.3). Пока словарь пуст —
+                  показываем код, а не пустую строку. */}
+              <span className={styles.fieldValue}>
+                {ru.systems[node.system] || node.system}
+              </span>
             </Section>
           )}
           {node.owner !== undefined && (
@@ -205,21 +209,11 @@ function NodeDrawerPanel({ node, onClose }: NodeDrawerPanelProps) {
         </div>
 
         <footer className={styles.footer}>
-          {/* SPEC §4.3: в v1 кнопка скрыта, если у узла нет description.
-              Отдельного экрана «подробнее» в v1 нет, поэтому единственное
-              действие, которое кнопка может выполнить честно, — показать само
-              описание: прокрутить к нему содержимое панели. */}
-          {hasDescription && (
-            <button
-              type="button"
-              className={`${styles.button} ${styles.buttonStroked}`}
-              onClick={() => {
-                descriptionRef.current?.scrollIntoView({ block: 'start' });
-              }}
-            >
-              {ru.drawer.more}
-            </button>
-          )}
+          {/* SPEC §4.3: кнопка «Подробнее» из макета в v1 не реализуется —
+              решение владельца процесса (process-map-wo8). Она прокручивала бы
+              к описанию, уже видимому на этой же панели, то есть обещала
+              больше, чем делала на самом деле. В футере остаётся только
+              «Открыть в модуле». */}
           <button
             type="button"
             className={`${styles.button} ${styles.buttonPrimary}`}

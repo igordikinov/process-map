@@ -187,17 +187,6 @@ describe('NodeDrawer', () => {
     expect(screen.queryByText(ru.drawer.screenEmpty)).not.toBeInTheDocument();
   });
 
-  it('«Подробнее» показывается только при непустом description (SPEC §4.3, v1)', () => {
-    const withDescription = nodeById(STEP_WITH_LIST);
-    const { unmount } = openDrawer([withDescription], withDescription.id);
-    expect(screen.getByRole('button', { name: ru.drawer.more })).toBeInTheDocument();
-    unmount();
-
-    const withoutDescription: ProcessNode = { ...withDescription, description: undefined };
-    openDrawer([withoutDescription], withoutDescription.id);
-    expect(screen.queryByRole('button', { name: ru.drawer.more })).not.toBeInTheDocument();
-  });
-
   it('Esc и кнопка «Закрыть» вызывают closeDrawer', () => {
     const node = nodeById(STEP_WITH_LIST);
     const { unmount } = openDrawer([node], node.id);

@@ -1,5 +1,6 @@
 // Все строки интерфейса (CLAUDE.md «Кодовые правила»).
 // Функции здесь — только форматирование готовых значений, никакой логики UI.
+import type { SystemCode } from '../data/schema';
 import { pluralRu } from '../utils/format';
 
 export const ru = {
@@ -75,12 +76,51 @@ export const ru = {
     /** По артборду A3 заголовок пишется через запятую. */
     system: 'Система, модуль',
     owner: 'Ответственный',
-    /** Футер: stroked-кнопка, показывается только при непустом description. */
-    more: 'Подробнее',
     /** Футер: primary-кнопка, disabled без ссылки на экран. */
     openInModule: 'Открыть в модуле',
     /** title той же кнопки, когда она заблокирована. */
     openInModuleEmpty: 'Ссылка на экран не задана',
+  },
+
+  /**
+   * Расшифровка кода системы для секции «Система, модуль» (SPEC §4.3).
+   * В process.json и в узлах лежит только код (`node.system: SystemCode`) —
+   * артборд A3 показывает расшифровку («In.Plan · Планирование поставок»),
+   * но сами названия ещё не получены от владельца процесса (решение
+   * process-map-b67: расшифровки берутся из этого словаря, а не выдумываются).
+   * Пока значение пустое — секция показывает код как есть, без падений и
+   * без пустой строки (см. NodeDrawer.tsx).
+   *
+   * НИЧЕГО здесь не заполнять на глаз, даже правдоподобным вариантом:
+   * CLAUDE.md запрещает додумывать содержание процесса.
+   */
+  systems: {
+    DP: '',
+    PS: '',
+    IO: '',
+    ERP: '',
+    MRP: '',
+    INPLAN: '',
+  } satisfies Record<SystemCode, string>,
+
+  /**
+   * Тексты формы редактора ссылки на экран (SPEC §4.4, артборд A5).
+   * Форму делает задача process-map-0sb — тексты утверждены владельцем
+   * заранее (process-map-kdh) и добавлены сюда, потому что ru.ts в этой
+   * задаче уже открыт. Ключи называны по `reason` из utils/url.ts::validateUrl,
+   * чтобы форма подставляла текст без своего сопоставления строк.
+   */
+  screenLinkForm: {
+    /** validateUrl: { status: 'invalid', reason: 'empty' }. */
+    urlEmpty: 'Укажите ссылку на экран',
+    /** validateUrl: { status: 'invalid', reason: 'malformed' }. */
+    urlMalformed: 'Введите корректный URL',
+    /** validateUrl: { status: 'invalid', reason: 'unsupported-protocol' }. */
+    urlUnsupportedProtocol: 'Допустимы только ссылки https:// и http://',
+    /** validateUrl: { status: 'warning', reason: 'insecure-protocol' }. */
+    urlInsecureWarning: 'Ссылка без шифрования (http). Рекомендуется https',
+    /** `title` формы пусто. */
+    titleEmpty: 'Укажите название экрана',
   },
 
   /** Тулбар полотна (SPEC §4.6): toggle интеграций + зум −/%/+/fit. */

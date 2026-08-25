@@ -172,20 +172,8 @@
   white-space: nowrap;
 }
 
-/* «Подробнее» — modifier stroked, color sub-primary. */
-.buttonStroked {
-  border-color: var(--scp-neutral-default-border);
-  background: var(--scp-background-primary);
-  color: var(--scp-main-font-color);
-}
-
-.buttonStroked:hover,
-.buttonStroked:focus-visible {
-  background: var(--scp-background-action-neutral-secondary-default);
-  outline: none;
-}
-
-/* «Открыть в модуле» — color primary. */
+/* «Открыть в модуле» — единственная кнопка футера (SPEC §4.3, решение
+   process-map-wo8 убрало «Подробнее» из v1) — color primary. */
 .buttonPrimary {
   background: var(--scp-background-action-brand-primary-default);
   color: var(--scp-content-constant);

@@ -188,7 +188,7 @@ test('узел со ссылкой (overrides): заголовок и url в п�
   }, OVERRIDES_KEY);
 });
 
-test('многострочное описание выводится абзацами, «Подробнее» показана', async ({ page }) => {
+test('многострочное описание выводится абзацами', async ({ page }) => {
   await page.goto('/');
   await openStage(page, 0);
   await clickNode(page, `[data-id="${NODE_WITH_DESCRIPTION}"] button`);
@@ -197,14 +197,4 @@ test('многострочное описание выводится абзац�
   await expect(dialog).toBeVisible();
   // 9 строк описания из process.json — 9 отдельных абзацев.
   await expect(dialog.locator('p')).toHaveCount(9);
-  await expect(dialog.getByRole('button', { name: 'Подробнее' })).toBeVisible();
-});
-
-test('у узла без описания кнопки «Подробнее» нет (SPEC §4.3, v1)', async ({ page }) => {
-  await page.goto('/');
-  await openFirstStepDrawer(page);
-
-  const dialog = page.getByRole('dialog');
-  await expect(dialog.locator('p')).toHaveCount(0);
-  await expect(dialog.getByRole('button', { name: 'Подробнее' })).toHaveCount(0);
 });
