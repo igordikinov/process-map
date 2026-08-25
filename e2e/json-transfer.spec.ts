@@ -57,7 +57,7 @@ function readProcessJson(): { text: string; map: ProcessMapLike } {
  * входов и узлы-интеграций остаются слева за кадром. Кликнуть настоящей мышью
  * по узлу за краем полотна нельзя — а весь смысл этого файла в настоящей мыши.
  */
-function firstNodeId(map: ProcessMapLike): string {
+function stepIds(map: ProcessMapLike, count: number): string[] {
   const steps = (map.stages[0]?.nodes ?? [])
     .filter((node) => node.type === 'step')
     .sort(
@@ -66,9 +66,13 @@ function firstNodeId(map: ProcessMapLike): string {
         a.position.y - b.position.y ||
         a.id.localeCompare(b.id, 'en'),
     );
-  const id = steps[0]?.id;
-  expect(id, 'в process.json нет карточек шага').toBeTruthy();
-  return id ?? '';
+  const ids = steps.slice(0, count).map((node) => node.id);
+  expect(ids.length, 'в process.json не хватает карточек шага').toBe(count);
+  return ids;
+}
+
+function firstNodeId(map: ProcessMapLike): string {
+  return stepIds(map, 1)[0] ?? '';
 }
 
 /** Включает режим «Редактор» (SPEC §4.4) настоящим кликом. */
@@ -100,6 +104,49 @@ async function mouseClickButton(page: Page, name: string): Promise<void> {
   expect(hitsButton, `клик по «${name}» перекрыт другим элементом`).toBe(true);
 
   await page.mouse.click(x, y);
+}
+
+/**
+ * Тексты обратной связи — ru.toolbar (process-map-ygd). Дублируются здесь
+ * строками, а не импортом из src: e2e проверяет то, что видит пользователь,
+ * и переименование ключа в i18n не должно проходить незамеченным.
+ */
+const MSG = {
+  importError: 'Это не файл карты процесса. Правки не изменены',
+  importNoChanges: 'Файл принят, расхождений нет',
+  importApplied: (count: number): string => `Применено ссылок: ${count}`,
+  resetConfirm: 'Удалить все правки?',
+  resetAccept: 'Удалить',
+  resetCancel: 'Отмена',
+};
+
+/**
+ * Строка сообщения импорта: ошибка объявляется как `alert`, успех — как
+ * `status`. Проверяется не только текст, но и то, что в эту точку экрана
+ * попадает именно она: тулбар лежит поверх полотна React Flow, и перекрытый
+ * элемент остаётся `toBeVisible()` (CLAUDE.md «Ловушки»).
+ */
+async function expectMessage(page: Page, role: 'alert' | 'status', text: string): Promise<void> {
+  const message = page.getByRole(role);
+  await expect(message).toHaveText(text);
+  const box = await message.boundingBox();
+  expect(box, 'строка сообщения без геометрии').not.toBeNull();
+  const onTop = await page.evaluate(
+    ({ x, y }) => document.elementFromPoint(x, y)?.textContent?.trim() ?? '',
+    { x: (box?.x ?? 0) + (box?.width ?? 0) / 2, y: (box?.y ?? 0) + (box?.height ?? 0) / 2 },
+  );
+  expect(onTop, 'строка сообщения перекрыта').toBe(text);
+}
+
+/**
+ * Двухшаговый сброс целиком: взвести и подтвердить. Раньше «Сбросить правки»
+ * стирал overrides с первого клика — теперь одного клика недостаточно, и все
+ * старые сценарии ходят через этот хелпер.
+ */
+async function resetViaUi(page: Page): Promise<void> {
+  await mouseClickButton(page, 'Сбросить правки');
+  await expect(page.getByRole('group', { name: MSG.resetConfirm })).toBeVisible();
+  await mouseClickButton(page, MSG.resetAccept);
 }
 
 async function storedOverrides(page: Page): Promise<unknown> {
@@ -210,8 +257,42 @@ test.describe('Тулбар редактора: три кнопки SPEC §4.4',
       expect((box?.x ?? 0) + (box?.width ?? 0)).toBeLessThanOrEqual(1024);
     }
 
-    // И «Сбросить правки» после переноса строки по-прежнему кликается мышью.
+    // И «Сбросить правки» после переноса строки по-прежнему кликается мышью…
     await mouseClickButton(page, 'Сбросить правки');
+    // …а взведённое подтверждение (оно длиннее самой кнопки) тулбар не разносит.
+    await expect(page.getByRole('group', { name: MSG.resetConfirm })).toBeVisible();
+    for (const name of ['Просмотр', 'Редактор', MSG.resetAccept, MSG.resetCancel]) {
+      const box = await page.getByRole('button', { name, exact: true }).boundingBox();
+      expect(box, `кнопка «${name}» без геометрии`).not.toBeNull();
+      expect(box?.x ?? -1, `кнопка «${name}» уехала за левый край`).toBeGreaterThanOrEqual(0);
+      expect((box?.x ?? 0) + (box?.width ?? 0)).toBeLessThanOrEqual(1024);
+    }
+  });
+
+  test('строка сообщения на 1024×600 не разносит тулбар за края экрана', async ({ page }) => {
+    await page.setViewportSize({ width: 1024, height: 600 });
+    await page.goto('/');
+    await page.waitForSelector('.react-flow__node-stage');
+    await enterEditMode(page);
+
+    // Самый длинный из текстов владельца.
+    await importJson(page, 'broken.json', '{ это совсем не json');
+    await expectMessage(page, 'alert', MSG.importError);
+
+    const box = await page.getByRole('alert').boundingBox();
+    expect(box?.x ?? -1).toBeGreaterThanOrEqual(0);
+    expect((box?.x ?? 0) + (box?.width ?? 0)).toBeLessThanOrEqual(1024);
+    // Полоса горизонтальной прокрутки от сообщения не появляется.
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    );
+    expect(overflow).toBeLessThanOrEqual(0);
+
+    for (const name of ['Просмотр', 'Редактор', 'Экспорт JSON', 'Импорт JSON', 'Сбросить правки']) {
+      const button = await page.getByRole('button', { name, exact: true }).boundingBox();
+      expect(button?.x ?? -1, `кнопка «${name}» уехала за левый край`).toBeGreaterThanOrEqual(0);
+      expect((button?.x ?? 0) + (button?.width ?? 0)).toBeLessThanOrEqual(1024);
+    }
   });
 });
 
@@ -262,7 +343,7 @@ test.describe('Импорт JSON', () => {
     const exported = await exportJson(page);
 
     // Стираем правки — как будто пользователь открыл карту в другом браузере.
-    await mouseClickButton(page, 'Сбросить правки');
+    await resetViaUi(page);
     expect(await storedOverrides(page)).toBeNull();
 
     await importJson(page, exported.fileName, exported.text);
@@ -306,6 +387,74 @@ test.describe('Импорт JSON', () => {
     await expect(dialog.getByRole('button', { name: 'Открыть в модуле' })).toBeEnabled();
   });
 
+  // ── Обратная связь импорта (process-map-ygd) ─────────────────────────────
+  //
+  // До этой задачи отказ уходил в console.warn, и снаружи успешный импорт
+  // файла, совпадающего с базовым, был НЕОТЛИЧИМ от отвергнутого — оба ничего
+  // не меняли на экране. Ровно эту неразличимость и проверяют три теста ниже:
+  // каждому исходу — своя видимая строка.
+
+  test('валидная карта с N ссылками: «Применено ссылок: N» и ссылки на карточках', async ({
+    page,
+  }) => {
+    const { text, map } = readProcessJson();
+    const ids = stepIds(map, 2);
+    const edited = JSON.parse(text) as ProcessMapLike;
+    for (const [index, id] of ids.entries()) {
+      const target = edited.stages[0]?.nodes.find((node) => node.id === id);
+      expect(target).toBeDefined();
+      if (target !== undefined) {
+        target.screen = { title: `${LINK.title} ${index}`, url: `${LINK.url}/${index}` };
+      }
+    }
+
+    await page.goto('/');
+    await page.waitForSelector('.react-flow__node-stage');
+    await enterEditMode(page);
+    await importJson(page, 'process.json', `${JSON.stringify(edited, null, 2)}\n`);
+
+    await expectMessage(page, 'status', MSG.importApplied(ids.length));
+
+    // Число в строке — не украшение: столько же записей легло в хранилище.
+    expect(Object.keys((await storedOverrides(page)) as object)).toHaveLength(ids.length);
+
+    // И ссылки действительно появились на карточках (иконка link-external).
+    await openStage(page, 0);
+    for (const id of ids) {
+      await expect(
+        page.locator(`[data-id="${id}"] button[aria-label^="Открыть экран в In.Plan: "]`),
+      ).toHaveCount(1);
+    }
+  });
+
+  test('файл без расхождений: «Файл принят, расхождений нет», а не «Применено ссылок: 0»', async ({
+    page,
+  }) => {
+    const { text } = readProcessJson();
+
+    await page.goto('/');
+    await page.waitForSelector('.react-flow__node-stage');
+    await enterEditMode(page);
+    // Ровно тот файл, который лежит в репозитории: принят, но менять нечего.
+    await importJson(page, 'process.json', text);
+
+    await expectMessage(page, 'status', MSG.importNoChanges);
+    await expect(page.getByText(MSG.importApplied(0))).toHaveCount(0);
+  });
+
+  test('сообщение живёт до следующего действия', async ({ page }) => {
+    await page.goto('/');
+    await page.waitForSelector('.react-flow__node-stage');
+    await enterEditMode(page);
+
+    await importJson(page, 'broken.json', '{ это совсем не json');
+    await expectMessage(page, 'alert', MSG.importError);
+
+    // Следующее действие — клик по «Сбросить правки»: строка исчезает.
+    await mouseClickButton(page, 'Сбросить правки');
+    await expect(page.getByRole('alert')).toHaveCount(0);
+  });
+
   test('битый JSON не роняет приложение и не трогает правки', async ({ page }) => {
     const nodeId = firstNodeId(readProcessJson().map);
     const errors: string[] = [];
@@ -322,6 +471,9 @@ test.describe('Импорт JSON', () => {
     await expect(page.locator('.react-flow__node-stage').first()).toBeVisible();
     expect(errors).toEqual([]);
     expect(await storedOverrides(page)).toEqual({ [nodeId]: { screen: LINK } });
+
+    // И отказ теперь ВИДЕН, а не только в консоли.
+    await expectMessage(page, 'alert', MSG.importError);
   });
 
   test('чужая валидная JSON-форма (файл overrides) отвергается', async ({ page }) => {
@@ -336,11 +488,68 @@ test.describe('Импорт JSON', () => {
 
     await expect(page.locator('.react-flow__node-stage').first()).toBeVisible();
     expect(await storedOverrides(page)).toEqual({ [nodeId]: { screen: LINK } });
+    // Тот же текст, что у битого JSON: владелец различает эти случаи только
+    // в реализации, а не в интерфейсе.
+    await expectMessage(page, 'alert', MSG.importError);
   });
 });
 
-test.describe('Сбросить правки', () => {
-  test('стирает overrides и возвращает карту к process.json без перезагрузки', async ({ page }) => {
+test.describe('Сбросить правки: двухшаговая кнопка', () => {
+  // window.confirm здесь запрещён: в <iframe> с sandbox без allow-modals
+  // браузер подавляет его МОЛЧА, и сброс прошёл бы без вопроса (тот же класс
+  // тихого отказа, что у _top-навигации, process-map-6ap). Поэтому вопрос —
+  // обычные кнопки в тулбаре, и проверяются они настоящей мышью.
+
+  test('первый клик не удаляет, а спрашивает; «Отмена» возвращает исходный вид', async ({
+    page,
+  }) => {
+    const nodeId = firstNodeId(readProcessJson().map);
+    await page.goto('/');
+    await setOverride(page, nodeId, LINK);
+    await enterEditMode(page);
+
+    await mouseClickButton(page, 'Сбросить правки');
+
+    // Вопрос на экране, исходной кнопки нет, хранилище НЕ тронуто.
+    const confirm = page.getByRole('group', { name: MSG.resetConfirm });
+    await expect(confirm).toBeVisible();
+    await expect(page.getByText(MSG.resetConfirm)).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Сбросить правки', exact: true })).toHaveCount(0);
+    expect(await storedOverrides(page)).toEqual({ [nodeId]: { screen: LINK } });
+
+    // Подтверждение достижимо клавиатурой: фокус уже на «Удалить», ноль Tab'ов.
+    await expect(page.getByRole('button', { name: MSG.resetAccept, exact: true })).toBeFocused();
+    // Один Tab — и фокус на «Отмена».
+    await page.keyboard.press('Tab');
+    await expect(page.getByRole('button', { name: MSG.resetCancel, exact: true })).toBeFocused();
+
+    // «Отмена» возвращает исходный вид и ничего не удаляет.
+    await mouseClickButton(page, MSG.resetCancel);
+    await expect(confirm).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Сбросить правки', exact: true })).toBeVisible();
+    expect(await storedOverrides(page)).toEqual({ [nodeId]: { screen: LINK } });
+  });
+
+  test('потеря фокуса возвращает исходный вид и ничего не удаляет', async ({ page }) => {
+    const nodeId = firstNodeId(readProcessJson().map);
+    await page.goto('/');
+    await setOverride(page, nodeId, LINK);
+    await enterEditMode(page);
+
+    await mouseClickButton(page, 'Сбросить правки');
+    await expect(page.getByRole('group', { name: MSG.resetConfirm })).toBeVisible();
+
+    // Уводим фокус наружу — Shift+Tab с «Удалить» на «Импорт JSON».
+    await page.keyboard.press('Shift+Tab');
+
+    await expect(page.getByRole('group', { name: MSG.resetConfirm })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Сбросить правки', exact: true })).toBeVisible();
+    expect(await storedOverrides(page)).toEqual({ [nodeId]: { screen: LINK } });
+  });
+
+  test('«Удалить» стирает overrides и возвращает карту к process.json без перезагрузки', async ({
+    page,
+  }) => {
     const nodeId = firstNodeId(readProcessJson().map);
     await page.goto('/');
     await setOverride(page, nodeId, LINK);
@@ -352,7 +561,7 @@ test.describe('Сбросить правки', () => {
     await expect(page.getByRole('dialog').getByText(LINK.title)).toBeVisible();
     await page.keyboard.press('Escape');
 
-    await mouseClickButton(page, 'Сбросить правки');
+    await resetViaUi(page);
 
     // Ключ удалён целиком (resetOverrides), а не переписан пустым объектом.
     expect(await storedOverrides(page)).toBeNull();

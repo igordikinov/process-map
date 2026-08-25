@@ -46,3 +46,76 @@
 .fileInput {
   display: none;
 }
+
+/* ── Строка обратной связи импорта (process-map-ygd) ────────────────────────
+   Живёт до следующего действия. Высота и радиус — те же, что у контролов
+   тулбара, поэтому строка встаёт в ряд, а не ломает его.
+
+   white-space:nowrap намеренно: если строка не влезает в ряд, .toolbar
+   (flex-wrap) переносит её целиком на вторую строку, где ширины хватает
+   с запасом. Перенос ВНУТРИ строки сделал бы её выше 32px и разъехал бы
+   выравнивание всего ряда. max-width страхует от горизонтальной прокрутки. */
+.message {
+  display: flex;
+  height: var(--pm-toolbar-control-size);
+  max-width: 100%;
+  align-items: center;
+  padding: 0 var(--scp-paddings-m);
+  border: 1px solid transparent;
+  border-radius: var(--scp-radius-button);
+  margin: 0;
+  font-size: var(--scp-font-sizes-12);
+  white-space: nowrap;
+}
+
+.messageError {
+  border-color: var(--scp-color-error-200);
+  background: var(--scp-color-error-50);
+  color: var(--scp-color-error-700);
+}
+
+.messageSuccess {
+  border-color: var(--scp-color-attention-200);
+  background: var(--scp-color-attention-50);
+  color: var(--scp-color-attention-800);
+}
+
+/* ── Взведённое подтверждение сброса ────────────────────────────────────────
+   Тот же сегмент, что .group, но в тревожных цветах: пока он на экране,
+   исходной кнопки «Сбросить правки» нет — второй шаг подменяет первый,
+   а не добавляется к нему. */
+.confirmGroup {
+  display: flex;
+  height: var(--pm-toolbar-control-size);
+  flex: none;
+  align-items: center;
+  overflow: hidden;
+  border: 1px solid var(--scp-color-error-200);
+  border-radius: var(--scp-radius-button);
+  background: var(--scp-color-error-50);
+}
+
+.confirmQuestion {
+  display: flex;
+  height: 100%;
+  align-items: center;
+  padding: 0 var(--scp-paddings-m);
+  color: var(--scp-color-error-700);
+  font-size: var(--scp-font-sizes-12);
+  white-space: nowrap;
+}
+
+.confirmGroup .button {
+  border-right: 0;
+  border-left: 1px solid var(--scp-color-error-200);
+}
+
+.confirmGroup .button:hover,
+.confirmGroup .button:focus-visible {
+  background: var(--scp-color-error-100);
+}
+
+.confirmAccept {
+  color: var(--scp-color-error-700);
+  font-weight: var(--scp-font-weight-semi-bold);
+}

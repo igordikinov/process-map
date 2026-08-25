@@ -17,6 +17,27 @@ if (typeof globalThis.ResizeObserver === 'undefined') {
   globalThis.ResizeObserver = ResizeObserverMock;
 }
 
+// Blob.prototype.text() — импорт JSON читает выбранный файл именно им
+// (EditorActions.tsx). В браузерах метод есть с 2019 года, а jsdom 25 его так
+// и не реализовал, оставив только FileReader: без полифилла любой тест импорта
+// падал бы с «file.text is not a function», то есть на пробеле окружения, а не
+// на поведении приложения. Полифилл достраивает ровно чтение текста и ничего
+// в логике импорта не подменяет.
+if (typeof Blob.prototype.text !== 'function') {
+  Blob.prototype.text = function text(this: Blob): Promise<string> {
+    return new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.addEventListener('load', () => {
+        resolve(String(reader.result));
+      });
+      reader.addEventListener('error', () => {
+        reject(reader.error ?? new Error('FileReader: не удалось прочитать файл'));
+      });
+      reader.readAsText(this);
+    });
+  };
+}
+
 // DOMMatrixReadOnly нужен React Flow для разбора transform панорамирования.
 if (typeof globalThis.DOMMatrixReadOnly === 'undefined') {
   class DOMMatrixReadOnlyMock {
