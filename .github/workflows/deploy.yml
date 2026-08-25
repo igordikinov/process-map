@@ -1,0 +1,63 @@
+name: Deploy to GitHub Pages
+
+# Карта раздаётся статикой с GitHub Pages по адресу
+# https://igordikinov.github.io/process-map/ и встраивается оттуда в iframe.
+# Публикуется только собранный dist/ — исходники, презентация и макет
+# остаются в репозитории, но сайтом не раздаются.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Разрешения нужны именно этому workflow: read для checkout,
+# pages+id-token — для официального деплоя через actions/deploy-pages.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Параллельные деплои не нужны: побеждает последний push в main.
+# cancel-in-progress: false — начатый деплой доводится до конца,
+# чтобы Pages не остался с полузалитой сборкой.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Версия из .nvmrc: npm run layout требует Node >= 22.6
+      # (node --experimental-strip-types), см. engines в package.json.
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - run: npm ci
+
+      # Сломанная сборка не должна попасть на Pages: сначала проверки.
+      # e2e здесь не гоняются — они требуют браузеров Playwright и живут
+      # в отдельном прогоне; npm run check это tsc + eslint + vitest.
+      - run: npm run check
+
+      - run: npm run build
+
+      # base: './' в vite.config.ts (SPEC §6) делает пути относительными,
+      # поэтому сборка работает из подкаталога /process-map/ без правок.
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
