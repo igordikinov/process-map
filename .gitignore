@@ -6,3 +6,7 @@ test-results/
 .vite/
 *.local
 .DS_Store
+
+# Python
+__pycache__/
+*.py[cod]
