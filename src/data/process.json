@@ -31,7 +31,7 @@
           "system": "DP",
           "position": {
             "x": 296,
-            "y": 110
+            "y": 74
           },
           "slidePosition": {
             "x": 19,
@@ -48,7 +48,7 @@
           ],
           "position": {
             "x": 710,
-            "y": 110
+            "y": 74
           },
           "slidePosition": {
             "x": 243,
@@ -63,7 +63,7 @@
           "group": "preobrazovanie-prognoza-k-trebuemoy-granulyarnosti",
           "position": {
             "x": 1124,
-            "y": 110
+            "y": 74
           },
           "slidePosition": {
             "x": 448,
@@ -77,7 +77,7 @@
           "group": "preobrazovanie-prognoza-k-trebuemoy-granulyarnosti",
           "position": {
             "x": 1538,
-            "y": 110
+            "y": 74
           },
           "slidePosition": {
             "x": 652,
@@ -91,7 +91,7 @@
           "group": "preobrazovanie-prognoza-k-trebuemoy-granulyarnosti",
           "position": {
             "x": 1952,
-            "y": 110
+            "y": 74
           },
           "slidePosition": {
             "x": 857,
@@ -108,7 +108,7 @@
           ],
           "position": {
             "x": 2366,
-            "y": 110
+            "y": 74
           },
           "slidePosition": {
             "x": 1062,
@@ -119,9 +119,10 @@
           "id": "prognoz-prodazh-v-trebuemoy-granulyarnosti",
           "type": "data",
           "label": "Прогноз продаж в требуемой гранулярности",
+          "direction": "in",
           "position": {
             "x": 0,
-            "y": 72
+            "y": 0
           },
           "slidePosition": {
             "x": 43,
@@ -132,9 +133,10 @@
           "id": "otgruzhennye-zakazy-klientov",
           "type": "data",
           "label": "Отгруженные заказы клиентов",
+          "direction": "in",
           "position": {
             "x": 0,
-            "y": 144
+            "y": 72
           },
           "slidePosition": {
             "x": 43,
@@ -145,9 +147,10 @@
           "id": "otkrytye-zakazy-klientov-3-77",
           "type": "data",
           "label": "Открытые заказы клиентов",
+          "direction": "in",
           "position": {
             "x": 0,
-            "y": 216
+            "y": 144
           },
           "slidePosition": {
             "x": 43,
@@ -164,7 +167,7 @@
           ],
           "position": {
             "x": 2780,
-            "y": 110
+            "y": 74
           },
           "slidePosition": {
             "x": 52,
@@ -181,7 +184,7 @@
           ],
           "position": {
             "x": 3194,
-            "y": 110
+            "y": 74
           },
           "slidePosition": {
             "x": 396,
@@ -192,9 +195,10 @@
           "id": "skorrektirovannyy-otkrytyy-prognoz-prodazh-2-184",
           "type": "data",
           "label": "Скорректированный (открытый) прогноз продаж",
+          "direction": "out",
           "position": {
-            "x": 0,
-            "y": 0
+            "x": 3608,
+            "y": 72
           },
           "slidePosition": {
             "x": 315,
@@ -282,6 +286,7 @@
           "id": "osnovnye-dannye",
           "type": "data",
           "label": "Основные данные",
+          "direction": "in",
           "position": {
             "x": 0,
             "y": 0
@@ -295,6 +300,7 @@
           "id": "aktualnye-urovni-zapasov",
           "type": "data",
           "label": "Актуальные уровни запасов",
+          "direction": "in",
           "position": {
             "x": 0,
             "y": 72
@@ -308,6 +314,7 @@
           "id": "aktualnye-parametry-planirovaniya",
           "type": "data",
           "label": "Актуальные параметры планирования",
+          "direction": "in",
           "position": {
             "x": 0,
             "y": 144
@@ -327,7 +334,7 @@
           ],
           "position": {
             "x": 1538,
-            "y": 314
+            "y": 134
           },
           "slidePosition": {
             "x": 1018,
@@ -338,6 +345,7 @@
           "id": "otkrytye-zakazy-klientov-4-43",
           "type": "data",
           "label": "Открытые заказы клиентов",
+          "direction": "in",
           "position": {
             "x": 0,
             "y": 216
@@ -351,6 +359,7 @@
           "id": "skorrektirovannyy-otkrytyy-prognoz-prodazh-4-43",
           "type": "data",
           "label": "Скорректированный (открытый) прогноз продаж",
+          "direction": "in",
           "position": {
             "x": 0,
             "y": 288
@@ -371,7 +380,7 @@
           "system": "IO",
           "position": {
             "x": 710,
-            "y": 414
+            "y": 234
           },
           "slidePosition": {
             "x": 775,
@@ -382,6 +391,7 @@
           "id": "aktualnye-parametry-i-prioritety-prioritety-kvoty-parametry-popolneniya",
           "type": "data",
           "label": "Актуальные параметры и приоритеты (приоритеты, квоты, параметры пополнения)",
+          "direction": "in",
           "position": {
             "x": 0,
             "y": 360
@@ -401,7 +411,7 @@
           ],
           "position": {
             "x": 710,
-            "y": 582
+            "y": 402
           },
           "slidePosition": {
             "x": 126,
@@ -418,7 +428,7 @@
           ],
           "position": {
             "x": 1124,
-            "y": 398
+            "y": 218
           },
           "slidePosition": {
             "x": 330,
@@ -435,7 +445,7 @@
           ],
           "position": {
             "x": 1538,
-            "y": 398
+            "y": 218
           },
           "slidePosition": {
             "x": 543,
@@ -452,7 +462,7 @@
           ],
           "position": {
             "x": 710,
-            "y": 498
+            "y": 318
           },
           "slidePosition": {
             "x": 780,
@@ -469,7 +479,7 @@
           ],
           "position": {
             "x": 1124,
-            "y": 498
+            "y": 318
           },
           "slidePosition": {
             "x": 1026,
@@ -483,7 +493,7 @@
           "system": "IO",
           "position": {
             "x": 1124,
-            "y": 682
+            "y": 502
           },
           "slidePosition": {
             "x": 9,
@@ -497,7 +507,7 @@
           "system": "PS",
           "position": {
             "x": 296,
-            "y": 582
+            "y": 402
           },
           "slidePosition": {
             "x": 9,
@@ -508,9 +518,10 @@
           "id": "dostupnyy-frv-resursov",
           "type": "data",
           "label": "Доступный ФРВ ресурсов",
+          "direction": "in",
           "position": {
             "x": 0,
-            "y": 576
+            "y": 432
           },
           "slidePosition": {
             "x": 45,
@@ -521,9 +532,10 @@
           "id": "operativnyy-plan-proizvodstva-4-68",
           "type": "data",
           "label": "Оперативный план производства",
+          "direction": "in",
           "position": {
             "x": 0,
-            "y": 648
+            "y": 504
           },
           "slidePosition": {
             "x": 45,
@@ -534,9 +546,10 @@
           "id": "neogranichennaya-potrebnost-v-popolnenii",
           "type": "data",
           "label": "Неограниченная потребность в пополнении",
+          "direction": "in",
           "position": {
             "x": 0,
-            "y": 792
+            "y": 576
           },
           "slidePosition": {
             "x": 45,
@@ -547,9 +560,10 @@
           "id": "aktualnye-prioritety",
           "type": "data",
           "label": "Актуальные приоритеты",
+          "direction": "in",
           "position": {
             "x": 0,
-            "y": 936
+            "y": 648
           },
           "slidePosition": {
             "x": 45,
@@ -563,7 +577,7 @@
           "group": "raschet-obemnyh-planov-s-uchetom-ogranicheniy",
           "position": {
             "x": 1538,
-            "y": 698
+            "y": 518
           },
           "slidePosition": {
             "x": 45,
@@ -580,7 +594,7 @@
           ],
           "position": {
             "x": 1952,
-            "y": 698
+            "y": 518
           },
           "slidePosition": {
             "x": 254,
@@ -597,7 +611,7 @@
           ],
           "position": {
             "x": 2366,
-            "y": 698
+            "y": 518
           },
           "slidePosition": {
             "x": 455,
@@ -614,7 +628,7 @@
           ],
           "position": {
             "x": 2780,
-            "y": 698
+            "y": 518
           },
           "slidePosition": {
             "x": 657,
@@ -631,7 +645,7 @@
           ],
           "position": {
             "x": 3194,
-            "y": 698
+            "y": 518
           },
           "slidePosition": {
             "x": 858,
@@ -645,7 +659,7 @@
           "group": "raschet-obemnyh-planov-s-uchetom-ogranicheniy",
           "position": {
             "x": 3608,
-            "y": 698
+            "y": 518
           },
           "slidePosition": {
             "x": 1060,
@@ -656,9 +670,10 @@
           "id": "urovni-zapasov-v-planovyh-ei",
           "type": "data",
           "label": "Уровни запасов в плановых ЕИ",
+          "direction": "out",
           "position": {
-            "x": 0,
-            "y": 432
+            "x": 4022,
+            "y": 180
           },
           "slidePosition": {
             "x": 9,
@@ -669,9 +684,10 @@
           "id": "ogranichennyy-plan-prodazh-draft-2-151",
           "type": "data",
           "label": "Ограниченный План продаж (драфт)",
+          "direction": "out",
           "position": {
-            "x": 0,
-            "y": 504
+            "x": 4022,
+            "y": 252
           },
           "slidePosition": {
             "x": 195,
@@ -682,9 +698,10 @@
           "id": "plan-proizvodstva-draft-2-151",
           "type": "data",
           "label": "План производства (драфт)",
+          "direction": "out",
           "position": {
-            "x": 0,
-            "y": 720
+            "x": 4022,
+            "y": 324
           },
           "slidePosition": {
             "x": 195,
@@ -695,9 +712,10 @@
           "id": "plan-peremescheniy-draft-2-151",
           "type": "data",
           "label": "План перемещений (драфт)",
+          "direction": "out",
           "position": {
-            "x": 0,
-            "y": 864
+            "x": 4022,
+            "y": 396
           },
           "slidePosition": {
             "x": 195,
@@ -708,9 +726,10 @@
           "id": "potrebnost-v-kriticheskom-syre-2-151",
           "type": "data",
           "label": "Потребность в критическом сырье",
+          "direction": "out",
           "position": {
-            "x": 0,
-            "y": 1008
+            "x": 4022,
+            "y": 468
           },
           "slidePosition": {
             "x": 195,
@@ -870,9 +889,10 @@
           "id": "ogranichennyy-plan-prodazh-draft-5-155",
           "type": "data",
           "label": "Ограниченный план продаж (драфт)",
+          "direction": "in",
           "position": {
             "x": 0,
-            "y": 12
+            "y": 86
           },
           "slidePosition": {
             "x": 21,
@@ -894,7 +914,7 @@
           ],
           "position": {
             "x": 296,
-            "y": 118
+            "y": 126
           },
           "slidePosition": {
             "x": 232,
@@ -905,9 +925,10 @@
           "id": "plan-proizvodstva-draft-5-155",
           "type": "data",
           "label": "План производства (драфт)",
+          "direction": "in",
           "position": {
             "x": 0,
-            "y": 84
+            "y": 158
           },
           "slidePosition": {
             "x": 21,
@@ -918,9 +939,10 @@
           "id": "plan-peremescheniy-draft-5-155",
           "type": "data",
           "label": "План перемещений (драфт)",
+          "direction": "in",
           "position": {
             "x": 0,
-            "y": 156
+            "y": 230
           },
           "slidePosition": {
             "x": 21,
@@ -931,9 +953,10 @@
           "id": "potrebnost-v-kriticheskom-syre-5-155",
           "type": "data",
           "label": "Потребность в критическом сырье",
+          "direction": "in",
           "position": {
             "x": 0,
-            "y": 228
+            "y": 302
           },
           "slidePosition": {
             "x": 21,
@@ -944,9 +967,10 @@
           "id": "informaciya-po-buduschim-zakazam-klientov",
           "type": "data",
           "label": "Информация по будущим заказам клиентов",
+          "direction": "in",
           "position": {
             "x": 0,
-            "y": 300
+            "y": 374
           },
           "slidePosition": {
             "x": 99,
@@ -961,7 +985,7 @@
           "group": "vnesenie-ruchnyh-korrektirovok",
           "position": {
             "x": 1124,
-            "y": 168
+            "y": 243
           },
           "slidePosition": {
             "x": 259,
@@ -975,7 +999,7 @@
           "group": "vnesenie-ruchnyh-korrektirovok",
           "position": {
             "x": 1538,
-            "y": 126
+            "y": 134
           },
           "slidePosition": {
             "x": 788,
@@ -986,9 +1010,10 @@
           "id": "informaciya-o-polomkah-ostanovkah-liniy",
           "type": "data",
           "label": "Информация о поломках / остановках линий",
+          "direction": "in",
           "position": {
             "x": 0,
-            "y": 372
+            "y": 446
           },
           "slidePosition": {
             "x": 99,
@@ -1021,7 +1046,7 @@
           "system": "DP",
           "position": {
             "x": 1952,
-            "y": 42
+            "y": 8
           },
           "slidePosition": {
             "x": 1007,
@@ -1032,9 +1057,10 @@
           "id": "preduprezhdenie-po-over-stock-5-93",
           "type": "data",
           "label": "Предупреждение по Over Stock",
+          "direction": "in",
           "position": {
             "x": 0,
-            "y": 444
+            "y": 518
           },
           "slidePosition": {
             "x": 99,
@@ -1063,7 +1089,7 @@
           "group": "vnesenie-ruchnyh-korrektirovok",
           "position": {
             "x": 710,
-            "y": 118
+            "y": 126
           },
           "slidePosition": {
             "x": 43,
@@ -1081,7 +1107,7 @@
           "system": "PS",
           "position": {
             "x": 1952,
-            "y": 126
+            "y": 92
           },
           "slidePosition": {
             "x": 1007,
@@ -1095,7 +1121,7 @@
           "group": "vnesenie-ruchnyh-korrektirovok-po-prichine-deficit-gp-iz-za-nizkogo",
           "position": {
             "x": 710,
-            "y": 820
+            "y": 895
           },
           "slidePosition": {
             "x": 258,
@@ -1109,7 +1135,7 @@
           "group": "vnesenie-ruchnyh-korrektirovok-po-prichine-deficit-gp-iz-za-nizkogo",
           "position": {
             "x": 1124,
-            "y": 820
+            "y": 878
           },
           "slidePosition": {
             "x": 679,
@@ -1123,7 +1149,7 @@
           "group": "vnesenie-ruchnyh-korrektirovok-po-prichine-deficit-gp-iz-za-nizkogo",
           "position": {
             "x": 710,
-            "y": 736
+            "y": 811
           },
           "slidePosition": {
             "x": 258,
@@ -1134,9 +1160,10 @@
           "id": "preduprezhdenie-po-over-stock-5-158",
           "type": "data",
           "label": "Предупреждение по Over Stock",
+          "direction": "in",
           "position": {
             "x": 0,
-            "y": 588
+            "y": 590
           },
           "slidePosition": {
             "x": 165,
@@ -1154,7 +1181,7 @@
           "system": "MRP",
           "position": {
             "x": 1952,
-            "y": 210
+            "y": 176
           },
           "slidePosition": {
             "x": 1007,
@@ -1165,9 +1192,10 @@
           "id": "formirovanie-preduprezhdeniy-sp-posle-progona-planirovaniya-5-145",
           "type": "data",
           "label": "Формирование предупреждений SP после прогона планирования",
+          "direction": "in",
           "position": {
             "x": 0,
-            "y": 660
+            "y": 662
           },
           "slidePosition": {
             "x": 43,
@@ -1181,7 +1209,7 @@
           "group": "raschet-scenariev-dlya-s-op",
           "position": {
             "x": 710,
-            "y": 620
+            "y": 695
           },
           "slidePosition": {
             "x": 351,
@@ -1195,7 +1223,7 @@
           "group": "raschet-scenariev-dlya-s-op",
           "position": {
             "x": 1124,
-            "y": 452
+            "y": 552
           },
           "slidePosition": {
             "x": 860,
@@ -1209,7 +1237,7 @@
           "group": "raschet-scenariev-dlya-s-op",
           "position": {
             "x": 710,
-            "y": 536
+            "y": 611
           },
           "slidePosition": {
             "x": 351,
@@ -1227,7 +1255,7 @@
           "system": "ERP",
           "position": {
             "x": 1952,
-            "y": 294
+            "y": 260
           },
           "slidePosition": {
             "x": 1007,
@@ -1241,7 +1269,7 @@
           "group": "raschet-scenariev-dlya-s-op",
           "position": {
             "x": 296,
-            "y": 494
+            "y": 527
           },
           "slidePosition": {
             "x": 236,
@@ -1252,9 +1280,10 @@
           "id": "resheniya-o-vnesenii-korrektirovok-v-plany",
           "type": "data",
           "label": "Решения о внесении корректировок в Планы",
+          "direction": "in",
           "position": {
             "x": 0,
-            "y": 732
+            "y": 734
           },
           "slidePosition": {
             "x": 96,
@@ -1268,7 +1297,7 @@
           "group": "raschet-scenariev-dlya-s-op",
           "position": {
             "x": 710,
-            "y": 284
+            "y": 359
           },
           "slidePosition": {
             "x": 351,
@@ -1282,7 +1311,7 @@
           "group": "raschet-scenariev-dlya-s-op",
           "position": {
             "x": 710,
-            "y": 368
+            "y": 443
           },
           "slidePosition": {
             "x": 351,
@@ -1293,9 +1322,10 @@
           "id": "s-op",
           "type": "data",
           "label": "S&OP",
+          "direction": "in",
           "position": {
             "x": 0,
-            "y": 804
+            "y": 806
           },
           "slidePosition": {
             "x": 43,
@@ -1309,7 +1339,7 @@
           "group": "raschet-scenariev-dlya-s-op",
           "position": {
             "x": 710,
-            "y": 452
+            "y": 527
           },
           "slidePosition": {
             "x": 351,
@@ -1320,9 +1350,10 @@
           "id": "analiz-preduprezhdeniy",
           "type": "data",
           "label": "Анализ предупреждений",
+          "direction": "out",
           "position": {
-            "x": 0,
-            "y": 516
+            "x": 2366,
+            "y": 194
           },
           "slidePosition": {
             "x": 379,
@@ -1333,9 +1364,10 @@
           "id": "planovyy-ostatok-draft",
           "type": "data",
           "label": "Плановый остаток (драфт)",
+          "direction": "out",
           "position": {
             "x": 2366,
-            "y": 480
+            "y": 554
           },
           "slidePosition": {
             "x": 560,
@@ -1346,9 +1378,10 @@
           "id": "scenarii",
           "type": "data",
           "label": "Сценарии",
+          "direction": "out",
           "position": {
             "x": 2366,
-            "y": 624
+            "y": 698
           },
           "slidePosition": {
             "x": 560,
@@ -1359,9 +1392,10 @@
           "id": "opublikovannye-plany",
           "type": "data",
           "label": "Опубликованные планы:",
+          "direction": "out",
           "position": {
             "x": 2366,
-            "y": 192
+            "y": 266
           },
           "slidePosition": {
             "x": 737,
@@ -1372,9 +1406,10 @@
           "id": "proizvodstva-planovye-zakazy",
           "type": "data",
           "label": "Производства (плановые заказы)",
+          "direction": "out",
           "position": {
             "x": 2366,
-            "y": 264
+            "y": 338
           },
           "slidePosition": {
             "x": 737,
@@ -1385,9 +1420,10 @@
           "id": "potrebnost-v-kriticheskom-syre-zayavki-na-zakupku",
           "type": "data",
           "label": "Потребность в критическом сырье (заявки на закупку)",
+          "direction": "out",
           "position": {
             "x": 2366,
-            "y": 336
+            "y": 410
           },
           "slidePosition": {
             "x": 737,
@@ -1398,9 +1434,10 @@
           "id": "ogranichennyy-prognoz-prodazh",
           "type": "data",
           "label": "Ограниченный прогноз продаж",
+          "direction": "out",
           "position": {
             "x": 2366,
-            "y": 408
+            "y": 482
           },
           "slidePosition": {
             "x": 737,
@@ -1411,9 +1448,10 @@
           "id": "planovyy-ostatok",
           "type": "data",
           "label": "Плановый остаток",
+          "direction": "out",
           "position": {
             "x": 2366,
-            "y": 552
+            "y": 626
           },
           "slidePosition": {
             "x": 737,
@@ -1547,6 +1585,24 @@
           "source": "sozdanie-scenariya",
           "target": "izmenenie-urovney-zapasov-v-scenarii",
           "kind": "process"
+        },
+        {
+          "id": "e-raschet-ogranichennyh-planov--peredacha-ogranichennogo-prognoza-v-dp",
+          "source": "raschet-ogranichennyh-planov",
+          "target": "peredacha-ogranichennogo-prognoza-v-dp",
+          "kind": "process"
+        },
+        {
+          "id": "e-raschet-ogranichennyh-planov--publikaciya-zayavok-na-zakupku",
+          "source": "raschet-ogranichennyh-planov",
+          "target": "publikaciya-zayavok-na-zakupku",
+          "kind": "process"
+        },
+        {
+          "id": "e-raschet-ogranichennyh-planov--publikaciya-zayavok-na-peremeschenie",
+          "source": "raschet-ogranichennyh-planov",
+          "target": "publikaciya-zayavok-na-peremeschenie",
+          "kind": "process"
         }
       ],
       "inputs": [],
@@ -1598,6 +1654,7 @@
           "id": "skorrektirovannyy-otkrytyy-prognoz-prodazh-6-105",
           "type": "data",
           "label": "Скорректированный (открытый) прогноз продаж",
+          "direction": "in",
           "position": {
             "x": 0,
             "y": 0
@@ -1611,6 +1668,7 @@
           "id": "operativnyy-plan-proizvodstva-6-105",
           "type": "data",
           "label": "Оперативный план производства",
+          "direction": "in",
           "position": {
             "x": 0,
             "y": 72
@@ -1624,6 +1682,7 @@
           "id": "otkrytye-zakazy-klientov-6-105",
           "type": "data",
           "label": "Открытые заказы клиентов",
+          "direction": "in",
           "position": {
             "x": 0,
             "y": 144
@@ -1637,6 +1696,7 @@
           "id": "multisorsing",
           "type": "data",
           "label": "Мультисорсинг",
+          "direction": "in",
           "position": {
             "x": 0,
             "y": 216
@@ -1650,6 +1710,7 @@
           "id": "ogranicheniya-resursov-po-personalu",
           "type": "data",
           "label": "Ограничения ресурсов по персоналу",
+          "direction": "in",
           "position": {
             "x": 0,
             "y": 288
@@ -1663,6 +1724,7 @@
           "id": "lid-taym-transportirovki",
           "type": "data",
           "label": "Лид тайм транспортировки",
+          "direction": "in",
           "position": {
             "x": 0,
             "y": 360
@@ -1741,6 +1803,7 @@
           "id": "matricy-peremescheniy-sku-rc",
           "type": "data",
           "label": "Матрицы перемещений SKU\\РЦ",
+          "direction": "in",
           "position": {
             "x": 0,
             "y": 432
@@ -1754,6 +1817,7 @@
           "id": "istochniki-postavki",
           "type": "data",
           "label": "Источники поставки",
+          "direction": "in",
           "position": {
             "x": 0,
             "y": 504
@@ -1767,6 +1831,7 @@
           "id": "razmeschennye-zakazy-po",
           "type": "data",
           "label": "Размещенные заказы (PO)",
+          "direction": "in",
           "position": {
             "x": 0,
             "y": 576
@@ -1780,6 +1845,7 @@
           "id": "planovye-prihody",
           "type": "data",
           "label": "Плановые приходы",
+          "direction": "in",
           "position": {
             "x": 0,
             "y": 648
@@ -1793,6 +1859,7 @@
           "id": "matricy-peremescheniy-sku-ndc-rc",
           "type": "data",
           "label": "Матрицы перемещений SKU\\НДЦ\\РЦ",
+          "direction": "in",
           "position": {
             "x": 0,
             "y": 720
@@ -1806,6 +1873,7 @@
           "id": "urovni-sz",
           "type": "data",
           "label": "Уровни СЗ",
+          "direction": "in",
           "position": {
             "x": 0,
             "y": 792
@@ -1819,6 +1887,7 @@
           "id": "min-partii-na-transportirovku-i-kratnosti",
           "type": "data",
           "label": "Мин. Партии на транспортировку и кратности",
+          "direction": "in",
           "position": {
             "x": 0,
             "y": 864
@@ -1832,6 +1901,7 @@
           "id": "ogranicheniya-po-propusknoy-sposobnosti",
           "type": "data",
           "label": "Ограничения по пропускной способности",
+          "direction": "in",
           "position": {
             "x": 0,
             "y": 936
@@ -1845,6 +1915,7 @@
           "id": "osg",
           "type": "data",
           "label": "ОСГ",
+          "direction": "in",
           "position": {
             "x": 0,
             "y": 1008
@@ -1858,6 +1929,7 @@
           "id": "allokaciya",
           "type": "data",
           "label": "Аллокация",
+          "direction": "in",
           "position": {
             "x": 0,
             "y": 1080
@@ -1871,6 +1943,7 @@
           "id": "plan-popolneniya-po-dnyam",
           "type": "data",
           "label": "План пополнения по дням",
+          "direction": "out",
           "position": {
             "x": 1952,
             "y": 504
@@ -1884,6 +1957,7 @@
           "id": "shema-zagruzki-transportnyh-sredstv",
           "type": "data",
           "label": "Схема загрузки транспортных средств",
+          "direction": "out",
           "position": {
             "x": 1952,
             "y": 576

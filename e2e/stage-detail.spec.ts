@@ -57,8 +57,10 @@ test('клик по карточке этапа открывает детали�
   await expect(page.getByText(/ · .+ · /)).toBeVisible();
   // Обзорных карточек этапов на уровне 2 быть не должно.
   await expect(page.locator('.react-flow__node-stage')).toHaveCount(0);
-  // Этап 1: 2 группы + колонка входов (выходов у этапа 1 нет).
-  await expect(page.locator('.react-flow__node-groupBox')).toHaveCount(3);
+  // Этап 1: 2 группы + колонка входов + колонка выходов. Колонка выходов
+  // появилась вместе с явным node.direction (задача process-map-24p): до неё
+  // геометрическое правило зачисляло единственный выход этапа во входы.
+  await expect(page.locator('.react-flow__node-groupBox')).toHaveCount(4);
 });
 
 test('центр карточки шага принимает события мыши, а не полотно', async ({ page }) => {

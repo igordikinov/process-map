@@ -47,6 +47,39 @@ function readPythonTuple(name: string): string[] {
   return [...match[1]!.matchAll(/"([^"]+)"/g)].map((item) => item[1]!);
 }
 
+interface OwnerDecision {
+  task: string;
+  stage: number;
+  source: string;
+  targets: string[];
+}
+
+/**
+ * Читает OWNER_DECISION_EDGES из scripts/import-pptx.py — объявление рёбер,
+ * которых в презентации НЕТ (задача process-map-7bz). Разбор регуляркой, а не
+ * запуском Python: тест обязан работать там, где интерпретатора нет.
+ */
+function readOwnerDecisionEdges(): OwnerDecision[] {
+  // Разбор ограничен объявлением верхнего уровня: похожие литералы в других
+  // местах файла (например, фикстура самопроверки) сюда попасть не должны.
+  const block = /^OWNER_DECISION_EDGES[^\n]*=\s*\(\n([\s\S]*?)\n\)\n/m.exec(importerSource);
+  // Пустой список вместо исключения — намеренно: «объявление исчезло» должно
+  // ронять ИМЕНОВАННУЮ проверку ниже, а не сборку файла. Падение на этапе
+  // сбора унесло бы вместе с собой и остальные тесты этого файла, и стало бы
+  // непонятно, какое именно условие нарушено.
+  if (block === null) {
+    return [];
+  }
+  const pattern =
+    /"task":\s*"([^"]+)",\s*"stage":\s*(\d+),\s*"source":\s*"([^"]+)",\s*"targets":\s*\(([\s\S]*?)\)/g;
+  return [...block[1]!.matchAll(pattern)].map((match) => ({
+    task: match[1]!,
+    stage: Number(match[2]!),
+    source: match[3]!,
+    targets: [...match[4]!.matchAll(/"([^"]+)"/g)].map((item) => item[1]!),
+  }));
+}
+
 const nodeKeyOrder = readPythonTuple('NODE_KEY_ORDER');
 const stageKeyOrder = readPythonTuple('STAGE_KEY_ORDER');
 const preservedNodeFields = readPythonTuple('PRESERVED_NODE_FIELDS');
@@ -64,6 +97,15 @@ describe('import-pptx.py: контракт переноса ручных пол�
     expect(preservedNodeFields).toContain('screen');
     expect(preservedNodeFields).toContain('owner');
     expect(preservedStageFields).toContain('screen');
+  });
+
+  it('direction переносимым полем НЕ объявлен: его строит импортёр, а не человек', () => {
+    // Задача process-map-24p: направление data-узла читается из презентации
+    // (по происхождению фигуры), поэтому переносить его из предыдущего файла
+    // нельзя — перенос означал бы, что импортёр тянет из старого JSON то, что
+    // обязан вывести сам, и правка презентации перестала бы доезжать.
+    expect(preservedNodeFields).not.toContain('direction');
+    expect(nodeKeyOrder).toContain('direction');
   });
 
   it('все переносимые поля существуют в схеме и объявлены необязательными', () => {
@@ -109,5 +151,58 @@ describe('import-pptx.py: контракт переноса ручных пол�
         expect([...positions].sort((a, b) => a - b), label).toEqual(positions);
       }
     }
+  });
+});
+
+// Рёбра по решению владельца процесса (задача process-map-7bz).
+//
+// ЗАЧЕМ ЭТОТ БЛОК. Дописать такое ребро прямо в process.json нельзя: импортёр
+// пересобирает файл с нуля, и следующий `npm run data` его сотрёт — тот же
+// дефект, что чинила process-map-2dj для ссылок на экраны. Поэтому решение
+// живёт объявлением в scripts/import-pptx.py, а тест сторожит связь между
+// объявлением и файлом в ОБЕ стороны:
+//   · объявлено, но в JSON нет — значит, объявление перестало применяться;
+//   · в JSON есть, а объявления нет — значит, ребро дописали руками, и оно
+//     не переживёт следующей перегенерации.
+describe('import-pptx.py: рёбра по решению владельца процесса', () => {
+  const decisions = readOwnerDecisionEdges();
+
+  it('объявление не потеряно и называет задачу-основание', () => {
+    expect(
+      decisions.length,
+      'OWNER_DECISION_EDGES в scripts/import-pptx.py пуст или не найден — ' +
+        'решения владельца процесса не переживут следующий npm run data',
+    ).toBeGreaterThan(0);
+    for (const decision of decisions) {
+      expect(decision.task, 'источник решения').toMatch(/^process-map-/);
+      expect(decision.targets.length).toBeGreaterThan(0);
+    }
+  });
+
+  it('каждое объявленное ребро есть в process.json и его концы — узлы того же этапа', () => {
+    for (const decision of decisions) {
+      const stage = map.stages.find((candidate) => candidate.number === decision.stage);
+      expect(stage, `этап ${decision.stage}`).toBeDefined();
+      const nodeIds = new Set(stage!.nodes.map((node) => node.id));
+      const edgeIds = new Set(stage!.edges.map((edge) => edge.id));
+
+      expect(nodeIds.has(decision.source), `${decision.source}: узел-источник`).toBe(true);
+      for (const target of decision.targets) {
+        expect(nodeIds.has(target), `${target}: узел-приёмник`).toBe(true);
+        expect(
+          edgeIds.has(`e-${decision.source}--${target}`),
+          `${decision.task}: ребро ${decision.source} → ${target} не доехало в process.json`,
+        ).toBe(true);
+      }
+    }
+  });
+
+  it('группа «Публикация планов» связана целиком — решение 7bz применено', () => {
+    const stage = map.stages.find((candidate) => candidate.number === 3);
+    expect(stage).toBeDefined();
+    const group = stage!.nodes.filter((node) => node.group === 'publikaciya-planov');
+    expect(group.length).toBe(4);
+    const targets = new Set(stage!.edges.map((edge) => edge.target));
+    expect(group.filter((node) => !targets.has(node.id)).map((node) => node.id)).toEqual([]);
   });
 });

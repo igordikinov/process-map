@@ -87,6 +87,69 @@ describe('ProcessMapSchema', () => {
     expect(parsed.stages[0]?.nodes[0]?.slidePosition).toEqual({ x: 12, y: 34 });
   });
 
+  // --- direction у data-узлов (SPEC §3, задача process-map-24p) ----------------
+
+  it('у каждого data-узла проставлено direction, и только у data-узлов', () => {
+    // Импортёр знает направление точно (по происхождению фигуры), поэтому
+    // «поле опционально» относится к чужим документам, а не к нашему файлу:
+    // здесь оно обязано стоять у всех 100% data-узлов. Если проставлять его
+    // перестанут, splitStageDataNodes молча откатится на геометрию и вернёт
+    // ноль выходов у этапов 1 и 2 — ровно тот дефект, который чинил 24p.
+    const map = ProcessMapSchema.parse(loadProcessMap());
+    const nodes = map.stages.flatMap((stage) => stage.nodes);
+    const data = nodes.filter((node) => node.type === 'data');
+
+    expect(data.length).toBeGreaterThan(0);
+    expect(data.filter((node) => node.direction === undefined).map((node) => node.id)).toEqual([]);
+    expect(
+      nodes.filter((node) => node.type !== 'data' && node.direction !== undefined).map((n) => n.id),
+    ).toEqual([]);
+  });
+
+  it('у каждого этапа есть и входы, и выходы', () => {
+    // Регрессия 24p: у этапов 1 и 2 геометрическое правило давало ноль выходов
+    // при 2–3 ключевых выходах на карточке обзора — экран противоречил сам себе.
+    const map = ProcessMapSchema.parse(loadProcessMap());
+    for (const stage of map.stages) {
+      const data = stage.nodes.filter((node) => node.type === 'data');
+      expect(
+        data.filter((node) => node.direction === 'in').length,
+        `этап ${stage.number}: входы`,
+      ).toBeGreaterThan(0);
+      expect(
+        data.filter((node) => node.direction === 'out').length,
+        `этап ${stage.number}: выходы`,
+      ).toBeGreaterThan(0);
+    }
+  });
+
+  it('принимает узел без direction: поле необязательное', () => {
+    const map = buildSampleProcessMap();
+    const node = map.stages[0]?.nodes[0];
+    expect(node).toBeTruthy();
+    expect(node!.direction).toBeUndefined();
+    expect(() => ProcessMapSchema.parse(map)).not.toThrow();
+  });
+
+  it('отвергает direction вне in|out', () => {
+    const map = buildSampleProcessMap();
+    const node = map.stages[0]?.nodes[0];
+    expect(node).toBeTruthy();
+    node!.direction = 'left' as unknown as 'in';
+    expect(() => ProcessMapSchema.parse(map)).toThrow();
+  });
+
+  it('сохраняет direction при разборе: поле не вычищается схемой', () => {
+    // Как и slidePosition: если бы zod его отбрасывал, экспорт из приложения
+    // перестал бы совпадать с src/data/process.json побайтово.
+    const map = buildSampleProcessMap();
+    const node = map.stages[0]?.nodes[0];
+    expect(node).toBeTruthy();
+    node!.direction = 'out';
+    const parsed = ProcessMapSchema.parse(map);
+    expect(parsed.stages[0]?.nodes[0]?.direction).toBe('out');
+  });
+
   it('отвергает keyOutputs из более чем 3 элементов', () => {
     const map = buildSampleProcessMap();
     const stage = map.stages[0];

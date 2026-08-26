@@ -14,12 +14,46 @@ export const ScreenLinkSchema = z.object({
 });
 export type ScreenLink = z.infer<typeof ScreenLinkSchema>;
 
+// Направление артефакта относительно этапа: 'in' — этап его потребляет,
+// 'out' — производит. Одна схема на две сущности (ProcessNode.direction и
+// ExternalIO.direction) — намеренно: вопрос у них дословно один и тот же
+// («в какой колонке этапа стоит артефакт»), и разводить два одинаковых
+// перечисления значило бы завести два словаря для одного понятия. Отличаются
+// они не смыслом направления, а тем, ЧТО именно направлено: ExternalIO — это
+// свимлейн внешней системы уровня 1, ProcessNode — карточка внутри этапа.
+export const DirectionSchema = z.enum(['in', 'out']);
+export type Direction = z.infer<typeof DirectionSchema>;
+
 export const ProcessNodeSchema = z.object({
   id: z.string(),
   type: NodeTypeSchema,
   label: z.string(),
   description: z.string().optional(),
   group: z.string().optional(),
+  // Колонка, в которой стоит data-узел на экране детализации: 'in' — вход
+  // этапа, 'out' — выход (SPEC §4.2). Для остальных типов узлов поле не имеет
+  // смысла и не проставляется.
+  //
+  // ЗАЧЕМ ЯВНОЕ ПОЛЕ (задача process-map-24p). Раньше колонку выводили
+  // геометрически: узел левее середины области шагов — вход. На реальных
+  // слайдах это давало ноль выходов у этапов 1 и 2, хотя их карточки в обзоре
+  // перечисляют по 2–3 ключевых выхода: блоки выходов презентация рисует не
+  // справа от потока, а под контейнером этапа на слайде обзора, и по абсциссе
+  // они попадали левее середины. Экран противоречил сам себе («15 входов ·
+  // 0 выходов»), поэтому направление больше не выводится из координат.
+  //
+  // Значение ставит импортёр — не эвристикой, а ПО ПРОИСХОЖДЕНИЮ фигуры, см.
+  // scripts/import-pptx.py::NodeDraft.direction: узлы левой колонки слайда
+  // детализации — 'in', узлы блоков выходов этапа со слайда обзора — 'out'.
+  // Других способов породить data-узел у импортёра нет, поэтому поле стоит
+  // у всех узлов, и правкой руками это поле не является.
+  //
+  // Поле НЕОБЯЗАТЕЛЬНОЕ: документ без него (старый файл, экспорт из стороннего
+  // инструмента) остаётся валидным, и такой узел раскладывается по прежнему
+  // геометрическому правилу — src/utils/stageNodes.ts, единственный источник
+  // правила. Сделать его обязательным значило бы сломать и такие документы,
+  // и импорт JSON из §4.7.
+  direction: DirectionSchema.optional(),
   inputs: z.array(z.string()).optional(),
   outputs: z.array(z.string()).optional(),
   system: SystemCodeSchema.optional(),
@@ -68,7 +102,7 @@ export const ExternalIOSchema = z.object({
   system: SystemCodeSchema,
   label: z.string(),
   stage: z.number(),
-  direction: z.enum(['in', 'out']),
+  direction: DirectionSchema,
 });
 export type ExternalIO = z.infer<typeof ExternalIOSchema>;
 

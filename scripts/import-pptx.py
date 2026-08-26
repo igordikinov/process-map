@@ -38,6 +38,22 @@ dagre). Порядок обязателен и обратного не имее�
 и концы рёбер выводятся геометрически. Всё, что не распозналось однозначно,
 не выдумывается, а печатается в отчёте-сверке.
 
+ЧТО В ДОКУМЕНТЕ НЕ ИЗ ПРЕЗЕНТАЦИИ
+---------------------------------
+Ровно два места, и оба на виду — потому что правило проекта «не изобретать
+процесс» иначе не проверить:
+
+  · OWNER_DECISION_EDGES — рёбра по решению владельца процесса, которых на
+    слайде нет (задача process-map-7bz). Отчёт печатает их отдельным блоком;
+  · ручные поля `screen`/`owner` — их проставляет человек в редакторе, см.
+    ниже.
+
+Направление data-узлов (`node.direction`, задача process-map-24p) к этому
+списку НЕ относится: оно читается из презентации так же, как всё прочее, —
+по тому, из какой фигуры узел родился (левая колонка входов слайда детализации
+против блока выходов этапа на слайде обзора). Из КООРДИНАТ оно не выводится:
+блоки выходов этапов 1 и 2 нарисованы левее середины области шагов.
+
 РУЧНЫЕ ПОЛЯ (`screen`, `owner`) ПЕРЕЖИВАЮТ ПЕРЕГЕНЕРАЦИЮ
 ---------------------------------------------------------
 Ссылок на экраны In.Plan в презентации нет: их проставляет человек в редакторе,
@@ -125,6 +141,7 @@ NODE_KEY_ORDER = (
     "label",
     "description",
     "group",
+    "direction",
     "inputs",
     "outputs",
     "system",
@@ -162,6 +179,63 @@ IMPORTER_STAGE_FIELDS = tuple(k for k in STAGE_KEY_ORDER if k not in PRESERVED_S
 # больше нет. Файл при этом записывается — импорт корректен, потерян только
 # ручной слой, и его полный список напечатан в отчёте.
 EXIT_LINKS_LOST = 2
+
+# --------------------------------------------------------------------------------------
+# РЁБРА ПО РЕШЕНИЮ ВЛАДЕЛЬЦА ПРОЦЕССА — ИХ НЕТ В ПРЕЗЕНТАЦИИ
+# --------------------------------------------------------------------------------------
+#
+# ЧИТАТЬ ЦЕЛИКОМ, ПРЕЖДЕ ЧЕМ ДОБАВЛЯТЬ СЮДА СТРОКУ.
+#
+# Всё остальное в этом файле — чтение слайда: узел есть, потому что на слайде
+# есть фигура; ребро есть, потому что на слайде есть линия. Этот список —
+# ЕДИНСТВЕННОЕ исключение, и заведено оно ровно для того, чтобы исключение было
+# видно. В `stage["edges"]` рёбра отсюда лежат вперемешку с прочитанными со
+# слайда и внешне от них не отличаются; отличить их можно только здесь и по
+# отчёту импортёра (блок «РЁБРА ПО РЕШЕНИЮ ВЛАДЕЛЬЦА ПРОЦЕССА»).
+#
+# Условие для новой строки — ЗАФИКСИРОВАННОЕ решение владельца процесса
+# (номер задачи обязателен). Догадка «тут по смыслу должна быть стрелка» таким
+# решением НЕ является: автоматическое правило «связать узлы группы публикации
+# с расчётом» уже предлагалось (задача np4) и было откачено как выдумывание
+# процесса. Разница между np4 и тем, что ниже, — не в содержании рёбер, а
+# исключительно в источнике, и через полгода восстановить её будет неоткуда,
+# кроме этого комментария.
+#
+# ПОЧЕМУ ПРАВИЛОМ В ИМПОРТЁРЕ, А НЕ ПРАВКОЙ process.json. Импортёр собирает
+# документ с нуля, поэтому дописанное руками в JSON стирается следующим же
+# прогоном `npm run data` — этот дефект уже чинила задача process-map-2dj для
+# ссылок на экраны. Механизм переноса ручных полей (PRESERVED_NODE_FIELDS)
+# здесь не подходит: он сопоставляет ПОЛЯ СУЩЕСТВУЮЩИХ узлов по id, а не
+# добавляет новые сущности, и «перенос» рёбер означал бы, что импортёр молча
+# тянет из старого файла связи, которых в презентации нет, — то есть ровно то,
+# что запрещено. Объявление в коде переживает перегенерацию по построению и
+# при этом остаётся на виду.
+#
+# `targets` перечисляет решение ЦЕЛИКОМ, включая концы, которые на слайде уже
+# нарисованы: применяется только недостающее, а совпавшее печатается в отчёте
+# как пришедшее из презентации. Так строка остаётся читаемой как формулировка
+# решения («связать все четыре»), а не как дельта к текущему состоянию слайда,
+# и правка презентации не превращает список в тихую ложь.
+OWNER_DECISION_EDGES: tuple[dict, ...] = (
+    {
+        "task": "process-map-7bz",
+        "stage": 3,
+        "source": "raschet-ogranichennyh-planov",
+        "targets": (
+            "peredacha-ogranichennogo-prognoza-v-dp",
+            "publikaciya-planovyh-zakazov",
+            "publikaciya-zayavok-na-zakupku",
+            "publikaciya-zayavok-na-peremeschenie",
+        ),
+        "kind": "process",
+        "why": (
+            "решение владельца процесса: все четыре узла группы «Публикация планов» "
+            "выполняются по результату расчёта ограниченных планов. В презентации "
+            "стрелка нарисована только к «Публикация плановых заказов» (линия [146]), "
+            "остальные три узла остаются изолированными"
+        ),
+    },
+)
 
 A = "{http://schemas.openxmlformats.org/drawingml/2006/main}"
 P = "{http://schemas.openxmlformats.org/presentationml/2006/main}"
@@ -252,6 +326,23 @@ class NodeDraft:
     label: str
     box: Box
     group: str | None = None
+    # Колонка data-узла на экране детализации (SPEC §3/§4.2, задача
+    # process-map-24p): 'in' — вход этапа, 'out' — выход.
+    #
+    # НЕ ЭВРИСТИКА И НЕ ГЕОМЕТРИЯ, а происхождение фигуры: у импортёра ровно
+    # два места, где рождается data-узел, и каждое знает направление точно —
+    #   · build_stage, шаг 4 «левая колонка входов» слайда детализации → 'in';
+    #   · build_process_map, блоки выходов этапа под его контейнером на слайде
+    #     обзора (слайд 2)                                             → 'out'.
+    # Больше никакой путь data-узел не создаёт: node_type_for() возвращает
+    # только step/integration/warning. Поэтому поле проставлено у всех
+    # data-узлов, а у остальных типов его нет — там оно бессмысленно.
+    #
+    # Выводить направление из координат нельзя: блоки выходов этапов 1 и 2
+    # презентация рисует под контейнером этапа на слайде обзора, и по абсциссе
+    # они оказываются ЛЕВЕЕ середины области шагов — прежнее правило «левее
+    # середины = вход» давало у этих этапов ноль выходов.
+    direction: str | None = None
     description_parts: list[str] = field(default_factory=list)
     inputs: list[str] = field(default_factory=list)
     outputs: list[str] = field(default_factory=list)
@@ -275,6 +366,12 @@ class SlideReport:
     text_skipped: list[str] = field(default_factory=list)
     loose_attachments: list[str] = field(default_factory=list)
     questions: list[str] = field(default_factory=list)
+    # Артефакты, названные выходом этапа в обзоре, но уже существующие узлом
+    # колонки входов на слайде детализации (задача process-map-24p).
+    dedup_key_outputs: list[str] = field(default_factory=list)
+    # Рёбра, добавленные не из презентации, а по решению владельца процесса
+    # (OWNER_DECISION_EDGES, задача process-map-7bz).
+    owner_edges: list[str] = field(default_factory=list)
 
 
 # --------------------------------------------------------------------------------------
@@ -838,6 +935,8 @@ def build_stage(
     #    Подписи-выходы к этому моменту уже разобраны шагом 3, поэтому здесь
     #    достаточно признака «текстбокс стоит в левом поле слайда».
     #    group у data-узлов не проставляется: входы стоят вне групп (SPEC §4.2).
+    #    direction='in' — по происхождению, а не по координате: это и есть
+    #    колонка входов слайда (см. NodeDraft.direction, задача process-map-24p).
     for tb in sorted([t for t in textboxes if t.consumed_by is None], key=Shape.sort_key):
         if tb.box.left > LEFT_MARGIN_LIMIT:
             continue
@@ -859,6 +958,7 @@ def build_stage(
                     node_type="data",
                     label=para,
                     box=Box(tb.box.left, int(tb.box.top + index * step), tb.box.width, int(step)),
+                    direction="in",
                 )
             )
             report.data_nodes += 1
@@ -975,6 +1075,8 @@ def serialize_node(draft: NodeDraft) -> dict:
         node["description"] = draft.description
     if draft.group:
         node["group"] = draft.group
+    if draft.direction:
+        node["direction"] = draft.direction
     if draft.inputs:
         node["inputs"] = draft.inputs
     if draft.outputs:
@@ -1203,7 +1305,31 @@ def build_process_map(
         stages.append(stage)
         reports.append(report)
 
+    # Рёбра, которых в презентации нет (OWNER_DECISION_EDGES) — досыпаются сразу
+    # после разбора слайдов детализации, до сверок и отчётов: изолированные узлы
+    # и целостность считаются уже по итоговому набору рёбер. reports здесь ещё
+    # содержит ровно 4 отчёта этапов, отчёт обзора вставляется в начало ниже.
+    #
+    # Только во ВТОРОЙ фазе: в первой (collisions=None) IdFactory выдаёт
+    # временные id вида «base~N» ради подсчёта коллизий, и сверять с ними id,
+    # названные в решении владельца, бессмысленно — не нашлось бы ни одного.
+    # Результат первой фазы всё равно выбрасывается, кроме карты коллизий, а
+    # рёбра решения новых id не создают, так что пропуск ни на что не влияет.
+    if collisions is not None:
+        apply_owner_decision_edges(stages, reports)
+
     # Правая колонка выходов этапа (SPEC §4.2) — блоки под контейнером на слайде 2.
+    # direction='out' — по происхождению: это блок выходов этапа в обзоре
+    # (см. NodeDraft.direction, задача process-map-24p). Абсцисса такого блока
+    # к колонке отношения не имеет: у этапов 1 и 2 она левее середины области
+    # шагов, и прежнее геометрическое правило зачисляло эти узлы во входы.
+    #
+    # Артефакт, который уже есть среди узлов этапа, вторым узлом не заводится
+    # (проверка по casefold ниже) и направления НЕ меняет: на слайде
+    # детализации он нарисован в левой колонке входов, и переписать ему
+    # direction на 'out' значило бы решить за владельца процесса, что
+    # презентация в одном из двух мест ошибается. Такие узлы перечислены в
+    # отчёте (report.dedup_key_outputs).
     for index, stage in enumerate(stages):
         blocks = overview.output_blocks[index] if index < len(overview.output_blocks) else []
         stage["keyOutputs"] = choose_key_outputs(blocks)
@@ -1213,6 +1339,16 @@ def build_process_map(
             step = box.height / max(len(paragraphs), 1)
             for para_index, para in enumerate(paragraphs):
                 if para.casefold() in existing:
+                    twin = next(
+                        (n for n in stage["nodes"] if n["label"].casefold() == para.casefold()),
+                        None,
+                    )
+                    if twin is not None and twin.get("direction") == "in":
+                        overview_report.dedup_key_outputs.append(
+                            f"этап {stage['number']}: «{para}» назван выходом этапа в обзоре "
+                            f"(слайд 2), но на слайде детализации это узел «{twin['id']}» из "
+                            f"колонки входов — оставлен входом, отдельный узел-выход не создан"
+                        )
                     continue
                 existing.add(para.casefold())
                 added.append(
@@ -1224,6 +1360,7 @@ def build_process_map(
                             box=Box(
                                 box.left, int(box.top + para_index * step), box.width, int(step)
                             ),
+                            direction="out",
                         )
                     )
                 )
@@ -1299,6 +1436,67 @@ def build_process_map(
         "overviewEdges": overview_edges,
     }
     return process_map, reports, questions, ids.counts
+
+
+def apply_owner_decision_edges(
+    stages: list[dict],
+    stage_reports: Sequence[SlideReport],
+    decisions: Sequence[dict] = OWNER_DECISION_EDGES,
+) -> None:
+    """
+    Досыпает в этапы рёбра из OWNER_DECISION_EDGES — единственные рёбра
+    документа, которых нет в презентации (см. комментарий у самой константы).
+
+    Инварианты те же, что у прочитанных со слайда рёбер, и проверяются здесь,
+    а не только в src/data/schema.ts::validateIntegrity: оба конца — узлы ТОГО
+    ЖЕ этапа, id ребра уникален (формат `e-{source}--{target}` общий с
+    построенными по линиям, поэтому «уже есть такое ребро» и «дубль id» — одно
+    и то же условие и разбирается одинаково).
+
+    Узел, названный в решении, но исчезнувший из презентации, — ОСТАНОВКА
+    импорта, а не пропуск: пропустить значило бы тихо потерять решение
+    владельца, а именно ради того, чтобы оно не терялось, список и заведён.
+    """
+    by_number = {stage["number"]: stage for stage in stages}
+    for decision in decisions:
+        report = stage_reports[decision["stage"] - 1]
+        stage = by_number.get(decision["stage"])
+        if stage is None:
+            raise SystemExit(
+                f"OWNER_DECISION_EDGES ({decision['task']}): этапа {decision['stage']} нет "
+                f"в презентации — решение владельца применить не к чему"
+            )
+        node_ids = {node["id"] for node in stage["nodes"]}
+        existing = {edge["id"] for edge in stage["edges"]}
+        endpoints = (decision["source"], *decision["targets"])
+        missing = [node_id for node_id in endpoints if node_id not in node_ids]
+        if missing:
+            raise SystemExit(
+                f"OWNER_DECISION_EDGES ({decision['task']}): на этапе {decision['stage']} нет "
+                f"узлов {', '.join(missing)} — презентация изменилась. Импорт остановлен, чтобы "
+                f"решение владельца не потерялось молча: обновите список в scripts/import-pptx.py."
+            )
+        for target in decision["targets"]:
+            edge_id = f"e-{decision['source']}--{target}"
+            if edge_id in existing:
+                report.owner_edges.append(
+                    f"этап {decision['stage']}: {decision['source']} → {target} — уже есть "
+                    f"в презентации (стрелка нарисована), решение владельца её подтверждает"
+                )
+                continue
+            existing.add(edge_id)
+            stage["edges"].append(
+                {
+                    "id": edge_id,
+                    "source": decision["source"],
+                    "target": target,
+                    "kind": decision["kind"],
+                }
+            )
+            report.owner_edges.append(
+                f"этап {decision['stage']}: {decision['source']} → {target} — ДОБАВЛЕНО "
+                f"по решению владельца ({decision['task']}), в презентации стрелки нет"
+            )
 
 
 def register_system(stages: list[dict], system: dict, stage_key: str, direction_hint: str) -> str:
@@ -1401,6 +1599,53 @@ def print_report(process_map: dict, reports: Sequence[SlideReport], questions: S
             f"{len(stage['groups'])} групп, {len(stage['inputs'])} входов, "
             f"{len(stage['outputs'])} выходов, warningsCount={stage['warningsCount']}"
         )
+    # Направление data-узлов (SPEC §3, задача process-map-24p). Печатается
+    # отдельным блоком, потому что это ответ на вопрос «почему на экране этапа
+    # столько-то входов и столько-то выходов», а прежний ответ («так легли
+    # координаты») больше не действует.
+    print("\n" + "=" * 78)
+    print("НАПРАВЛЕНИЕ data-УЗЛОВ (node.direction) — КОЛОНКИ ВХОДОВ И ВЫХОДОВ")
+    print("=" * 78)
+    print("  Ставится по происхождению фигуры, не по координатам:")
+    print("    'in'  — левая колонка входов слайда детализации;")
+    print("    'out' — блок выходов этапа под его контейнером на слайде обзора.")
+    unset = 0
+    for stage in process_map["stages"]:
+        data_nodes = [n for n in stage["nodes"] if n["type"] == "data"]
+        ins = sum(1 for n in data_nodes if n.get("direction") == "in")
+        outs = sum(1 for n in data_nodes if n.get("direction") == "out")
+        unset += len(data_nodes) - ins - outs
+        flow = len(stage["nodes"]) - len(data_nodes)
+        print(
+            f"  этап {stage['number']} «{stage['shortTitle']}»: поток {flow}, "
+            f"входов {ins}, выходов {outs}"
+        )
+    if unset:
+        print(f"  ВНИМАНИЕ: data-узлов без direction: {unset} — это ошибка импортёра:")
+        print("  все data-узлы рождаются в одном из двух мест, и оба знают направление.")
+    else:
+        print("  data-узлов без direction: нет")
+    dedup = [item for report in reports for item in report.dedup_key_outputs]
+    if dedup:
+        print(f"  артефакт назван выходом в обзоре, но существует входом ({len(dedup)}):")
+        for item in dedup:
+            print(f"    · {item}")
+
+    # Рёбра, которых в презентации НЕТ. Отдельный блок и есть то место, по
+    # которому через полгода видно, что источник этих связей — решение
+    # владельца процесса, а не стрелка на слайде (задача process-map-7bz).
+    owner_edges = [item for report in reports for item in report.owner_edges]
+    print("\n" + "=" * 78)
+    print("РЁБРА ПО РЕШЕНИЮ ВЛАДЕЛЬЦА ПРОЦЕССА — В ПРЕЗЕНТАЦИИ ИХ НЕТ")
+    print("=" * 78)
+    if owner_edges:
+        print("  Источник этих связей — OWNER_DECISION_EDGES в scripts/import-pptx.py,")
+        print("  а НЕ линия на слайде. Всё остальное в документе прочитано из презентации.")
+        for item in owner_edges:
+            print(f"    · {item}")
+    else:
+        print("  список OWNER_DECISION_EDGES пуст — все рёбра прочитаны из презентации")
+
     print("\n" + "=" * 78)
     print("ИЗОЛИРОВАННЫЕ не-data УЗЛЫ — где в презентации связи нет")
     print("=" * 78)
@@ -1848,6 +2093,88 @@ def run_self_test() -> int:
     # Разные объекты: раскладка меняет position и не должна задеть slidePosition.
     laid["position"]["x"] = 999
     check(laid["slidePosition"]["x"] == 2, "position и slidePosition — один и тот же объект")
+
+    # 1c. direction (задача process-map-24p): поле пишется у data-узлов и
+    # только у них, и стоит на своём месте в NODE_KEY_ORDER.
+    step_node = serialize_node(NodeDraft(node_id="s", node_type="step", label="L", box=Box(0, 0, 1, 1)))
+    check("direction" not in step_node, "direction проставлен не-data узлу")
+    for value in ("in", "out"):
+        data_node = serialize_node(
+            NodeDraft(node_id="d", node_type="data", label="L", box=Box(0, 0, 1, 1), direction=value)
+        )
+        check(data_node.get("direction") == value, f"direction={value} не записан")
+        check(
+            list(data_node) == [k for k in NODE_KEY_ORDER if k in data_node],
+            f"порядок ключей data-узла нарушен: {list(data_node)}",
+        )
+    check("direction" in NODE_KEY_ORDER, "direction отсутствует в NODE_KEY_ORDER")
+    check("direction" in IMPORTER_NODE_FIELDS, "direction не объявлен полем импортёра")
+
+    # 1d. Рёбра по решению владельца процесса (задача process-map-7bz).
+    def _stage_fixture() -> list[dict]:
+        return [
+            {
+                "number": 3,
+                "nodes": [{"id": "src"}, {"id": "a"}, {"id": "b"}],
+                "edges": [{"id": "e-src--a", "source": "src", "target": "a", "kind": "process"}],
+            }
+        ]
+
+    # Решение-фикстура передаётся параметром, а не подменой глобали: константу
+    # OWNER_DECISION_EDGES читает ещё и tests/importPreserve.test.ts (регуляркой
+    # по исходнику, без Python), и второй похожий литерал в файле сбил бы разбор.
+    fake_decisions = (
+        {
+            "task": "self-test",
+            "stage": 3,
+            "source": "src",
+            "targets": ("a", "b"),
+            "kind": "process",
+            "why": "самопроверка",
+        },
+    )
+    reports = [SlideReport(slide_no=n + 3) for n in range(4)]
+    stages = _stage_fixture()
+    apply_owner_decision_edges(stages, reports, fake_decisions)
+    edge_ids = [e["id"] for e in stages[0]["edges"]]
+    check(edge_ids == ["e-src--a", "e-src--b"], f"недостающее ребро не добавлено: {edge_ids}")
+    check(len(reports[2].owner_edges) == 2, "в отчёт попали не все концы решения")
+    check(
+        any("уже есть в презентации" in item for item in reports[2].owner_edges),
+        "совпавшее со слайдом ребро не отмечено как пришедшее из презентации",
+    )
+    check(
+        any("ДОБАВЛЕНО" in item for item in reports[2].owner_edges),
+        "добавленное ребро не отмечено как решение владельца",
+    )
+
+    # Повтор ничего не дублирует: id ребра — функция концов.
+    apply_owner_decision_edges(stages, [SlideReport(slide_no=n + 3) for n in range(4)], fake_decisions)
+    check(
+        [e["id"] for e in stages[0]["edges"]] == edge_ids,
+        "повторное применение решения продублировало рёбра",
+    )
+
+    # Исчезнувший узел — остановка импорта, а не тихий пропуск.
+    broken = _stage_fixture()
+    broken[0]["nodes"] = [{"id": "src"}, {"id": "a"}]
+    try:
+        apply_owner_decision_edges(
+            broken, [SlideReport(slide_no=n + 3) for n in range(4)], fake_decisions
+        )
+    except SystemExit as error:
+        check("b" in str(error), "в сообщении нет id пропавшего узла")
+    else:
+        check(False, "пропавший узел решения не остановил импорт")
+
+    # Объявление верхнего уровня разбирается тем же способом, что и в vitest:
+    # у каждого решения есть основание-задача и непустой список концов.
+    for decision in OWNER_DECISION_EDGES:
+        check(
+            decision["task"].startswith("process-map-"),
+            f"решение без задачи-основания: {decision['task']}",
+        )
+        check(bool(decision["targets"]), f"решение {decision['task']} без концов")
 
     # 2. Первый запуск: предыдущего файла нет.
     fresh = _fresh_fixture()

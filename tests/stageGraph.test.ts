@@ -209,7 +209,9 @@ describe('buildStageGraph', () => {
       expect(childrenOf(COLUMN_OUT_ID)).toHaveLength(counts.outputs);
 
       const byId = new Map(nodes.map((node) => [node.id, node]));
-      // Пустая колонка контейнера не получает (у этапов 1, 2 и 4 нет выходов).
+      // Пустая колонка контейнера не получает. После process-map-24p пустых
+      // колонок в реальных данных нет — ветка остаётся для документов, где
+      // одна из колонок действительно пуста.
       expect(byId.has(COLUMN_IN_ID)).toBe(split.inputs.length > 0);
       expect(byId.has(COLUMN_OUT_ID)).toBe(split.outputs.length > 0);
 
@@ -272,9 +274,14 @@ describe('buildStageGraph', () => {
     expect(backward).toBe(1);
   });
 
-  // Осознанное состояние данных, а не баг: в презентации у группы
-  // «Публикация планов» связей нет (задача process-map-7bz).
-  it('этап 3: узлы группы publikaciya-planov без рёбер всё равно попадают на полотно', () => {
+  // Решение владельца процесса (задача process-map-7bz): все четыре узла
+  // группы «Публикация планов» связаны с «Расчёт Ограниченных Планов».
+  // В презентации нарисована лишь одна из этих стрелок — остальные три
+  // объявлены в scripts/import-pptx.py::OWNER_DECISION_EDGES, и переживают
+  // перегенерацию именно поэтому. Тест сторожит результат: если объявление
+  // потеряется, следующий `npm run data` вернёт изолированные узлы, и это
+  // должно быть видно тестом, а не глазами на экране.
+  it('этап 3: все узлы группы publikaciya-planov связаны с расчётом ограниченных планов', () => {
     const stage = map.stages.find((candidate) => candidate.number === 3);
     expect(stage).toBeDefined();
     if (stage === undefined) {
@@ -282,14 +289,22 @@ describe('buildStageGraph', () => {
     }
     const { nodes, edges } = buildStageGraph(stage);
     const ids = new Set(nodes.map((node) => node.id));
-    const endpoints = new Set(edges.flatMap((edge) => [edge.source, edge.target]));
 
-    const orphans = stage.nodes.filter(
-      (node) => node.group === 'publikaciya-planov' && !endpoints.has(node.id),
-    );
-    expect(orphans.length).toBeGreaterThan(0);
-    for (const node of orphans) {
-      expect(ids.has(node.id)).toBe(true);
+    const group = stage.nodes.filter((node) => node.group === 'publikaciya-planov');
+    expect(group.map((node) => node.id).sort()).toEqual([
+      'peredacha-ogranichennogo-prognoza-v-dp',
+      'publikaciya-planovyh-zakazov',
+      'publikaciya-zayavok-na-peremeschenie',
+      'publikaciya-zayavok-na-zakupku',
+    ]);
+
+    for (const node of group) {
+      expect(ids.has(node.id), `${node.id} не попал на полотно`).toBe(true);
+      const incoming = edges.filter((edge) => edge.target === node.id);
+      expect(
+        incoming.map((edge) => edge.source),
+        `${node.id}: входящие рёбра`,
+      ).toEqual(['raschet-ogranichennyh-planov']);
     }
     expect(ids.has(groupContainerId('publikaciya-planov'))).toBe(true);
   });

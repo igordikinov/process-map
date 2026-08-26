@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { ProcessMapSchema, validateIntegrity, type Stage } from '../src/data/schema.ts';
+import {
+  ProcessMapSchema,
+  validateIntegrity,
+  type ProcessNode,
+  type Stage,
+} from '../src/data/schema.ts';
 import {
   NODE_SIZE,
   countOverlappingPairs,
@@ -205,25 +210,43 @@ describe('конвейер данных: slidePosition как исходная �
     }
   });
 
-  it('колонки, выбранные раскладкой, совпадают с тем, как их видит приложение', () => {
-    // Раскладка делит data-узлы по геометрии слайда, а StageDetail и счётчик в
-    // Breadcrumbs — по записанному position. Обе классификации обязаны
-    // совпадать, иначе узел, положенный в колонку входов, показывался бы в
-    // выходах. Это и есть условие, при котором сдвиг сида безопасен.
+  it('колонки не зависят от координат: ни от слайдовых, ни от расставленных раскладкой', () => {
+    // Раскладка (scripts/layout.ts) и приложение (StageDetail, счётчик в
+    // Breadcrumbs) зовут один и тот же splitStageDataNodes, но с РАЗНЫМИ
+    // координатами: раскладка сидируется slidePosition, приложение читает
+    // position, который она же и перезаписывает. Раньше это было опасное место
+    // — правило было геометрическим, и расхождение двух геометрий положило бы
+    // узел в одну колонку, а показало в другой.
+    //
+    // После process-map-24p колонку задаёт node.direction, и обе классификации
+    // обязаны совпадать УЖЕ НЕ ПО СОВПАДЕНИЮ ГЕОМЕТРИЙ, а потому, что координат
+    // не читают вовсе. Поэтому сравниваем не «слайд против position», а три
+    // варианта, включая заведомо абсурдный: если хоть один разойдётся, значит
+    // геометрия всё-таки влияет.
     for (const stage of map.stages) {
-      const bySlide = splitStageDataNodes({
+      const withPositions = (map_: (node: ProcessNode) => { x: number; y: number }): Stage => ({
         ...stage,
-        nodes: stage.nodes.map((node) => ({ ...node, position: slidePositionOf(node) })),
+        nodes: stage.nodes.map((node) => ({ ...node, position: map_(node) })),
       });
+      const bySlide = splitStageDataNodes(withPositions(slidePositionOf));
       const byPosition = splitStageDataNodes(stage);
-      expect(
-        byPosition.inputs.map((node) => node.id).sort(),
-        `этап ${stage.number}: входы`,
-      ).toEqual(bySlide.inputs.map((node) => node.id).sort());
-      expect(
-        byPosition.outputs.map((node) => node.id).sort(),
-        `этап ${stage.number}: выходы`,
-      ).toEqual(bySlide.outputs.map((node) => node.id).sort());
+      // Все узлы в одной точке: геометрическое правило здесь дало бы одну
+      // колонку на всех (midpoint совпал бы с x каждого узла).
+      const byNothing = splitStageDataNodes(withPositions(() => ({ x: 0, y: 0 })));
+
+      for (const [name, split] of [
+        ['слайдовые координаты', bySlide],
+        ['вырожденные координаты', byNothing],
+      ] as const) {
+        expect(split.inputs.map((node) => node.id), `этап ${stage.number}: входы, ${name}`).toEqual(
+          byPosition.inputs.map((node) => node.id),
+        );
+        expect(
+          split.outputs.map((node) => node.id),
+          `этап ${stage.number}: выходы, ${name}`,
+        ).toEqual(byPosition.outputs.map((node) => node.id));
+      }
+      expect(byPosition.outputs.length, `этап ${stage.number}: выходы не пусты`).toBeGreaterThan(0);
     }
   });
 });
