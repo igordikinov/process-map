@@ -1,0 +1,32 @@
+# Окончания строк.
+#
+# ЗАЧЕМ. В репозитории core.autocrlf=true, и без этого файла `git checkout`
+# записывал src/data/process.json с CRLF. Это ломает инвариант, на котором
+# держится передача ссылок на экраны из браузера в репозиторий: экспорт из
+# приложения (src/utils/processTransfer.ts::serializeProcessMap) и импортёр
+# (scripts/import-pptx.py::write_json) пишут LF, и выгруженный файл кладётся
+# поверх src/data/process.json без правок руками — но только пока файл в
+# рабочем дереве тоже с LF. Подробности — docs/ссылки-на-экраны.md.
+#
+# Побочный эффект: пропадает предупреждение «LF will be replaced by CRLF»,
+# которое git печатал на каждый add.
+
+* text=auto eol=lf
+
+# Скрипты, которые запускаются напрямую: CRLF ломает шебанг.
+*.sh          text eol=lf
+*.py          text eol=lf
+.beads/hooks/* text eol=lf
+
+# Двоичное — не трогать. Презентация это источник истины по содержанию
+# процесса (SPEC §3), нормализация испортила бы её молча.
+*.pptx        binary
+*.woff        binary
+*.woff2       binary
+*.png         binary
+*.jpg         binary
+*.ico         binary
+
+# Отчёт Playwright и прочие артефакты прогонов в репозиторий не попадают
+# (см. .gitignore), но если попадут — не нормализовать.
+*.zip         binary
