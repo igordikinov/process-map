@@ -62,6 +62,7 @@ npm run check        # tsc + eslint + vitest
 npm run e2e          # playwright
 npm run build        # dist/
 npm run layout       # пересчитать стартовые координаты (dagre) → process.json
+npm run data         # весь конвейер данных: import-pptx.py → layout.ts (README «Данные»)
 ```
 
 ## Чего не делать
