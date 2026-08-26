@@ -20,6 +20,19 @@ declare module 'node:module' {
   export function createRequire(url: string | URL): (id: string) => unknown;
 }
 
+declare module 'node:child_process' {
+  /** Ровно то, что читает scripts/data.ts: код возврата и ошибка запуска. */
+  export interface SpawnSyncResult {
+    status: number | null;
+    error?: Error & { code?: string };
+  }
+  export function spawnSync(
+    command: string,
+    args: readonly string[],
+    options?: { stdio?: 'inherit' },
+  ): SpawnSyncResult;
+}
+
 declare module 'node:path' {
   export function resolve(...paths: string[]): string;
 }
@@ -31,6 +44,8 @@ declare module 'node:url' {
 declare const process: {
   argv: string[];
   exitCode: number;
+  /** Переменные окружения: scripts/data.ts читает PYTHON. */
+  env: Record<string, string | undefined>;
   /** Корень прогона: под vitest+jsdom import.meta.url не file:-URL. */
   cwd(): string;
 };

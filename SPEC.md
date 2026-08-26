@@ -54,8 +54,9 @@ process-map/
     utils/url.ts            # валидация, открытие ссылки
     i18n/ru.ts              # все строки UI
   scripts/
-    import-pptx.py          # pptx → process.json (одноразово)
-    layout.ts               # dagre → координаты
+    import-pptx.py          # pptx → process.json: содержание + геометрия слайда
+    layout.ts               # dagre → координаты (position)
+    data.ts                 # весь конвейер одной командой: npm run data
   tests/  e2e/
 ```
 
@@ -81,7 +82,8 @@ interface ProcessNode {
   system?: SystemCode;
   owner?: string;
   screen?: ScreenLink;
-  position: { x: number; y: number };
+  position: { x: number; y: number };        // что показывает приложение (считает layout.ts)
+  slidePosition?: { x: number; y: number };  // исходная геометрия слайда (пишет import-pptx.py)
 }
 
 interface Group { id: string; label: string; }
@@ -117,6 +119,17 @@ interface ProcessMap {
 ```
 
 Правила: `id` стабильны (по ним работают deep-link и localStorage); `position` обязателен; JSON проходит `schema.parse()` в тесте `tests/data.test.ts`, который также проверяет, что число узлов ≥ 40 и все `edge.source/target` существуют.
+
+### Конвейер данных: `npm run data`
+
+`process.json` собирается двумя шагами, и порядок между ними обязателен:
+
+1. `scripts/import-pptx.py` — содержание из презентации; в `position` кладётся **сырая геометрия слайда** (на ней карточки накладываются), её копия — в `slidePosition`;
+2. `scripts/layout.ts` (`npm run layout`) — dagre считает по `slidePosition` пригодные координаты и перезаписывает **только** `position`.
+
+Обе половины склеены в одну команду `npm run data`, чтобы порядок не приходилось помнить (`process-map-3b9`). Незавершённый конвейер виден в `npm run check`: `tests/layout.test.ts` сверяет координаты файла с пересчётом.
+
+`slidePosition` — служебное поле: в UI не используется, задаёт вход раскладки. Раскладка обязана сидироваться им, а не `position`, который сама же перезаписывает, — иначе после первого прогона она опирается на собственный прошлый результат, а геометрия презентации теряется навсегда (`process-map-cxn`). Поле необязательное: документ без него валиден, раскладка на нём откатывается на `position` и печатает предупреждение. Из `position` же (а не из `slidePosition`) приложение определяет колонки входов/выходов — `src/utils/stageNodes.ts`, единственный источник правила; обе классификации совпадают, это проверяется тестом.
 
 ### Overrides (localStorage)
 
@@ -186,6 +199,7 @@ interface ProcessMap {
 ## 7. Тестирование
 
 - `tests/data.test.ts` — схема, целостность рёбер, полнота (список обязательных id шагов из презентации в `tests/fixtures/required-nodes.json`).
+- `tests/layout.test.ts` — раскладка: узлы не пересекаются, колонки по краям, и конвейер данных (§3): координаты файла = пересчёт по `slidePosition`, сид не зависит от `position`.
 - `tests/url.test.ts` — валидация и `openScreen`.
 - `tests/loader.test.ts` — merge overrides, импорт/экспорт round-trip.
 - `e2e/`: обзор → этап 2 → шаг → Drawer → «Открыть в модуле» (перехват `window.open`); редактор: сохранить ссылку, перезагрузить, ссылка на месте; компактный режим при viewport 1024×600.

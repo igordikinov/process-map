@@ -12,6 +12,22 @@ import-pptx.py — перенос содержимого «SNP Е2Е проце�
 при коллизии базового slug'а суффикс берётся из «номер слайда + shape_id»
 (двухфазная генерация, см. IdFactory).
 
+ЭТО ПЕРВАЯ ПОЛОВИНА КОНВЕЙЕРА
+-----------------------------
+Импорт кладёт в `position` СЫРУЮ геометрию слайда, на которой карточки
+накладываются друг на друга (десятки пересекающихся пар). Пригодные к показу
+координаты считает вторая половина — `npm run layout` (scripts/layout.ts,
+dagre). Порядок обязателен и обратного не имеет.
+
+Чтобы этот порядок не приходилось помнить, есть одна команда:
+
+    npm run data          # import-pptx.py → layout.ts
+
+Исходная геометрия слайда при этом не теряется: она пишется ещё и в
+`node.slidePosition` (SPEC §3), и раскладка сидируется именно ею, а не своим
+прошлым результатом. Если прогнать только импорт и закоммитить, `npm run check`
+покраснеет: tests/layout.test.ts сверяет координаты файла с пересчётом.
+
 Структура презентации (проверено на файле «SNP Е2Е процесс.pptx»):
   слайд 1 — титул, данных нет;
   слайд 2 — обзор уровня 1 (контейнеры этапов, боксы групп, боксы внешних систем,
@@ -115,6 +131,7 @@ NODE_KEY_ORDER = (
     "owner",
     "screen",
     "position",
+    "slidePosition",
 )
 STAGE_KEY_ORDER = (
     "id",
@@ -964,10 +981,17 @@ def serialize_node(draft: NodeDraft) -> dict:
         node["outputs"] = draft.outputs
     if draft.system:
         node["system"] = draft.system
-    node["position"] = {
+    slide_position = {
         "x": round(draft.box.left / EMU_PER_PX),
         "y": round(draft.box.top / EMU_PER_PX),
     }
+    # position — то, что покажет приложение; его перезапишет `npm run layout`.
+    # slidePosition — та же геометрия слайда, но НАВСЕГДА: раскладка сидируется
+    # ею, а не собственным прошлым результатом (SPEC §3, задача process-map-cxn).
+    # Два разных словаря, а не один и тот же объект: иначе правка одного поля
+    # молча меняла бы второе.
+    node["position"] = dict(slide_position)
+    node["slidePosition"] = slide_position
     return node
 
 
@@ -1618,6 +1642,40 @@ def print_carry_over(report: CarryOverReport) -> None:
         print("  потерянных ручных полей нет")
 
 
+def print_layout_required(process_map: dict, in_pipeline: bool) -> None:
+    """
+    Импорт — ПЕРВАЯ половина конвейера. Требование прогнать раскладку печатается
+    последним блоком (его видно, даже если отчёт-сверку пролистали) и говорит,
+    что именно сейчас лежит в файле, а не просто «не забудьте».
+
+    `in_pipeline` — скрипт запущен из scripts/data.ts, раскладка стартует сразу
+    после: пугать нечем, но сказать, что файл ещё сырой, всё равно надо.
+    """
+    nodes = sum(len(stage["nodes"]) for stage in process_map["stages"])
+    without_slide = sum(
+        1
+        for stage in process_map["stages"]
+        for node in stage["nodes"]
+        if "slidePosition" not in node
+    )
+    print("\n" + "=" * 78)
+    if in_pipeline:
+        print("ШАГ 1 ИЗ 2 ГОТОВ — ДАЛЬШЕ РАСКЛАДКА (scripts/layout.ts, запускается сейчас)")
+    else:
+        print("КОНВЕЙЕР НЕ ЗАВЕРШЁН — ОБЯЗАТЕЛЬНО: npm run layout")
+    print("=" * 78)
+    print(f"  узлов: {nodes}; в position сейчас СЫРАЯ геометрия слайда — карточки")
+    print("  на ней накладываются друг на друга и показывать её нельзя;")
+    print("  пригодные координаты считает scripts/layout.ts (dagre).")
+    print("  исходная геометрия сохранена в node.slidePosition, раскладка сидируется ею")
+    if without_slide:
+        print(f"  ВНИМАНИЕ: узлов без slidePosition: {without_slide} — это ошибка импортёра")
+    if not in_pipeline:
+        print("\n  одной командой:   npm run data     (import-pptx.py → layout.ts)")
+        print("  сторож в тестах:  tests/layout.test.ts сверяет координаты с пересчётом,")
+        print("                    так что незавершённый конвейер делает npm run check красным")
+
+
 # --------------------------------------------------------------------------------------
 # Запись файлов
 # --------------------------------------------------------------------------------------
@@ -1777,6 +1835,20 @@ def run_self_test() -> int:
         "PRESERVED_NODE_FIELDS пересекается с IMPORTER_NODE_FIELDS",
     )
 
+    # 1b. Исходная геометрия слайда сохраняется отдельным полем и совпадает с
+    # position В МОМЕНТ ИМПОРТА (дальше position перезапишет npm run layout).
+    box = Box(2 * EMU_PER_PX, 3 * EMU_PER_PX, 10 * EMU_PER_PX, 10 * EMU_PER_PX)
+    laid = serialize_node(NodeDraft(node_id="y", node_type="step", label="L", box=box))
+    check("slidePosition" in laid, "serialize_node не пишет slidePosition")
+    check(
+        laid["slidePosition"] == {"x": 2, "y": 3},
+        f"slidePosition не равен геометрии слайда: {laid['slidePosition']}",
+    )
+    check(laid["position"] == laid["slidePosition"], "position при импорте ≠ slidePosition")
+    # Разные объекты: раскладка меняет position и не должна задеть slidePosition.
+    laid["position"]["x"] = 999
+    check(laid["slidePosition"]["x"] == 2, "position и slidePosition — один и тот же объект")
+
     # 2. Первый запуск: предыдущего файла нет.
     fresh = _fresh_fixture()
     empty = carry_over_manual_fields(fresh, None)
@@ -1855,6 +1927,10 @@ def main(argv: Iterable[str]) -> int:
     if "--self-test" in args:
         return run_self_test()
 
+    # --in-pipeline ставит scripts/data.ts (npm run data): раскладка стартует
+    # сразу после импорта, и требовать её отдельно уже не надо. На сам импорт
+    # флаг не влияет — только на текст финального блока.
+
     # Ручной слой читаем ДО сборки: если предыдущий файл битый, лучше упасть
     # раньше, чем после разбора презентации.
     previous = load_previous_map(JSON_PATH)
@@ -1872,6 +1948,7 @@ def main(argv: Iterable[str]) -> int:
     print_carry_over(carry_over)
     print(f"\nзаписано: {JSON_PATH.relative_to(ROOT).as_posix()}")
     print(f"записано: {REQUIRED_NODES_PATH.relative_to(ROOT).as_posix()}")
+    print_layout_required(process_map, "--in-pipeline" in args)
     if carry_over.lost:
         print(
             f"\nВНИМАНИЕ: потеряно ручных полей: {len(carry_over.lost)} "

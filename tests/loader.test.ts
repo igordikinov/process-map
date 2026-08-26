@@ -131,8 +131,11 @@ describe('экспорт: формат файла', () => {
     const text = serializeProcessMap(getMergedProcessMap());
     const node = (JSON.parse(text) as ProcessMap).stages[0]?.nodes[0];
 
-    // Порядок ключей схемы (src/data/schema.ts): … screen, position.
-    expect(Object.keys(node ?? {}).slice(-2)).toEqual(['screen', 'position']);
+    // Порядок ключей схемы (src/data/schema.ts): … screen, position, slidePosition.
+    // slidePosition — служебная геометрия слайда, её пишет scripts/import-pptx.py;
+    // в экспорте она обязана сохраниться и остаться на своём месте, иначе файл
+    // перестанет совпадать с src/data/process.json побайтово.
+    expect(Object.keys(node ?? {}).slice(-3)).toEqual(['screen', 'position', 'slidePosition']);
   });
 
   it('имя файла — process.json (SPEC §4.4)', () => {

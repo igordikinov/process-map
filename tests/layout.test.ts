@@ -4,9 +4,12 @@ import {
   NODE_SIZE,
   countOverlappingPairs,
   countStageOverlaps,
+  countWithoutSlidePosition,
   layoutStage,
   rectOf,
+  slidePositionOf,
 } from '../scripts/layout.ts';
+import { splitStageDataNodes } from '../src/utils/stageNodes.ts';
 import processJson from '../src/data/process.json';
 
 // Координаты в src/data/process.json расставляет `npm run layout`
@@ -100,7 +103,7 @@ describe('раскладка process.json', () => {
     }
   });
 
-  it('координаты в файле совпадают с пересчётом (npm run layout идемпотентен)', () => {
+  it('координаты в файле совпадают с пересчётом (конвейер доведён до конца)', () => {
     for (const stage of map.stages) {
       const first = layoutStage(stage);
       const second = layoutStage(stage);
@@ -108,7 +111,13 @@ describe('раскладка process.json', () => {
         const placement = first.get(node.id);
         expect(placement, `${node.id} не получил координат`).toBeDefined();
         expect(second.get(node.id)).toEqual(placement);
-        expect(placement).toEqual(node.position);
+        expect(
+          placement,
+          `${node.id}: координаты файла не совпадают с раскладкой по исходной геометрии слайда. ` +
+            'Похоже, прогнан только импорт (scripts/import-pptx.py) — в файле сырая ' +
+            'геометрия презентации, на которой карточки накладываются. ' +
+            'Конвейер целиком: npm run data',
+        ).toEqual(node.position);
       }
     }
   });
@@ -117,5 +126,104 @@ describe('раскладка process.json', () => {
     expect(validateIntegrity(map)).toEqual([]);
     const totalNodes = map.stages.reduce((sum, stage) => sum + stage.nodes.length, 0);
     expect(totalNodes).toBeGreaterThanOrEqual(40);
+  });
+});
+
+// Конвейер данных: import-pptx.py (геометрия слайда) → layout.ts (dagre).
+// Задачи process-map-3b9 (порядок шагов) и process-map-cxn (чем сидируется
+// раскладка). Проверяется не «раскладка красивая», а то, ОТКУДА она берёт вход:
+// из `slidePosition` — неизменяемой геометрии презентации, а не из `position`,
+// которое сама же и перезаписывает.
+describe('конвейер данных: slidePosition как исходная геометрия', () => {
+  it('исходная геометрия слайда сохранена у всех узлов', () => {
+    for (const stage of map.stages) {
+      expect(
+        countWithoutSlidePosition(stage),
+        `этап ${stage.number}: узлы без slidePosition — геометрия презентации потеряна, ` +
+          'перегенерируйте данные: npm run data',
+      ).toBe(0);
+    }
+  });
+
+  it('slidePosition отличается от position: position уже пересчитан dagre', () => {
+    // Если бы `npm run layout` не отработал, position совпадал бы со слайдом
+    // у ВСЕХ узлов — то есть файл остался бы на сырой геометрии.
+    // Читается ИМЕННО поле файла, а не slidePositionOf: проверяется состояние
+    // данных, а не поведение скрипта (иначе тест ловил бы фолбэк вместо
+    // незавершённого конвейера).
+    const moved = map.stages
+      .flatMap((stage) => stage.nodes)
+      .filter(
+        (node) =>
+          node.slidePosition !== undefined &&
+          (node.slidePosition.x !== node.position.x || node.slidePosition.y !== node.position.y),
+      );
+    expect(moved.length, 'ни один узел не сдвинут — раскладка не прогонялась').toBeGreaterThan(0);
+  });
+
+  it('раскладка сидируется slidePosition, а не текущим position', () => {
+    // Мутация: position каждого узла заменяется на зеркальный и смещённый —
+    // на таком входе прежняя (сидированная position) раскладка дала бы другой
+    // порядок ранга́ и другое деление data-узлов на входы/выходы.
+    for (const stage of map.stages) {
+      const mutated: Stage = {
+        ...stage,
+        nodes: stage.nodes.map((node) => ({
+          ...node,
+          position: { x: -node.position.x, y: 10_000 - node.position.y },
+        })),
+      };
+      const expected = layoutStage(stage);
+      const actual = layoutStage(mutated);
+      for (const node of stage.nodes) {
+        expect(
+          actual.get(node.id),
+          `этап ${stage.number}, узел ${node.id}: раскладка зависит от position`,
+        ).toEqual(expected.get(node.id));
+      }
+    }
+  });
+
+  it('без slidePosition раскладка откатывается на position (старые документы)', () => {
+    // Совместимость: карта, собранная до появления поля (или пришедшая
+    // экспортом из приложения стороннего инструмента), раскладывается как
+    // раньше — по position.
+    for (const stage of map.stages) {
+      const legacy: Stage = {
+        ...stage,
+        nodes: stage.nodes.map((node) => {
+          const legacyNode = { ...node, position: slidePositionOf(node) };
+          delete legacyNode.slidePosition;
+          return legacyNode;
+        }),
+      };
+      expect(countWithoutSlidePosition(legacy)).toBe(stage.nodes.length);
+      const expected = layoutStage(stage);
+      for (const node of stage.nodes) {
+        expect(layoutStage(legacy).get(node.id), `${node.id}`).toEqual(expected.get(node.id));
+      }
+    }
+  });
+
+  it('колонки, выбранные раскладкой, совпадают с тем, как их видит приложение', () => {
+    // Раскладка делит data-узлы по геометрии слайда, а StageDetail и счётчик в
+    // Breadcrumbs — по записанному position. Обе классификации обязаны
+    // совпадать, иначе узел, положенный в колонку входов, показывался бы в
+    // выходах. Это и есть условие, при котором сдвиг сида безопасен.
+    for (const stage of map.stages) {
+      const bySlide = splitStageDataNodes({
+        ...stage,
+        nodes: stage.nodes.map((node) => ({ ...node, position: slidePositionOf(node) })),
+      });
+      const byPosition = splitStageDataNodes(stage);
+      expect(
+        byPosition.inputs.map((node) => node.id).sort(),
+        `этап ${stage.number}: входы`,
+      ).toEqual(bySlide.inputs.map((node) => node.id).sort());
+      expect(
+        byPosition.outputs.map((node) => node.id).sort(),
+        `этап ${stage.number}: выходы`,
+      ).toEqual(bySlide.outputs.map((node) => node.id).sort());
+    }
   });
 });

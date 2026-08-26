@@ -58,6 +58,35 @@ describe('ProcessMapSchema', () => {
     expect(() => ProcessMapSchema.parse(map)).toThrow();
   });
 
+  it('принимает узел без slidePosition: поле необязательное', () => {
+    // Совместимость: файлы, собранные до появления поля, и экспорт стороннего
+    // инструмента остаются валидными (SPEC §3).
+    const map = buildSampleProcessMap();
+    const node = map.stages[0]?.nodes[0];
+    expect(node).toBeTruthy();
+    expect(node!.slidePosition).toBeUndefined();
+    expect(() => ProcessMapSchema.parse(map)).not.toThrow();
+  });
+
+  it('отвергает slidePosition неверной формы', () => {
+    const map = buildSampleProcessMap();
+    const node = map.stages[0]?.nodes[0];
+    expect(node).toBeTruthy();
+    node!.slidePosition = { x: 1, y: 'верх' } as unknown as { x: number; y: number };
+    expect(() => ProcessMapSchema.parse(map)).toThrow();
+  });
+
+  it('сохраняет slidePosition при разборе: поле не вычищается схемой', () => {
+    // Если бы zod его отбрасывал, экспорт из приложения перестал бы совпадать с
+    // src/data/process.json побайтово (см. tests/loader.test.ts).
+    const map = buildSampleProcessMap();
+    const node = map.stages[0]?.nodes[0];
+    expect(node).toBeTruthy();
+    node!.slidePosition = { x: 12, y: 34 };
+    const parsed = ProcessMapSchema.parse(map);
+    expect(parsed.stages[0]?.nodes[0]?.slidePosition).toEqual({ x: 12, y: 34 });
+  });
+
   it('отвергает keyOutputs из более чем 3 элементов', () => {
     const map = buildSampleProcessMap();
     const stage = map.stages[0];

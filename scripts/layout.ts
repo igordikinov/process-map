@@ -3,7 +3,21 @@
 //
 // Запуск (из корня репозитория):
 //
-//     npm run layout
+//     npm run layout       # только раскладка
+//     npm run data         # весь конвейер: import-pptx.py → layout.ts
+//
+// ЭТО ВТОРАЯ ПОЛОВИНА КОНВЕЙЕРА. Первая — scripts/import-pptx.py: она кладёт в
+// `position` сырую геометрию слайда, на которой карточки накладываются. Порядок
+// «импорт → раскладка» обязателен, поэтому обе половины склеены в `npm run data`.
+//
+// ЧЕМ СИДИРУЕТСЯ РАСКЛАДКА (задача process-map-cxn). Исходный порядок узлов и
+// деление data-узлов на колонки входов/выходов берутся из `node.slidePosition` —
+// геометрии слайда, которую пишет импортёр и которую этот скрипт НЕ трогает.
+// Раньше сидировался `position` — то самое поле, которое скрипт перезаписывает,
+// то есть после первого прогона раскладка опиралась на результат собственной
+// прошлой работы, а геометрия презентации была потеряна. Если slidePosition в
+// файле нет (старый файл, экспорт из стороннего инструмента), скрипт
+// откатывается на `position` и печатает об этом предупреждение.
 //
 // Скрипт меняет в JSON ТОЛЬКО поле position у узлов: содержание (id, label,
 // рёбра, группы, типы) берётся из презентации и здесь не трогается.
@@ -171,13 +185,47 @@ export interface Placement {
 // этот файл тянет @dagrejs/dagre, а SPEC §1 требует держать dagre вне
 // рантайм-бандла.
 
+/**
+ * Исходная геометрия узла — координаты фигуры на слайде презентации.
+ *
+ * Это ЕДИНСТВЕННЫЙ вход раскладки по геометрии. `position` здесь — запасной
+ * вариант для документов, собранных до появления slidePosition: раскладка на
+ * них работает как раньше (сидируется собственным прошлым результатом), и
+ * скрипт об этом предупреждает — см. countWithoutSlidePosition.
+ */
+export function slidePositionOf(node: ProcessNode): { x: number; y: number } {
+  return node.slidePosition ?? node.position;
+}
+
+/** Число узлов, потерявших исходную геометрию слайда (нужно только для отчёта). */
+export function countWithoutSlidePosition(stage: Stage): number {
+  return stage.nodes.filter((node) => node.slidePosition === undefined).length;
+}
+
+/**
+ * Копия этапа, у которой `position` = исходная геометрия слайда.
+ *
+ * Нужна, чтобы отдать этап в splitStageDataNodes (src/utils/stageNodes.ts) —
+ * единственный источник правила «левее середины — вход» — не заводя второй
+ * копии правила и не добавляя в него параметр ради одного вызова из скрипта.
+ * Всё остальное (id, тип, группа) копируется как есть.
+ */
+function seedStage(stage: Stage): Stage {
+  return {
+    ...stage,
+    nodes: stage.nodes.map((node) => ({ ...node, position: slidePositionOf(node) })),
+  };
+}
+
 /** Порядок узлов внутри ранга сидируется исходной геометрией слайда: сверху вниз, слева направо. */
 function bySlideOrder(a: ProcessNode, b: ProcessNode): number {
-  if (a.position.y !== b.position.y) {
-    return a.position.y - b.position.y;
+  const first = slidePositionOf(a);
+  const second = slidePositionOf(b);
+  if (first.y !== second.y) {
+    return first.y - second.y;
   }
-  if (a.position.x !== b.position.x) {
-    return a.position.x - b.position.x;
+  if (first.x !== second.x) {
+    return first.x - second.x;
   }
   return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
 }
@@ -275,7 +323,12 @@ export function layoutStage(stage: Stage): Map<string, Placement> {
   });
   const flowBounds = boundsOf(flowRects);
 
-  const { inputs, outputs } = splitDataNodes(stage);
+  // Деление на колонки считается по геометрии СЛАЙДА, а не по текущим
+  // координатам файла: иначе после первого прогона решение принималось бы по
+  // результату этого же прогона (data-узел, положенный в левую колонку,
+  // навсегда оставался бы входом). Правило — общее с приложением,
+  // src/utils/stageNodes.ts.
+  const { inputs, outputs } = splitDataNodes(seedStage(stage));
   const sortedInputs = [...inputs].sort(bySlideOrder);
   const sortedOutputs = [...outputs].sort(bySlideOrder);
 
@@ -405,7 +458,13 @@ function serialize(map: ProcessMap): string {
   return `${JSON.stringify(map, null, 2)}\n`;
 }
 
-function main(): number {
+/**
+ * Полный прогон раскладки: читает src/data/process.json, пересчитывает
+ * координаты, печатает отчёт и записывает файл. Экспортируется ради
+ * scripts/data.ts (конвейер `npm run data`), который вызывает её в том же
+ * процессе после импорта.
+ */
+export function runLayout(): number {
   const path = jsonPath();
   const original = readFileSync(path, 'utf8');
   const raw = JSON.parse(original) as ProcessMap;
@@ -450,6 +509,14 @@ function main(): number {
     lines.push(
       `  пересечений узлов:    ${countOverlappingPairs(rects)} (было ${wasOverlaps})`,
     );
+    const orphans = countWithoutSlidePosition(stage);
+    if (orphans > 0) {
+      lines.push(
+        `  БЕЗ slidePosition:    ${orphans} — исходная геометрия слайда утрачена,` +
+          ` раскладка сидирована собственным прошлым результатом;` +
+          ` восстанавливается перегенерацией: npm run data`,
+      );
+    }
   }
 
   const overview = layoutOverview(raw);
@@ -498,5 +565,5 @@ function isDirectRun(): boolean {
 }
 
 if (isDirectRun()) {
-  process.exitCode = main();
+  process.exitCode = runLayout();
 }

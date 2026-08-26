@@ -10,7 +10,8 @@
     "check": "tsc --noEmit && eslint . && vitest run",
     "test": "vitest run",
     "e2e": "playwright test --pass-with-no-tests",
-    "layout": "node --experimental-strip-types scripts/layout.ts"
+    "layout": "node --experimental-strip-types scripts/layout.ts",
+    "data": "node --experimental-strip-types scripts/data.ts"
   },
   "dependencies": {
     "@fontsource/open-sans": "^5.3.0",
