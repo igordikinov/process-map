@@ -17,6 +17,7 @@ import {
 } from '../src/components/Overview/overviewGraph';
 import { StageCard } from '../src/components/nodes/StageNode/StageCard';
 import { loadBaseProcessMap } from '../src/data/loader';
+import { formatIsoDate } from '../src/utils/format';
 import type { Stage } from '../src/data/schema';
 import { ru } from '../src/i18n/ru';
 import { createInitialState, useProcessStore } from '../src/store/useProcessStore';
@@ -47,7 +48,13 @@ describe('OverviewHeader', () => {
 
     expect(screen.getByRole('heading', { name: map.title })).toBeInTheDocument();
     expect(screen.getByText('4 этапа')).toBeInTheDocument();
-    expect(screen.getByText('Обновлено 24.08.2026')).toBeInTheDocument();
+    // Значение из данных, а не литерал: раньше здесь стояло «Обновлено
+    // 24.08.2026», и тест ломался бы при любом обновлении карты. Само
+    // форматирование сторожит tests/format.test.ts — без него эта правка была
+    // бы потерей покрытия: formatIsoDate больше ничем не закреплён.
+    expect(
+      screen.getByText(ru.overview.updatedAt(formatIsoDate(map.updatedAt))),
+    ).toBeInTheDocument();
   });
 
   // App больше не рендерит <h1>{ru.appTitle}</h1> (его место занял заголовок из

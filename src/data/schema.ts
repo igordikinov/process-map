@@ -124,7 +124,11 @@ export type Stage = z.infer<typeof StageSchema>;
 
 export const ProcessMapSchema = z.object({
   version: z.string(),
-  updatedAt: z.string(),
+  // Формат закреплён (process-map-vjz.10): формально это строка, но шапка
+  // обзора гонит её через formatIsoDate, а тот при непопадании в ISO отдаёт
+  // вход как есть — то есть пустое значение или «вчера» уехали бы на экран
+  // сырьём. Экспорт всегда пишет date-only, поэтому времени в шаблоне нет.
+  updatedAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   title: z.string(),
   stages: z.array(StageSchema),
   overviewEdges: z.array(EdgeSchema),
