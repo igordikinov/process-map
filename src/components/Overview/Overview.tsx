@@ -130,7 +130,7 @@ export function Overview() {
           {/* Тот же fitViewOptions, что и автозапуск fitView выше (SPEC §4.6):
               на уровне 1 пола читаемости нет, кнопка «Уместить в экран» просто
               повторяет исходный вид. */}
-          <Toolbar fitViewOptions={fitViewOptions} />
+          <Toolbar fitViewOptions={fitViewOptions} compact={compact} />
         </ReactFlowProvider>
       </div>
       {/* Легенда — строка ПОД полотном, не поверх него: см. обоснование в

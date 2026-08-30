@@ -647,4 +647,19 @@
   --pm-legend-height-compact: 32px;
   --pm-legend-gap-compact: 12px;
   --pm-legend-strip-height-compact: 44px;
+
+  /* Тулбар, свёрнутый по A4 (process-map-jcz). Toggle интеграций теряет
+     пилюлю и подпись и становится квадратом --pm-toolbar-control-size с
+     иконкой link.svg; зум-ячейки сужаются 32/44/32/32 → 30/40/30/30, иконки
+     14/14/15 → 13/13/14. Полоса тулбара: 510px → 345px при ширине фрейма
+     1024. Заведены отдельные токены, а не переиспользованы совпадающие по
+     числу (--pm-toolbar-fit-icon-size = 15px, --pm-node-icon-opacity = 0.55):
+     «иконка узла» в тулбаре — семантический мусор, и связывать эти числа
+     нечем. */
+  --pm-toolbar-toggle-icon-size: 15px;
+  --pm-toolbar-toggle-icon-opacity: 0.55;
+  --pm-toolbar-control-size-compact: 30px;
+  --pm-toolbar-zoom-display-width-compact: 40px;
+  --pm-toolbar-icon-size-compact: 13px;
+  --pm-toolbar-fit-icon-size-compact: 14px;
 }

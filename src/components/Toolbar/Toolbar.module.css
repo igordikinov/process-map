@@ -204,3 +204,45 @@
   color: var(--scp-color-neutral-700);
   font-size: var(--scp-font-sizes-12);
 }
+
+/* Компактный режим — SPEC §4.5, артборд A4 (process-map-jcz).
+   Toggle теряет пилюлю и подпись и становится квадратом с иконкой link.svg;
+   зум-ячейки сужаются. Полоса тулбара: 510px → 345px при ширине 1024. */
+.toggleCompact {
+  width: var(--pm-toolbar-control-size);
+  justify-content: center;
+  padding: 0;
+}
+
+/* Единственный видимый признак состояния после того, как трек убран: у
+   ассистивной техники его несёт aria-checked, у глаза — фон. Оттенок и рамка
+   те же, что у активного сегмента «Просмотр / Редактор» выше в этом файле:
+   в артборде A4 выключенное состояние не нарисовано, и новый цвет не заводится. */
+.toggleCompact[aria-checked='true'] {
+  border-color: var(--scp-accent-primary);
+  background: var(--scp-background-action-brand-tertiary-active);
+}
+
+.toggleIcon {
+  width: var(--pm-toolbar-toggle-icon-size);
+  height: var(--pm-toolbar-toggle-icon-size);
+  opacity: var(--pm-toolbar-toggle-icon-opacity);
+}
+
+.compact .zoomButton {
+  width: var(--pm-toolbar-control-size-compact);
+}
+
+.compact .zoomDisplay {
+  width: var(--pm-toolbar-zoom-display-width-compact);
+}
+
+.compact .zoomIcon {
+  width: var(--pm-toolbar-icon-size-compact);
+  height: var(--pm-toolbar-icon-size-compact);
+}
+
+.compact .zoomIconFit {
+  width: var(--pm-toolbar-fit-icon-size-compact);
+  height: var(--pm-toolbar-fit-icon-size-compact);
+}

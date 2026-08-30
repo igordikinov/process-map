@@ -150,7 +150,11 @@ export function StageDetail() {
               в stageGraph.ts. */}
           {/* drawerOpen: панель шириной 360 накрывает правый верхний угол
               полотна вместе со всем тулбаром — см. .shifted в Toolbar.module.css. */}
-          <Toolbar fitViewOptions={TOOLBAR_FIT_VIEW_OPTIONS} drawerOpen={drawerOpen} />
+          <Toolbar
+            fitViewOptions={TOOLBAR_FIT_VIEW_OPTIONS}
+            drawerOpen={drawerOpen}
+            compact={compact}
+          />
         </ReactFlowProvider>
         {/* Боковая панель узла — внутри .canvas, чтобы затемнение начиналось
             под шапкой крошек, как в артборде A3 (SPEC §4.3). */}

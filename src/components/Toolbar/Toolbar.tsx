@@ -27,6 +27,7 @@ import styles from './Toolbar.module.css';
 const MINUS_ICON = iconUrl('minus');
 const PLUS_ICON = iconUrl('plus');
 const FIT_ICON = iconUrl('fit');
+const LINK_ICON = iconUrl('link');
 
 export interface ToolbarProps {
   /**
@@ -47,9 +48,16 @@ export interface ToolbarProps {
    * Уровень 1 панели не имеет и проп не передаёт.
    */
   drawerOpen?: boolean;
+  /**
+   * SPEC §4.5, артборд A4 (process-map-jcz): в низком фрейме toggle интеграций
+   * сворачивается в кнопку-иконку, а зум-ячейки сужаются. Подпись при этом не
+   * исчезает, а переезжает в aria-label — он и так был именем кнопки, поэтому
+   * доступное имя не меняется. Тот же приём, что у легенды (Legend.tsx).
+   */
+  compact?: boolean;
 }
 
-export function Toolbar({ fitViewOptions, drawerOpen = false }: ToolbarProps) {
+export function Toolbar({ fitViewOptions, drawerOpen = false, compact = false }: ToolbarProps) {
   const { zoomIn, zoomOut, fitView } = useReactFlow();
   const { zoom } = useViewport();
   const showIntegrations = useProcessStore((state) => state.showIntegrations);
@@ -58,7 +66,11 @@ export function Toolbar({ fitViewOptions, drawerOpen = false }: ToolbarProps) {
   const setMode = useProcessStore((state) => state.setMode);
 
   return (
-    <div className={drawerOpen ? `${styles.toolbar} ${styles.shifted}` : styles.toolbar}>
+    <div
+      className={`${styles.toolbar}${drawerOpen ? ` ${styles.shifted}` : ''}${
+        compact ? ` ${styles.compact}` : ''
+      }`}
+    >
       {/* Переключатель «Просмотр / Редактор» (SPEC §4.4). Значение живёт в
           store и НЕ персистится: при каждой загрузке — «Просмотр», иначе
           режим редактора «залипал» бы у читателя вики.
@@ -103,18 +115,31 @@ export function Toolbar({ fitViewOptions, drawerOpen = false }: ToolbarProps) {
           опасна. */}
       {mode === 'edit' && <EditorActions />}
 
+      {/* Роль, aria-checked, aria-label и onClick одинаковы в обоих видах —
+          меняется только содержимое. Это и позволяет свернуть кнопку, не
+          тронув ни один из существующих тестов: они ищут её как
+          getByRole('switch', { name: 'Показать интеграции' }). В компактном
+          виде подпись не прячется стилями, а не рендерится: скрытый DOM всё
+          равно читается скринридером. */}
       <button
         type="button"
         role="switch"
         aria-checked={showIntegrations}
         aria-label={ru.toolbar.showIntegrations}
-        className={styles.toggle}
+        className={compact ? `${styles.toggle} ${styles.toggleCompact}` : styles.toggle}
+        title={compact ? ru.toolbar.showIntegrations : undefined}
         onClick={toggleIntegrations}
       >
-        <span className={styles.switchTrack} aria-hidden="true">
-          <span className={styles.switchKnob} />
-        </span>
-        <span className={styles.toggleLabel}>{ru.toolbar.showIntegrations}</span>
+        {compact ? (
+          <img src={LINK_ICON} alt="" className={styles.toggleIcon} />
+        ) : (
+          <>
+            <span className={styles.switchTrack} aria-hidden="true">
+              <span className={styles.switchKnob} />
+            </span>
+            <span className={styles.toggleLabel}>{ru.toolbar.showIntegrations}</span>
+          </>
+        )}
       </button>
 
       <div className={styles.zoomGroup}>

@@ -15,7 +15,9 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { Breadcrumbs } from '../src/components/Breadcrumbs';
+import { ReactFlowProvider } from '@xyflow/react';
 import { Legend } from '../src/components/Legend';
+import { Toolbar } from '../src/components/Toolbar';
 import { OverviewHeader } from '../src/components/Overview/OverviewHeader';
 import {
   buildOverviewGraph,
@@ -439,5 +441,79 @@ describe('Legend: компактный режим сворачивает пан�
   it('обычный режим по-прежнему без интерактивных элементов', () => {
     const { container } = render(<Legend />);
     expect(container.querySelectorAll('button, a, [tabindex]')).toHaveLength(0);
+  });
+});
+
+// Тулбар в компактном режиме — SPEC §4.5, артборд A4 (process-map-jcz).
+//
+// Тесты живут здесь, а не в tests/toolbar.test.tsx, по образцу легенды выше:
+// компактные варианты компонентов собраны в одном файле.
+//
+// ВАЖНО, ЧТО ЭТИ ТЕСТЫ НЕ ДОКАЗЫВАЮТ. Они передают compact пропом руками, то
+// есть не проверяют ПРОВОДКУ из Overview/StageDetail: в jsdom useFrameSize
+// меряет 0 (глобальный мок геометрии сужен до `.react-flow`), поэтому compact
+// там всегда false. Проводку и все размеры сторожит e2e/compact.spec.ts.
+describe('Toolbar: компактный режим (артборд A4)', () => {
+  function renderToolbar(compact: boolean) {
+    return render(
+      <ReactFlowProvider>
+        <Toolbar fitViewOptions={{ padding: 0.1 }} compact={compact} />
+      </ReactFlowProvider>,
+    );
+  }
+
+  it('toggle остаётся тем же контролом: role=switch с прежним именем', () => {
+    renderToolbar(true);
+
+    // Ровно то, на чём держатся 12+ существующих проверок тулбара: подпись
+    // переехала из видимого текста в aria-label, а он и раньше был именем
+    // кнопки, поэтому доступное имя не изменилось.
+    const toggle = screen.getByRole('switch', { name: ru.toolbar.showIntegrations });
+    expect(toggle).toHaveAttribute('aria-checked', 'true');
+
+    // Имя проверяется ещё и как атрибут, а не только запросом по роли.
+    // Мутация показала, почему: если убрать aria-label, доступное имя даст
+    // `title` (он есть у свёрнутой кнопки ради тултипа мыши), и запрос по роли
+    // останется зелёным — а 12+ мест в e2e читают именно атрибут и упали бы.
+    expect(toggle).toHaveAttribute('aria-label', ru.toolbar.showIntegrations);
+  });
+
+  it('подпись не отрендерена, а не спрятана стилями', () => {
+    const { container } = renderToolbar(true);
+
+    expect(screen.queryByText(ru.toolbar.showIntegrations)).not.toBeInTheDocument();
+    // Скрытый DOM всё равно читается скринридером — проверяем именно отсутствие.
+    expect(container.textContent).not.toContain(ru.toolbar.showIntegrations);
+  });
+
+  it('иконка декоративная: имя даёт aria-label, а не alt', () => {
+    renderToolbar(true);
+
+    const icon = screen.getByRole('switch').querySelector('img');
+    expect(icon, 'в компактном виде toggle рисуется иконкой').not.toBeNull();
+    expect(icon).toHaveAttribute('alt', '');
+  });
+
+  it('свёрнутый toggle по-прежнему переключает интеграции', () => {
+    renderToolbar(true);
+
+    expect(useProcessStore.getState().showIntegrations).toBe(true);
+    fireEvent.click(screen.getByRole('switch', { name: ru.toolbar.showIntegrations }));
+    expect(useProcessStore.getState().showIntegrations).toBe(false);
+  });
+
+  it('кнопки зума не теряют имён при сворачивании', () => {
+    renderToolbar(true);
+
+    expect(screen.getByRole('button', { name: ru.toolbar.zoomOut })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: ru.toolbar.zoomIn })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: ru.toolbar.fitView })).toBeInTheDocument();
+  });
+
+  it('обычный режим не задет: пилюля с подписью на месте', () => {
+    renderToolbar(false);
+
+    expect(screen.getByText(ru.toolbar.showIntegrations)).toBeInTheDocument();
+    expect(screen.getByRole('switch').querySelector('img')).toBeNull();
   });
 });

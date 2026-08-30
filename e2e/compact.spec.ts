@@ -20,6 +20,31 @@ const FULL = { width: 1280, height: 720 };
 const HEADER_HEIGHT = 52;
 const HEADER_HEIGHT_COMPACT = 44;
 const STAGE_CARD_COMPACT = { width: 228, height: 200 };
+/**
+ * Тулбар, свёрнутый по A4 (process-map-jcz). Арифметика полосы:
+ * 165 («Просмотр/Редактор») + 8 + 32 (иконка) + 8 + 132 (зум) = 345.
+ * Порог 360 даёт запас на округление шрифта.
+ *
+ * Что здесь НЕ достигается и почему: артборд A4 рисует полосу 172 px, но в нём
+ * нет переключателя «Просмотр / Редактор» — его нет ни в одном артборде, а
+ * SPEC §4.4 его требует. Эти 165 px и есть вся разница.
+ */
+const TOOLBAR_MAX_WIDTH_COMPACT = 360;
+const TOGGLE_SIZE_COMPACT = { w: 32, h: 32 };
+/** A4: ячейки 30/40/30/30 + 2 px рамок. */
+const ZOOM_GROUP_WIDTH_COMPACT = 132;
+
+/** Ширина всей полосы тулбара: контейнер растянут left+right, меряем детей. */
+async function toolbarStripWidth(page: Page): Promise<number> {
+  return page.evaluate(() => {
+    const toolbar = document.querySelector('[role="switch"]')?.parentElement;
+    if (toolbar === null || toolbar === undefined) {
+      throw new Error('тулбар не найден');
+    }
+    const boxes = [...toolbar.children].map((el) => el.getBoundingClientRect());
+    return Math.max(...boxes.map((b) => b.right)) - Math.min(...boxes.map((b) => b.left));
+  });
+}
 
 /** Собственный (нетрансформированный) размер элемента: полотно масштабируется. */
 async function layoutSize(page: Page, selector: string): Promise<{ w: number; h: number }> {
@@ -172,6 +197,49 @@ test.describe('компактный режим 1024×600 (артборд A4)', (
     const header = await layoutSize(page, 'header');
     expect(header.h).toBe(HEADER_HEIGHT_COMPACT);
   });
+
+  // process-map-jcz. До неё тулбар в этом файле не проверялся вовсе, хотя
+  // занимал половину ширины фрейма (510 px из 1024).
+  test('toggle интеграций свёрнут в кнопку-иконку 32×32', async ({ page }) => {
+    const toggle = page.getByRole('switch', { name: 'Показать интеграции' });
+    await expect(toggle).toBeVisible();
+    // Подпись не спрятана стилями, а не отрендерена.
+    await expect(page.getByText('Показать интеграции')).toHaveCount(0);
+
+    const size = await layoutSize(page, '[role="switch"]');
+    expect(size).toEqual(TOGGLE_SIZE_COMPACT);
+  });
+
+  test('кнопка-иконка остаётся рабочей при настоящем клике мышью', async ({ page }) => {
+    const toggle = page.getByRole('switch', { name: 'Показать интеграции' });
+    await expect(toggle).toHaveAttribute('aria-checked', 'true');
+
+    // Настоящий клик, а не .click() по DOM: тулбар лежит поверх полотна, и
+    // после уменьшения цели с 187×32 до 32×32 важно, что попадает именно он.
+    const box = await toggle.boundingBox();
+    await page.mouse.click(
+      (box?.x ?? 0) + (box?.width ?? 0) / 2,
+      (box?.y ?? 0) + (box?.height ?? 0) / 2,
+    );
+
+    await expect(toggle).toHaveAttribute('aria-checked', 'false');
+    await expect(page.locator('.react-flow__node-lane')).toHaveCount(0);
+  });
+
+  test('полоса тулбара не занимает половину ширины фрейма', async ({ page }) => {
+    const width = await toolbarStripWidth(page);
+    expect(width, `полоса ${width} px при ширине фрейма ${COMPACT.width}`).toBeLessThanOrEqual(
+      TOOLBAR_MAX_WIDTH_COMPACT,
+    );
+
+    // Отдельный замер зум-группы: порог полосы её не сторожит — расширение
+    // ячеек обратно до 32 даёт 355 px и в порог 360 по-прежнему укладывается.
+    const zoom = await page.evaluate(() => {
+      const fit = document.querySelector('[aria-label="Уместить в экран"]');
+      return fit?.parentElement?.getBoundingClientRect().width ?? 0;
+    });
+    expect(Math.round(zoom)).toBe(ZOOM_GROUP_WIDTH_COMPACT);
+  });
 });
 
 // ───────── переключение режима на живой странице (SPEC §4.5) ─────────
@@ -250,6 +318,12 @@ test('уменьшение окна БЕЗ перезагрузки включа
   await expect(page.locator('.react-flow__node-lane')).toHaveCount(0);
   await expect(page.locator('.react-flow__node-flowLane')).toHaveCount(0);
   await expect(page.getByRole('group', { name: 'Внешние системы процесса' })).toBeVisible();
+  // Тулбар свернулся вместе с остальным хромом (process-map-jcz). Единственная
+  // проверка, доказывающая, что вид завязан на живой compact из ResizeObserver,
+  // а не на что-то статичное при монтировании.
+  await expect
+    .poll(async () => (await layoutSize(page, '[role="switch"]')).w)
+    .toBe(TOGGLE_SIZE_COMPACT.w);
   const compactCard = await page.evaluate(() => {
     const el = document.querySelector('.react-flow__node-stage button');
     return { w: (el as HTMLElement).offsetWidth, h: (el as HTMLElement).offsetHeight };
@@ -280,6 +354,7 @@ test('уменьшение окна БЕЗ перезагрузки включа
   // Возврат к прежнему размеру так же обратим — и тоже без перезагрузки.
   await page.setViewportSize(FULL);
   await expect.poll(async () => (await layoutSize(page, 'header')).h).toBe(HEADER_HEIGHT);
+  await expect.poll(async () => (await layoutSize(page, '[role="switch"]')).w).toBeGreaterThan(100);
   await expect(page.locator('.react-flow__node-lane')).toHaveCount(2);
   await expect.poll(async () => fullyVisibleStages(page), { timeout: 5000 }).toBe(4);
 });
@@ -300,6 +375,12 @@ test.describe('обычный режим 1280×720 (артборд A1)', () => {
     await expect(page.locator('.react-flow__node-lane')).toHaveCount(2);
     await expect(page.getByRole('group', { name: 'Внешние системы процесса' })).toHaveCount(0);
     await expect(page.getByText(/^Обновлено /)).toBeVisible();
+  });
+
+  test('тулбар не свёрнут: у toggle пилюля с подписью', async ({ page }) => {
+    await expect(page.getByText('Показать интеграции')).toBeVisible();
+    const size = await layoutSize(page, '[role="switch"]');
+    expect(size.w, 'в обычном режиме toggle шире иконки').toBeGreaterThan(100);
   });
 
   test('легенда развёрнута, кнопки-переключателя нет', async ({ page }) => {
