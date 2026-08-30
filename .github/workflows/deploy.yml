@@ -40,8 +40,9 @@ jobs:
       - run: npm ci
 
       # Сломанная сборка не должна попасть на Pages: сначала проверки.
-      # e2e здесь не гоняются — они требуют браузеров Playwright и живут
-      # в отдельном прогоне; npm run check это tsc + eslint + vitest.
+      # npm run check это tsc + eslint + vitest + prettier --check
+      # (process-map-mx2). e2e гоняются соседним job'ом e2e: им нужны браузеры
+      # Playwright, и ставить их ради сборки незачем — job'ы идут параллельно.
       - run: npm run check
 
       - run: npm run build
@@ -52,8 +53,47 @@ jobs:
         with:
           path: dist
 
+  # Задача process-map-vjz.3. До неё e2e не запускались в CI вовсе, и флак
+  # process-map-6ja месяц падал в половине локальных прогонов, ни разу не
+  # будучи пойманным pipeline.
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - run: npm ci
+
+      # Только chromium: в playwright.config.ts нет projects, то есть работает
+      # единственный неявный проект. Установка без имени браузера тянула бы
+      # ещё firefox и webkit впустую.
+      - run: npx playwright install --with-deps chromium
+
+      # Dev-сервер поднимает сам Playwright (webServer в конфиге) — отдельного
+      # шага здесь быть не должно: в CI reuseExistingServer=false, и на занятом
+      # порту прогон упал бы с «is already used».
+      - run: npm run e2e
+
+      # Без этого от падения в CI осталась бы только текстовая простыня лога:
+      # трейс и HTML-отчёт пишутся в файлы. if: !cancelled() — отчёт нужен
+      # именно когда прогон красный.
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
+          if-no-files-found: ignore
+
   deploy:
-    needs: build
+    # Решение владельца: e2e блокируют деплой — сломанное не уезжает на стенд.
+    needs: [build, e2e]
     runs-on: ubuntu-latest
     environment:
       name: github-pages

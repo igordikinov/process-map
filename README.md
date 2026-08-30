@@ -141,9 +141,14 @@ ls dist/assets/*.woff2                           # шрифт внутри dist
 **https://igordikinov.github.io/process-map/**
 
 Публикация автоматическая: `.github/workflows/deploy.yml` на каждый push в `main`
-ставит зависимости, прогоняет `npm run check` и, только если он зелёный, собирает
-`dist/` и выкладывает его. Сломанная сборка на Pages не попадёт. Ручной запуск —
-через `workflow_dispatch` во вкладке Actions.
+запускает параллельно два job'а — `build` (`npm run check`, затем сборка `dist/`) и
+`e2e` (`npm run e2e` в chromium). Деплой ждёт оба: сломанное на Pages не попадёт
+ни из-за красных проверок, ни из-за красных e2e. Ручной запуск — через
+`workflow_dispatch` во вкладке Actions.
+
+При падении e2e отчёт Playwright и трейсы выгружаются артефактом
+`playwright-report` (хранится 7 дней) — по нему разбирают прогон, не воспроизводя
+его локально.
 
 **Однократная настройка в репозитории:** Settings → Pages → Source: **GitHub Actions**.
 Без этого workflow будет падать на шаге деплоя.
