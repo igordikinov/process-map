@@ -22,8 +22,16 @@ export interface NodeSize {
   readonly height: number;
 }
 
-/** StageNode, уровень 1 (SPEC §4.1). */
-export const STAGE_NODE_SIZE: NodeSize = { width: 274, height: 210 };
+/**
+ * StageNode, уровень 1 (SPEC §4.1).
+ *
+ * Высота 232, а не 210 из артборда A1: лимит «Ключевых выходов» поднят с трёх
+ * до четырёх (process-map-24i), потому что презентация перечисляет у этапа 3
+ * ровно четыре опубликованных плана. Четвёртая строка в 210 не влезала —
+ * у карточки с двухстрочным заголовком запас под списком был -1 px, и пункт
+ * оставался в дереве доступности, но не на экране. Ширина 274 из макета.
+ */
+export const STAGE_NODE_SIZE: NodeSize = { width: 274, height: 232 };
 
 /** StageNode в компактном режиме, высота контейнера < config.compactHeight (SPEC §4.5). */
 export const STAGE_NODE_SIZE_COMPACT: NodeSize = { width: 228, height: 200 };

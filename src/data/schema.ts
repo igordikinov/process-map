@@ -111,7 +111,7 @@ export const StageSchema = z.object({
   number: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]),
   title: z.string(),
   shortTitle: z.string(),
-  keyOutputs: z.array(z.string()).max(3),
+  keyOutputs: z.array(z.string()).max(4),
   warningsCount: z.number().optional(),
   screen: ScreenLinkSchema.optional(),
   groups: z.array(GroupSchema),

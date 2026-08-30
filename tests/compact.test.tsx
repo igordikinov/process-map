@@ -332,20 +332,27 @@ describe('buildOverviewGraph: компактный режим (SPEC §4.5)', () 
 // ───────────────────────── содержимое карточек ─────────────────────────
 
 describe('StageCard: компактный режим', () => {
-  it('показывает ДВА ключевых выхода вместо трёх', () => {
+  it('показывает ДВА ключевых выхода, сколько бы их ни было в данных', () => {
     const stage = stageAt(1);
-    expect(stage.keyOutputs).toHaveLength(3);
+    // Лимит схемы подняли до четырёх (process-map-24i), поэтому число здесь не
+    // прибито: важно, что компактная карточка показывает ровно два, а остальные
+    // не отрисованы вовсе.
+    expect(stage.keyOutputs.length).toBeGreaterThan(2);
 
     render(<StageCard stage={stage} compact />);
     expect(screen.getAllByRole('listitem')).toHaveLength(2);
-    expect(screen.queryByText(stage.keyOutputs[2] as string)).not.toBeInTheDocument();
+    for (const hidden of stage.keyOutputs.slice(2)) {
+      expect(screen.queryByText(hidden)).not.toBeInTheDocument();
+    }
   });
 
-  it('третий выход не «спрятан стилями», а не отрисован', () => {
+  it('лишние выходы не «спрятаны стилями», а не отрисованы', () => {
     // Скрытый классом пункт остался бы в дереве доступности.
     const stage = stageAt(1);
     const { container } = render(<StageCard stage={stage} compact />);
-    expect(container.textContent).not.toContain(stage.keyOutputs[2]);
+    for (const hidden of stage.keyOutputs.slice(2)) {
+      expect(container.textContent).not.toContain(hidden);
+    }
   });
 
   it('без «эйбра» и подписи «Этап» (артборд A4)', () => {
@@ -364,10 +371,10 @@ describe('StageCard: компактный режим', () => {
     expect(screen.getByAltText(ru.stageNode.warnings(5))).toBeInTheDocument();
   });
 
-  it('обычный режим не задет: три выхода и «эйбр» на месте', () => {
+  it('обычный режим не задет: все выходы и «эйбр» на месте', () => {
     const stage = stageAt(1);
     render(<StageCard stage={stage} />);
-    expect(screen.getAllByRole('listitem')).toHaveLength(3);
+    expect(screen.getAllByRole('listitem')).toHaveLength(stage.keyOutputs.length);
     expect(screen.getByText(ru.stageNode.keyOutputs)).toBeInTheDocument();
   });
 });

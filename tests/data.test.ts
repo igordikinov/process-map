@@ -150,12 +150,16 @@ describe('ProcessMapSchema', () => {
     expect(parsed.stages[0]?.nodes[0]?.direction).toBe('out');
   });
 
-  it('отвергает keyOutputs из более чем 3 элементов', () => {
+  it('отвергает keyOutputs из более чем 4 элементов', () => {
+    // Лимит поднят с трёх до четырёх (process-map-24i): презентация перечисляет
+    // у этапа 3 ровно четыре опубликованных плана, и третий пункт срезался.
     const map = buildSampleProcessMap();
     const stage = map.stages[0];
     expect(stage).toBeTruthy();
     stage!.keyOutputs = ['A', 'B', 'C', 'D'];
-    expect(() => ProcessMapSchema.parse(map)).toThrow();
+    expect(() => ProcessMapSchema.parse(map), 'четыре — ещё допустимо').not.toThrow();
+    stage!.keyOutputs = ['A', 'B', 'C', 'D', 'E'];
+    expect(() => ProcessMapSchema.parse(map), 'пять — уже нет').toThrow();
   });
 
   it('validateIntegrity находит ребро с несуществующим target', () => {

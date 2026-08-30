@@ -113,7 +113,7 @@ interface Stage {
   number: 1 | 2 | 3 | 4;
   title: string;
   shortTitle: string;
-  keyOutputs: string[]; // ≤ 3
+  keyOutputs: string[]; // ≤ 4
   warningsCount?: number;
   screen?: ScreenLink;
   groups: Group[];
@@ -173,7 +173,7 @@ interface ProcessMap {
 - Полотно React Flow с точечной сеткой (`Background variant=dots gap=16`).
 - Два dashed-контейнера свимлейнов (in/out) как узлы типа `group`, не перетаскиваются.
 - Третий dashed-контейнер того же стиля охватывает все 4 карточки этапов, заголовок «Модуль SNP». В отличие от свимлейнов не зависит от toggle «Показать интеграции»: описывает сам процесс, а не интеграции. В компактном режиме (§4.5) не рисуется. Решение владельца от 30.08.2026 (`process-map-sni`); в артборде A1 этой рамки нет — расхождение с макетом осознанное.
-- 4 `StageNode` 274×210: номер, название, разделитель, «Ключевые выходы» (≤ 3), внизу строка «Открыть в In.Plan →», если `stage.screen`. Активный/hover — фиолетовая верхняя полоска.
+- 4 `StageNode` 274×232: номер, название, разделитель, «Ключевые выходы» (≤ 4), внизу строка «Открыть в In.Plan →», если `stage.screen`. Активный/hover — фиолетовая верхняя полоска.
 - Рёбра этап→этап: `ProcessEdge` фиолетовый 1.8 px; система→этап: `IntegrationEdge` синий пунктир 1.3 px, `smoothstep`.
 - Все узлы `draggable=false`, `nodesConnectable=false`. Клик по StageNode → `navigate(stage)`.
 

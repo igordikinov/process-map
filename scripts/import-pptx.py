@@ -127,7 +127,7 @@ KEY_OUTPUT_TOP_OFFSET = 500_000      # блоки выходов — в нижн
 KEY_OUTPUT_BOTTOM_OFFSET = 700_000
 DECOR_ARROW_MAX_WIDTH = 400_000      # мелкие стрелки-коннекторы между боксами обзора
 
-MAX_KEY_OUTPUTS = 3                  # ограничение zod-схемы
+MAX_KEY_OUTPUTS = 4                  # ограничение zod-схемы
 MAX_ID_LENGTH = 72                   # длиннее, чтобы различающая часть текста не срезалась
 
 SYSTEM_CODES = ("DP", "PS", "IO", "ERP", "MRP", "INPLAN")
