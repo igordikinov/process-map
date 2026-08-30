@@ -47,8 +47,12 @@ function runImport(): number {
     // --in-pipeline: импортёр знает, что раскладка запустится следом, и не
     // требует её отдельной строкой (scripts/import-pptx.py::print_layout_required).
     const result = spawnSync(exe, [script, '--in-pipeline'], { stdio: 'inherit' });
+    // @types/node типизирует result.error как обычный Error, без code: код
+    // ошибки живёт в NodeJS.ErrnoException, куда Error присваивается напрямую
+    // (все поля там необязательные). Приведение не нужно — только аннотация.
+    const spawnError: NodeJS.ErrnoException | undefined = result.error;
     // ENOENT именно на этом кандидате — пробуем следующий; на последнем — падаем.
-    if (result.error !== undefined && result.error.code === 'ENOENT') {
+    if (spawnError?.code === 'ENOENT') {
       if (index < candidates.length - 1) {
         continue;
       }
