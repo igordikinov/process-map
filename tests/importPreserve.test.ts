@@ -1,7 +1,13 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { ProcessNodeSchema, ProcessMapSchema, StageSchema } from '../src/data/schema.ts';
+import {
+  ProcessNodeSchema,
+  ProcessMapSchema,
+  StageSchema,
+  SystemCodeSchema,
+} from '../src/data/schema.ts';
+import { ru } from '../src/i18n/ru.ts';
 import processJson from '../src/data/process.json';
 
 // Контракт между scripts/import-pptx.py и src/data/schema.ts (задача process-map-2dj).
@@ -421,5 +427,39 @@ describe('import-pptx.py: заголовок блока не становитс�
       usages.length,
       'функция объявлена, но вызывается меньше двух раз — правило снова живёт в одном месте',
     ).toBeGreaterThanOrEqual(3);
+  });
+});
+
+// Коды внешних систем объявлены дважды: союзом в схеме (TypeScript) и кортежем
+// в импортёре (Python). Прямой сверки между ними не было ни одной — рассинхрон
+// всплыл бы только после того, как новый код уже попал в process.json и уронил
+// ProcessMapSchema.parse. Этот тест ловит его раньше и без Python (process-map-32r).
+describe('import-pptx.py: коды систем согласованы со схемой', () => {
+  const fromPython = readPythonTuple('SYSTEM_CODES');
+  const fromSchema = [...SystemCodeSchema.options];
+
+  it('списки совпадают по составу', () => {
+    expect([...fromPython].sort(), 'SYSTEM_CODES в импортёре разошёлся с SystemCodeSchema').toEqual(
+      [...fromSchema].sort(),
+    );
+  });
+
+  it('ни один код не является префиксом другого', () => {
+    // SYSTEM_RE собирается альтернацией из этого списка, а она жадная слева
+    // направо: код-префикс другого кода начал бы перехватывать чужие тексты,
+    // и порядок в кортеже стал бы значимым.
+    const conflicts = fromSchema.flatMap((code) =>
+      fromSchema
+        .filter((other) => other !== code && other.startsWith(code))
+        .map((other) => `${code} → ${other}`),
+    );
+    expect(conflicts).toEqual([]);
+  });
+
+  it('у каждого кода есть запись в словаре расшифровок', () => {
+    // Дублирует satisfies Record<SystemCode, string> в ru.ts, но на другом
+    // уровне: satisfies ловит забытую запись на tsc, а этот тест назовёт код.
+    const missing = fromSchema.filter((code) => ru.systems[code] === undefined);
+    expect(missing, 'код есть в союзе, но не в ru.systems').toEqual([]);
   });
 });

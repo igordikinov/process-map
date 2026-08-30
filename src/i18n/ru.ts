@@ -141,6 +141,10 @@ export const ru = {
     ERP: 'ERP',
     MRP: 'In.Plan · Планирование потребности в материалах',
     INPLAN: 'In.Plan · Планирование сети поставок',
+    // BI и EPM владелец назвал как возможные внешние системы (process-map-32r),
+    // но расшифровок не дал — показываем код, как у ERP. В данных их пока нет.
+    BI: 'BI',
+    EPM: 'EPM',
   } satisfies Record<SystemCode, string>,
 
   /**

@@ -5,7 +5,7 @@ import { z } from 'zod';
 export const NodeTypeSchema = z.enum(['step', 'data', 'integration', 'warning']);
 export type NodeType = z.infer<typeof NodeTypeSchema>;
 
-export const SystemCodeSchema = z.enum(['DP', 'PS', 'IO', 'ERP', 'MRP', 'INPLAN']);
+export const SystemCodeSchema = z.enum(['DP', 'PS', 'IO', 'ERP', 'MRP', 'INPLAN', 'BI', 'EPM']);
 export type SystemCode = z.infer<typeof SystemCodeSchema>;
 
 export const ScreenLinkSchema = z.object({
@@ -161,7 +161,7 @@ export const OVERRIDES_STORAGE_KEY = 'inplan-process-map:overrides:v1';
  *     система → этап (SPEC §3, §4.1: свимлейны уровня 1 — это внешние
  *     системы, а не узлы графа с собственным id).
  * Это два разных пространства идентификаторов (kebab-case id этапов и
- * короткие коды систем DP/PS/IO/ERP/MRP/INPLAN), поэтому конфликтов имён
+ * короткие коды систем DP/PS/IO/ERP/MRP/INPLAN/BI/EPM), поэтому конфликтов имён
  * не возникает и ложных ошибок не даёт.
  */
 export function validateIntegrity(map: ProcessMap): string[] {

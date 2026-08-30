@@ -130,7 +130,7 @@ DECOR_ARROW_MAX_WIDTH = 400_000      # мелкие стрелки-коннек�
 MAX_KEY_OUTPUTS = 4                  # ограничение zod-схемы
 MAX_ID_LENGTH = 72                   # длиннее, чтобы различающая часть текста не срезалась
 
-SYSTEM_CODES = ("DP", "PS", "IO", "ERP", "MRP", "INPLAN")
+SYSTEM_CODES = ("DP", "PS", "IO", "ERP", "MRP", "INPLAN", "BI", "EPM")
 
 # --------------------------------------------------------------------------------------
 # Контракт с src/data/schema.ts
