@@ -4,6 +4,14 @@ name: Deploy to GitHub Pages
 # https://igordikinov.github.io/process-map/ и встраивается оттуда в iframe.
 # Публикуется только собранный dist/ — исходники, презентация и макет
 # остаются в репозитории, но сайтом не раздаются.
+#
+# ВЕРСИИ ACTIONS (process-map-vjz.9). Раннеры перешли на Node 24, а 23.09.2026
+# Node 20 удаляется из образа совсем — прежние v4/v3 не предупреждали бы, а
+# ломались. Версии подняты по полю runs.using в манифесте тега, а не по release
+# notes: у upload-artifact заявленная в v5 поддержка Node 24 на деле осталась
+# node20, минимум там v6. Предупреждение про upload-artifact в job build
+# приходило не отсюда — этот шаг лежит внутри upload-pages-artifact, и её v3 и
+# v4 обе тянут node20-версию, поэтому нужна ровно v5.
 
 on:
   push:
@@ -11,9 +19,11 @@ on:
   workflow_dispatch:
 
 # Разрешения нужны именно этому workflow: read для checkout,
-# pages+id-token — для официального деплоя через actions/deploy-pages.
+# pages+id-token — для официального деплоя через actions/deploy-pages,
+# actions: read — его же требование начиная с v4 (process-map-vjz.9).
 permissions:
   contents: read
+  actions: read
   pages: write
   id-token: write
 
@@ -28,11 +38,11 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # Версия из .nvmrc: npm run layout требует Node >= 22.6
       # (node --experimental-strip-types), см. engines в package.json.
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc
           cache: npm
@@ -49,7 +59,7 @@ jobs:
 
       # base: './' в vite.config.ts (SPEC §6) делает пути относительными,
       # поэтому сборка работает из подкаталога /process-map/ без правок.
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: dist
 
@@ -59,9 +69,9 @@ jobs:
   e2e:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc
           cache: npm
@@ -81,7 +91,7 @@ jobs:
       # Без этого от падения в CI осталась бы только текстовая простыня лога:
       # трейс и HTML-отчёт пишутся в файлы. if: !cancelled() — отчёт нужен
       # именно когда прогон красный.
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: ${{ !cancelled() }}
         with:
           name: playwright-report
@@ -100,4 +110,4 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
