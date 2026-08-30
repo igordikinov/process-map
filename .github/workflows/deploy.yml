@@ -1,4 +1,4 @@
-name: Deploy to GitHub Pages
+name: Проверки и деплой
 
 # Карта раздаётся статикой с GitHub Pages по адресу
 # https://igordikinov.github.io/process-map/ и встраивается оттуда в iframe.
@@ -13,26 +13,32 @@ name: Deploy to GitHub Pages
 # приходило не отсюда — этот шаг лежит внутри upload-pages-artifact, и её v3 и
 # v4 обе тянут node20-версию, поэтому нужна ровно v5.
 
+# ПРОВЕРКИ НА PR (process-map-vjz.7). Раньше триггера pull_request не было
+# вовсе: на PR не запускалось ничего, и всё выяснялось уже после вливания.
+#
+# Проверки НЕ вынесены в отдельный workflow намеренно. Разделение выглядело
+# аккуратнее, но ломало главное свойство, ради которого e2e и заводили в CI:
+# деплой обязан ждать проверок. Два независимых workflow друг о друге не знают,
+# и на push в main деплой уехал бы даже при красном CI. Здесь же зависимость
+# выражена прямо — `deploy: needs: [build, e2e]`.
 on:
   push:
     branches: [main]
+  pull_request:
   workflow_dispatch:
 
-# Разрешения нужны именно этому workflow: read для checkout,
-# pages+id-token — для официального деплоя через actions/deploy-pages,
-# actions: read — его же требование начиная с v4 (process-map-vjz.9).
+# По умолчанию — минимум. Права на публикацию выданы точечно job'у deploy,
+# чтобы прогоны PR их не получали (process-map-vjz.7).
 permissions:
   contents: read
-  actions: read
-  pages: write
-  id-token: write
 
-# Параллельные деплои не нужны: побеждает последний push в main.
-# cancel-in-progress: false — начатый деплой доводится до конца,
-# чтобы Pages не остался с полузалитой сборкой.
+# Деплой и проверки живут в разных группах. Для деплоя группа статическая и без
+# отмены: начатый доводится до конца, чтобы Pages не остался с полузалитой
+# сборкой. Для PR — своя группа на ветку с отменой устаревших: ждать прогон,
+# результат которого уже неактуален, незачем.
 concurrency:
-  group: pages
-  cancel-in-progress: false
+  group: ${{ github.event_name == 'pull_request' && format('pr-{0}', github.ref) || 'pages' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   build:
@@ -59,7 +65,9 @@ jobs:
 
       # base: './' в vite.config.ts (SPEC §6) делает пути относительными,
       # поэтому сборка работает из подкаталога /process-map/ без правок.
+      # На PR артефакт не нужен: деплоя там не будет, а квота расходуется.
       - uses: actions/upload-pages-artifact@v5
+        if: github.event_name != 'pull_request'
         with:
           path: dist
 
@@ -104,6 +112,16 @@ jobs:
   deploy:
     # Решение владельца: e2e блокируют деплой — сломанное не уезжает на стенд.
     needs: [build, e2e]
+    # На PR деплоить нечего и некуда: окружение github-pages защищено правилом
+    # «только ветка по умолчанию», и job всё равно был бы отклонён.
+    if: github.event_name != 'pull_request'
+    # Права на публикацию — только здесь, а не на весь workflow: actions: read
+    # требует deploy-pages начиная с v4 (process-map-vjz.9).
+    permissions:
+      contents: read
+      actions: read
+      pages: write
+      id-token: write
     runs-on: ubuntu-latest
     environment:
       name: github-pages
