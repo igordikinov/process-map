@@ -206,3 +206,93 @@ describe('import-pptx.py: рёбра по решению владельца пр
     expect(group.filter((node) => !targets.has(node.id)).map((node) => node.id)).toEqual([]);
   });
 });
+
+/**
+ * Читает STAGE_INPUT_ENRICHMENT из scripts/import-pptx.py — входы этапа, взятые
+ * со слайда ОБЗОРА вместо слайда детализации (задача process-map-qjl). Разбор
+ * регуляркой по той же причине, что и у OWNER_DECISION_EDGES: интерпретатора
+ * Python в CI нет.
+ */
+function readInputEnrichment(): InputEnrichment[] {
+  const block = /^STAGE_INPUT_ENRICHMENT[^\n]*=\s*\(\n([\s\S]*?)\n\)\n/m.exec(importerSource);
+  // Пустой список вместо исключения — как и выше: «объявление исчезло» обязано
+  // ронять именованную проверку, а не сбор файла целиком.
+  if (block === null) {
+    return [];
+  }
+  const entries = /"task":\s*"([^"]+)",[\s\S]*?"stage":\s*(\d+),[\s\S]*?"add":\s*\(([\s\S]*?)\),\s*(?:#[^\n]*\n\s*)*"expand":\s*\(([\s\S]*?)\n\s*\),/g;
+  return [...block[1]!.matchAll(entries)].map((match) => ({
+    task: match[1]!,
+    stage: Number(match[2]!),
+    add: [...match[3]!.matchAll(/"([^"]+)"/g)].map((item) => item[1]!),
+    expand: [...match[4]!.matchAll(/\(\s*"([^"]+)",\s*"([^"]+)",?\s*\)/g)].map((item) => ({
+      short: item[1]!,
+      full: item[2]!,
+    })),
+  }));
+}
+
+interface InputEnrichment {
+  task: string;
+  stage: number;
+  add: string[];
+  expand: { short: string; full: string }[];
+}
+
+// Входы, взятые со слайда обзора (process-map-qjl). Причина отдельного
+// объявления та же, что у рёбер выше: импортёр пересобирает process.json с
+// нуля, и правка подписи прямо в JSON не пережила бы следующий npm run data.
+// Тест сторожит связь в ОБЕ стороны: объявленное обязано быть в JSON, а
+// заменённая короткая формулировка — из JSON исчезнуть. Без второй половины
+// проверка осталась бы зелёной, даже если бы замена перестала применяться и в
+// файле лежали ОБА варианта строки.
+describe('import-pptx.py: входы по слайду обзора', () => {
+  const enrichments = readInputEnrichment();
+
+  it('объявление не потеряно и называет задачу-основание', () => {
+    expect(
+      enrichments.length,
+      'STAGE_INPUT_ENRICHMENT в scripts/import-pptx.py пуст или не найден — ' +
+        'решения владельца по формулировкам не переживут следующий npm run data',
+    ).toBeGreaterThan(0);
+    for (const entry of enrichments) {
+      expect(entry.task, 'источник решения').toMatch(/^process-map-/);
+      expect(entry.add.length + entry.expand.length).toBeGreaterThan(0);
+    }
+  });
+
+  it('добавленные строки доехали в process.json входами своего этапа', () => {
+    for (const entry of enrichments) {
+      const stage = map.stages.find((candidate) => candidate.number === entry.stage);
+      expect(stage, `этап ${entry.stage}`).toBeDefined();
+      const inputs = stage!.nodes.filter(
+        (node) => node.type === 'data' && node.direction === 'in',
+      );
+      const labels = new Set(inputs.map((node) => node.label));
+      for (const extra of entry.add) {
+        expect(
+          labels.has(extra),
+          `${entry.task}: «${extra}» не доехало в process.json входом этапа ${entry.stage}`,
+        ).toBe(true);
+      }
+    }
+  });
+
+  it('переформулированные строки заменены, а не продублированы', () => {
+    for (const entry of enrichments) {
+      const stage = map.stages.find((candidate) => candidate.number === entry.stage);
+      expect(stage, `этап ${entry.stage}`).toBeDefined();
+      const labels = new Set(stage!.nodes.map((node) => node.label));
+      for (const { short, full } of entry.expand) {
+        expect(
+          labels.has(full),
+          `${entry.task}: «${full}» не доехало в process.json`,
+        ).toBe(true);
+        expect(
+          labels.has(short),
+          `${entry.task}: «${short}» осталось в process.json — замена не применилась`,
+        ).toBe(false);
+      }
+    }
+  });
+});

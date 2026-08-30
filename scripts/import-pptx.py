@@ -40,11 +40,14 @@ dagre). Порядок обязателен и обратного не имее�
 
 ЧТО В ДОКУМЕНТЕ НЕ ИЗ ПРЕЗЕНТАЦИИ
 ---------------------------------
-Ровно два места, и оба на виду — потому что правило проекта «не изобретать
+Ровно три места, и все три на виду — потому что правило проекта «не изобретать
 процесс» иначе не проверить:
 
   · OWNER_DECISION_EDGES — рёбра по решению владельца процесса, которых на
     слайде нет (задача process-map-7bz). Отчёт печатает их отдельным блоком;
+  · STAGE_INPUT_ENRICHMENT — входы этапа, взятые со слайда ОБЗОРА вместо слайда
+    детализации (задача process-map-qjl): текст всё равно из презентации, но
+    выбор источника сделан владельцем. Тоже печатается отдельным блоком;
   · ручные поля `screen`/`owner` — их проставляет человек в редакторе, см.
     ниже.
 
@@ -237,6 +240,34 @@ OWNER_DECISION_EDGES: tuple[dict, ...] = (
     },
 )
 
+STAGE_INPUT_ENRICHMENT: tuple[dict, ...] = (
+    {
+        "task": "process-map-qjl",
+        "stage": 4,
+        # sid исходной фигуры слайда 2 — уходит в IdFactory как происхождение
+        # добавленных узлов, чтобы id разводились так же, как у всех прочих.
+        "sid": 164,
+        "source": (
+            "слайд 2, текстбокс [164] — мастер-данные этапа 4; привязан линией [181] "
+            "к боксу [8] «Расчёт плана пополнения (DRP/Deployment)»"
+        ),
+        # Строка есть на слайде обзора и отсутствует на слайде детализации.
+        "add": ("Транспортные отношения",),
+        # Слева — формулировка слайда 6 (она попадает в модель), справа — слайда 2.
+        "expand": (
+            ("ОСГ", "Остаточный срок годности (ОСГ)"),
+            ("Аллокация", "Резервы (аллокация)"),
+            ("Размещенные заказы (PO)", "Размещенные заказы на закупку (PO)"),
+        ),
+        "why": (
+            "решение владельца процесса: слайд обзора уточняет слайд детализации. "
+            "Из десяти строк [164] семь совпадают с колонкой входов слайда 6, три "
+            "записаны там короче, а «Транспортные отношения» отсутствуют в "
+            "презентации где-либо ещё"
+        ),
+    },
+)
+
 A = "{http://schemas.openxmlformats.org/drawingml/2006/main}"
 P = "{http://schemas.openxmlformats.org/presentationml/2006/main}"
 
@@ -372,6 +403,9 @@ class SlideReport:
     # Рёбра, добавленные не из презентации, а по решению владельца процесса
     # (OWNER_DECISION_EDGES, задача process-map-7bz).
     owner_edges: list[str] = field(default_factory=list)
+    # Входы, добавленные и переформулированные по слайду обзора
+    # (STAGE_INPUT_ENRICHMENT, задача process-map-qjl).
+    owner_inputs: list[str] = field(default_factory=list)
 
 
 # --------------------------------------------------------------------------------------
@@ -785,6 +819,73 @@ def resolve_second_pass(ranked: Sequence[tuple[float, str]], exclude: str) -> st
 # --------------------------------------------------------------------------------------
 
 
+def apply_input_enrichment(
+    enrichment: dict,
+    slide_no: int,
+    drafts: list[NodeDraft],
+    expanded: set[str],
+    ids: IdFactory,
+    report: SlideReport,
+) -> None:
+    """
+    Досыпает в колонку входов этапа строки со слайда обзора и проверяет, что
+    переформулировки нашли свои узлы (STAGE_INPUT_ENRICHMENT, process-map-qjl).
+
+    Расхождение с презентацией — не предупреждение, а остановка импорта, ровно
+    как в apply_owner_decision_edges: если слайд поправят и строка перестанет
+    находиться, решение владельца обязано упасть громко, а не рассосаться молча.
+    """
+    stage_number = enrichment["stage"]
+    missed = [short for short, _ in enrichment["expand"] if short not in expanded]
+    if missed:
+        raise SystemExit(
+            f"STAGE_INPUT_ENRICHMENT ({enrichment['task']}): среди входов этапа "
+            f"{stage_number} нет строк {', '.join(missed)} — презентация изменилась. "
+            f"Импорт остановлен, чтобы решение владельца не потерялось молча: "
+            f"обновите список в scripts/import-pptx.py."
+        )
+
+    column = [d for d in drafts if d.node_type == "data" and d.direction == "in"]
+    if not column:
+        raise SystemExit(
+            f"STAGE_INPUT_ENRICHMENT ({enrichment['task']}): у этапа {stage_number} нет "
+            f"колонки входов — добавлять строки некуда"
+        )
+
+    known = {normalize_text(draft.label).casefold() for draft in column}
+    # Новые строки встают сразу под колонкой: слайдовая геометрия узла нужна
+    # раскладке (layout.ts сидируется slidePosition), а колонка входов — её
+    # законное место на слайде детализации.
+    anchor = max(column, key=lambda draft: draft.box.bottom)
+
+    for offset, extra in enumerate(enrichment["add"]):
+        if normalize_text(extra).casefold() in known:
+            raise SystemExit(
+                f"STAGE_INPUT_ENRICHMENT ({enrichment['task']}): «{extra}» уже есть среди "
+                f"входов этапа {stage_number} — презентация изменилась и строку больше "
+                f"добавлять не нужно. Обновите список в scripts/import-pptx.py."
+            )
+        drafts.append(
+            NodeDraft(
+                node_id=ids.make(extra, slide_no, enrichment["sid"], offset),
+                node_type="data",
+                label=extra,
+                box=Box(
+                    anchor.box.left,
+                    anchor.box.bottom + offset * anchor.box.height,
+                    anchor.box.width,
+                    anchor.box.height,
+                ),
+                direction="in",
+            )
+        )
+        report.data_nodes += 1
+        report.owner_inputs.append(
+            f"этап {stage_number}: «{extra}» — ДОБАВЛЕНО со слайда обзора "
+            f"({enrichment['task']}), на слайде детализации строки нет"
+        )
+
+
 def build_stage(
     slide_no: int,
     stage_number: int,
@@ -937,6 +1038,13 @@ def build_stage(
     #    group у data-узлов не проставляется: входы стоят вне групп (SPEC §4.2).
     #    direction='in' — по происхождению, а не по координате: это и есть
     #    колонка входов слайда (см. NodeDraft.direction, задача process-map-24p).
+    #    Часть формулировок берётся со слайда обзора, а не отсюда, — см.
+    #    STAGE_INPUT_ENRICHMENT. Замена делается ДО ids.make: иначе id остался бы
+    #    слагом старой строки и разошёлся бы с подписью узла.
+    enrichment = next((e for e in STAGE_INPUT_ENRICHMENT if e["stage"] == stage_number), None)
+    expand = dict(enrichment["expand"]) if enrichment is not None else {}
+    expanded: set[str] = set()
+
     for tb in sorted([t for t in textboxes if t.consumed_by is None], key=Shape.sort_key):
         if tb.box.left > LEFT_MARGIN_LIMIT:
             continue
@@ -952,16 +1060,26 @@ def build_stage(
             )
         step = tb.box.height / max(len(unique), 1)
         for index, para in enumerate(unique):
+            label = expand.get(para, para)
+            if label != para:
+                expanded.add(para)
+                report.owner_inputs.append(
+                    f"этап {stage_number}: «{para}» → «{label}» — формулировка взята "
+                    f"со слайда обзора ({enrichment['task'] if enrichment else '?'})"
+                )
             drafts.append(
                 NodeDraft(
-                    node_id=ids.make(para, slide_no, tb.sid, index),
+                    node_id=ids.make(label, slide_no, tb.sid, index),
                     node_type="data",
-                    label=para,
+                    label=label,
                     box=Box(tb.box.left, int(tb.box.top + index * step), tb.box.width, int(step)),
                     direction="in",
                 )
             )
             report.data_nodes += 1
+
+    if enrichment is not None:
+        apply_input_enrichment(enrichment, slide_no, drafts, expanded, ids, report)
 
     # 5. Оставшиеся подписи внутри контейнера → description ближайшего узла группы.
     #    Привязка нестрогая, поэтому каждая попадает в отчёт.
@@ -1646,6 +1764,21 @@ def print_report(process_map: dict, reports: Sequence[SlideReport], questions: S
     else:
         print("  список OWNER_DECISION_EDGES пуст — все рёбра прочитаны из презентации")
 
+    # Входы, взятые со слайда ОБЗОРА вместо слайда детализации. Текст всё равно
+    # из презентации, но выбор источника сделал владелец — блок и есть то место,
+    # по которому это видно через полгода (задача process-map-qjl).
+    owner_inputs = [item for report in reports for item in report.owner_inputs]
+    print("\n" + "=" * 78)
+    print("ВХОДЫ ПО СЛАЙДУ ОБЗОРА — НА СЛАЙДЕ ДЕТАЛИЗАЦИИ ИХ НЕТ ИЛИ ОНИ КОРОЧЕ")
+    print("=" * 78)
+    if owner_inputs:
+        print("  Источник — STAGE_INPUT_ENRICHMENT в scripts/import-pptx.py: текст взят")
+        print("  из презентации, но с другого слайда, чем остальная колонка входов.")
+        for item in owner_inputs:
+            print(f"    · {item}")
+    else:
+        print("  список STAGE_INPUT_ENRICHMENT пуст — все входы прочитаны со слайдов детализации")
+
     print("\n" + "=" * 78)
     print("ИЗОЛИРОВАННЫЕ не-data УЗЛЫ — где в презентации связи нет")
     print("=" * 78)
@@ -2175,6 +2308,80 @@ def run_self_test() -> int:
             f"решение без задачи-основания: {decision['task']}",
         )
         check(bool(decision["targets"]), f"решение {decision['task']} без концов")
+
+    # 1c. Входы со слайда обзора (STAGE_INPUT_ENRICHMENT, process-map-qjl).
+    # Сама подстановка формулировок живёт в build_stage и проверяется реальным
+    # импортом; здесь — сторожа: они обязаны ронять импорт, а не молчать.
+    fake_enrichment = {
+        "task": "self-test",
+        "stage": 4,
+        "sid": 999,
+        "source": "самопроверка",
+        "add": ("Новая строка",),
+        "expand": (("Кратко", "Полностью"),),
+        "why": "самопроверка",
+    }
+
+    def _input_column() -> list[NodeDraft]:
+        return [
+            NodeDraft(
+                node_id="col-1",
+                node_type="data",
+                label="Уже есть",
+                box=Box(0, 0, 100, 50),
+                direction="in",
+            )
+        ]
+
+    drafts = _input_column()
+    enrich_report = SlideReport(slide_no=6)
+    apply_input_enrichment(fake_enrichment, 6, drafts, {"Кратко"}, IdFactory({}), enrich_report)
+    added = [d for d in drafts if d.label == "Новая строка"]
+    check(len(added) == 1, "строка со слайда обзора не добавлена в колонку входов")
+    check(added[0].direction == "in", "добавленная строка не помечена входом")
+    check(added[0].node_type == "data", "добавленная строка не data-узел")
+    check(
+        added[0].box.top == drafts[0].box.bottom,
+        "добавленная строка встала не под колонкой — раскладка сидируется slidePosition",
+    )
+    check(
+        any("ДОБАВЛЕНО" in item for item in enrich_report.owner_inputs),
+        "добавленная строка не отмечена в отчёте как пришедшая со слайда обзора",
+    )
+
+    # Переформулировка не нашла своей строки — остановка, а не тихий пропуск:
+    # иначе правка презентации молча вернула бы короткую подпись.
+    try:
+        apply_input_enrichment(
+            fake_enrichment, 6, _input_column(), set(), IdFactory({}), SlideReport(slide_no=6)
+        )
+    except SystemExit as error:
+        check("Кратко" in str(error), "в сообщении нет ненайденной формулировки")
+    else:
+        check(False, "ненайденная переформулировка не остановила импорт")
+
+    # Добавляемая строка уже есть в презентации — тоже остановка: обогащение
+    # устарело, и дублировать узел нельзя.
+    already = _input_column()
+    already[0].label = "Новая строка"
+    try:
+        apply_input_enrichment(
+            fake_enrichment, 6, already, {"Кратко"}, IdFactory({}), SlideReport(slide_no=6)
+        )
+    except SystemExit as error:
+        check("Новая строка" in str(error), "в сообщении нет уже существующей строки")
+    else:
+        check(False, "дублирующая строка не остановила импорт")
+
+    for entry in STAGE_INPUT_ENRICHMENT:
+        check(
+            entry["task"].startswith("process-map-"),
+            f"обогащение без задачи-основания: {entry['task']}",
+        )
+        check(
+            bool(entry["add"]) or bool(entry["expand"]),
+            f"обогащение {entry['task']} ничего не меняет",
+        )
 
     # 2. Первый запуск: предыдущего файла нет.
     fresh = _fresh_fixture()

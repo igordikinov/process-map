@@ -1744,7 +1744,7 @@
           ],
           "position": {
             "x": 296,
-            "y": 542
+            "y": 578
           },
           "slidePosition": {
             "x": 434,
@@ -1761,7 +1761,7 @@
           ],
           "position": {
             "x": 710,
-            "y": 542
+            "y": 578
           },
           "slidePosition": {
             "x": 647,
@@ -1775,7 +1775,7 @@
           "group": "raschet-plana-popolneniya-raspredeleniya",
           "position": {
             "x": 1124,
-            "y": 542
+            "y": 578
           },
           "slidePosition": {
             "x": 860,
@@ -1792,7 +1792,7 @@
           ],
           "position": {
             "x": 1538,
-            "y": 542
+            "y": 578
           },
           "slidePosition": {
             "x": 1073,
@@ -1828,9 +1828,9 @@
           }
         },
         {
-          "id": "razmeschennye-zakazy-po",
+          "id": "razmeschennye-zakazy-na-zakupku-po",
           "type": "data",
-          "label": "Размещенные заказы (PO)",
+          "label": "Размещенные заказы на закупку (PO)",
           "direction": "in",
           "position": {
             "x": 0,
@@ -1912,9 +1912,9 @@
           }
         },
         {
-          "id": "osg",
+          "id": "ostatochnyy-srok-godnosti-osg",
           "type": "data",
-          "label": "ОСГ",
+          "label": "Остаточный срок годности (ОСГ)",
           "direction": "in",
           "position": {
             "x": 0,
@@ -1926,9 +1926,9 @@
           }
         },
         {
-          "id": "allokaciya",
+          "id": "rezervy-allokaciya",
           "type": "data",
-          "label": "Аллокация",
+          "label": "Резервы (аллокация)",
           "direction": "in",
           "position": {
             "x": 0,
@@ -1940,13 +1940,27 @@
           }
         },
         {
+          "id": "transportnye-otnosheniya",
+          "type": "data",
+          "label": "Транспортные отношения",
+          "direction": "in",
+          "position": {
+            "x": 0,
+            "y": 1152
+          },
+          "slidePosition": {
+            "x": 30,
+            "y": 596
+          }
+        },
+        {
           "id": "plan-popolneniya-po-dnyam",
           "type": "data",
           "label": "План пополнения по дням",
           "direction": "out",
           "position": {
             "x": 1952,
-            "y": 504
+            "y": 540
           },
           "slidePosition": {
             "x": 916,
@@ -1960,7 +1974,7 @@
           "direction": "out",
           "position": {
             "x": 1952,
-            "y": 576
+            "y": 612
           },
           "slidePosition": {
             "x": 1099,
