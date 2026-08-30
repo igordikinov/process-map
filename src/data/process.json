@@ -1355,7 +1355,7 @@
           "direction": "out",
           "position": {
             "x": 2366,
-            "y": 194
+            "y": 230
           },
           "slidePosition": {
             "x": 379,
@@ -1369,7 +1369,7 @@
           "direction": "out",
           "position": {
             "x": 2366,
-            "y": 554
+            "y": 518
           },
           "slidePosition": {
             "x": 560,
@@ -1383,25 +1383,11 @@
           "direction": "out",
           "position": {
             "x": 2366,
-            "y": 698
+            "y": 662
           },
           "slidePosition": {
             "x": 560,
             "y": 586
-          }
-        },
-        {
-          "id": "opublikovannye-plany",
-          "type": "data",
-          "label": "Опубликованные планы:",
-          "direction": "out",
-          "position": {
-            "x": 2366,
-            "y": 266
-          },
-          "slidePosition": {
-            "x": 737,
-            "y": 487
           }
         },
         {
@@ -1411,7 +1397,7 @@
           "direction": "out",
           "position": {
             "x": 2366,
-            "y": 338
+            "y": 302
           },
           "slidePosition": {
             "x": 737,
@@ -1425,7 +1411,7 @@
           "direction": "out",
           "position": {
             "x": 2366,
-            "y": 410
+            "y": 374
           },
           "slidePosition": {
             "x": 737,
@@ -1439,7 +1425,7 @@
           "direction": "out",
           "position": {
             "x": 2366,
-            "y": 482
+            "y": 446
           },
           "slidePosition": {
             "x": 737,
@@ -1453,7 +1439,7 @@
           "direction": "out",
           "position": {
             "x": 2366,
-            "y": 626
+            "y": 590
           },
           "slidePosition": {
             "x": 737,

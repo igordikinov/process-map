@@ -1405,15 +1405,34 @@ def build_overview(shapes: Sequence[Shape], report: SlideReport) -> OverviewData
     )
 
 
+def block_items_start(paragraphs: Sequence[str]) -> int:
+    """
+    С какого абзаца в блоке выходов начинаются сами пункты.
+
+    Блок может открываться заголовком — на слайде 2 это «Опубликованные планы:».
+    Признак один: первый абзац оканчивается двоеточием. Разметка его
+    подтверждает (единственный во всей презентации абзац без буллита и с нулевым
+    отступом на фоне буллитованных соседей), но опираться на неё нельзя —
+    двоеточие надёжнее и не зависит от того, как редактор записал отступы.
+
+    Функция одна на ОБА применения — выбор keyOutputs и создание узлов-выходов.
+    Раньше правило жило только в первом, и заголовок уезжал в данные отдельной
+    карточкой «Опубликованные планы:» — единственным узлом документа, чья
+    подпись оканчивалась двоеточием (process-map-t9j).
+    """
+    return 1 if paragraphs and paragraphs[0].endswith(":") else 0
+
+
 def choose_key_outputs(blocks: Sequence[tuple[list[str], Box, int]]) -> list[str]:
     """
     Ключевые выходы этапа. Если среди блоков есть перечень с заголовком-двоеточием
     («Опубликованные планы:»), берём его пункты — это и есть выходы этапа.
-    Иначе — первые три абзаца в порядке чтения.
+    Иначе — первые MAX_KEY_OUTPUTS абзацев в порядке чтения.
     """
     for paragraphs, _box, _sid in blocks:
-        if paragraphs and paragraphs[0].endswith(":"):
-            return paragraphs[1 : 1 + MAX_KEY_OUTPUTS]
+        start = block_items_start(paragraphs)
+        if start:
+            return list(paragraphs[start : start + MAX_KEY_OUTPUTS])
     flat = [p for paragraphs, _box, _sid in blocks for p in paragraphs]
     return flat[:MAX_KEY_OUTPUTS]
 
@@ -1514,8 +1533,15 @@ def build_process_map(
         existing = {node["label"].casefold() for node in stage["nodes"]}
         added: list[dict] = []
         for paragraphs, box, sid in blocks:
+            # step считается по ВСЕМ абзацам, включая заголовок: высота блока на
+            # слайде поделена между ними, и пропуск заголовка не должен сдвигать
+            # остальные пункты с их настоящих слайдовых координат.
             step = box.height / max(len(paragraphs), 1)
+            items_start = block_items_start(paragraphs)
             for para_index, para in enumerate(paragraphs):
+                if para_index < items_start:
+                    # Заголовок перечня — не артефакт процесса (process-map-t9j).
+                    continue
                 if para.casefold() in existing:
                     twin = next(
                         (n for n in stage["nodes"] if n["label"].casefold() == para.casefold()),
