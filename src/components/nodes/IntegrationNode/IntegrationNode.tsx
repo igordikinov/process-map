@@ -32,6 +32,33 @@ export const SYSTEM_HANDLE = {
 } as const;
 
 export function IntegrationNode({ data }: NodeProps<IntegrationNodeType>) {
+  const codeText = (data.codes ?? [data.system]).join(' · ');
+
+  /*
+   * Подпись, дословно повторяющая код системы, — не подпись: карточка входа
+   * ERP этапа 2 рисовалась на проде как «ERP ERP» (process-map-2od).
+   *
+   * Так вышло из презентации: бокс [49] слайда 2 содержит одно слово «ERP», а
+   * import-pptx.py кладёт текст фигуры в label как есть. Что на самом деле
+   * идёт из ERP в этап 2, пока неизвестно — предполагаемый текст лежит в
+   * потерянном текстбоксе [131], но его связь с ERP утрачена (process-map-qjl).
+   * До ответа владельца дубль просто не показывается: додумывать содержание
+   * процесса запрещено (CLAUDE.md), а показывать код дважды — хуже, чем один
+   * раз. Правка живёт здесь, а не в process.json, потому что inputs/outputs
+   * пересобираются импортёром с нуля и правка данных умерла бы на первом же
+   * `npm run data`.
+   */
+  const showLabel =
+    data.label.trim() !== '' && data.label.trim() !== codeText && data.label.trim() !== data.system;
+
+  /** Подсказка не нужна, если в ней тот же код, что и в самой карточке. */
+  const tooltip =
+    data.fullLabel.trim() !== '' &&
+    data.fullLabel.trim() !== codeText &&
+    data.fullLabel.trim() !== data.system
+      ? data.fullLabel
+      : undefined;
+
   return (
     <>
       {data.direction === 'out' && (
@@ -44,10 +71,10 @@ export function IntegrationNode({ data }: NodeProps<IntegrationNodeType>) {
       )}
       <div
         className={data.compact === true ? `${styles.card} ${styles.compact}` : styles.card}
-        title={data.fullLabel}
+        title={tooltip}
       >
-        <span className={styles.code}>{(data.codes ?? [data.system]).join(' · ')}</span>
-        <span className={styles.label}>{data.label}</span>
+        <span className={styles.code}>{codeText}</span>
+        {showLabel && <span className={styles.label}>{data.label}</span>}
       </div>
       {data.direction === 'in' && (
         <Handle
