@@ -35,17 +35,21 @@ import styles from './StageDetail.module.css';
 
 // Объекты объявлены на уровне модуля: React Flow предупреждает, если nodeTypes
 // или edgeTypes меняют идентичность между рендерами.
+// Проверка типов настоящая, а не заглушённая: до process-map-ge3 здесь стояло
+// `as unknown as`, и оно пропускало в карту что угодно — проба с числом вместо
+// компонента не давала ни одной ошибки. `satisfies` сверяет объект с NodeTypes,
+// но не расширяет тип переменной до Record, поэтому имена ключей остаются точными.
 const nodeTypes = {
   groupBox: GroupNode,
   step: StepNode,
   warning: WarningNode,
   data: DataNode,
-} as unknown as NodeTypes;
+} satisfies NodeTypes;
 
 const edgeTypes = {
   process: ProcessEdge,
   integration: IntegrationEdge,
-} as unknown as EdgeTypes;
+} satisfies EdgeTypes;
 
 /** Убирает ссылку-attribution React Flow — обоснование в Overview.tsx (4hv). */
 const proOptions = { hideAttribution: true };

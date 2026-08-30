@@ -34,6 +34,10 @@ import styles from './Overview.module.css';
 
 // Объекты объявлены на уровне модуля: React Flow предупреждает, если nodeTypes
 // или edgeTypes меняют идентичность между рендерами.
+// Проверка типов настоящая, а не заглушённая: до process-map-ge3 здесь стояло
+// `as unknown as`, и оно пропускало в карту что угодно — проба с числом вместо
+// компонента не давала ни одной ошибки. `satisfies` сверяет объект с NodeTypes,
+// но не расширяет тип переменной до Record, поэтому имена ключей остаются точными.
 const nodeTypes = {
   lane: LaneNode,
   // Рамка вокруг потока этапов (process-map-sni) — тот же компонент, отдельный
@@ -42,12 +46,12 @@ const nodeTypes = {
   system: IntegrationNode,
   stage: StageNode,
   systemsBadge: SystemsBadge,
-} as unknown as NodeTypes;
+} satisfies NodeTypes;
 
 const edgeTypes = {
   process: ProcessEdge,
   integration: IntegrationEdge,
-} as unknown as EdgeTypes;
+} satisfies EdgeTypes;
 
 const fitViewOptions = { padding: FIT_VIEW_PADDING };
 
