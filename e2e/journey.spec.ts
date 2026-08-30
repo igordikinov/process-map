@@ -8,20 +8,12 @@
 // открытая панель + смена уровня. Именно там ломалось (см. отчёт задачи: панель
 // целиком накрывала тулбар).
 //
-// Открытие ссылки (SPEC §7: «перехват window.open») проверяется здесь же:
-// window.open подменяется в addInitScript ДО загрузки приложения и складывает
-// аргументы в window.__openCalls. Подмена обязательна не только ради проверки:
-// настоящий window.open(url, '_top') увёл бы всю страницу теста на example.com.
+// Открытие ссылки (SPEC §7: «перехват window.open») проверяется здесь же.
+// Сам перехват живёт в e2e/helpers.ts: он понадобился и в stage-detail.spec.ts,
+// где его отсутствие давало флак (process-map-6ja).
 import { expect, test, type Page } from '@playwright/test';
 
-/** Аргументы перехваченных вызовов window.open: [url, target]. */
-type OpenCall = [string, string];
-
-declare global {
-  interface Window {
-    __openCalls?: OpenCall[];
-  }
-}
+import { interceptWindowOpen, openCalls } from './helpers';
 
 const VIEWPORT = { width: 1280, height: 720 };
 
@@ -100,27 +92,6 @@ async function labelAtCenter(
       document.elementFromPoint(x, y)?.closest('button')?.getAttribute('aria-label') ?? null,
     { x: (box?.x ?? 0) + (box?.width ?? 0) / 2, y: (box?.y ?? 0) + (box?.height ?? 0) / 2 },
   );
-}
-
-/**
- * Перехват window.open на всё время жизни страницы.
- *
- * Ставится через addInitScript, то есть до первого скрипта приложения: модуль
- * utils/url.ts читает window.open в момент вызова, поэтому подмена работает.
- */
-async function interceptWindowOpen(page: Page): Promise<void> {
-  await page.addInitScript(() => {
-    window.__openCalls = [];
-    window.open = (url?: string | URL, target?: string): Window | null => {
-      window.__openCalls?.push([String(url), String(target)]);
-      return null;
-    };
-  });
-}
-
-/** Что успел перехватить interceptWindowOpen. */
-async function openCalls(page: Page): Promise<OpenCall[]> {
-  return page.evaluate(() => window.__openCalls ?? []);
 }
 
 /**

@@ -7,6 +7,8 @@
 // document.elementFromPoint.
 import { expect, test, type Page } from '@playwright/test';
 
+import { interceptWindowOpen, openCalls } from './helpers';
+
 const VIEWPORT = { width: 1280, height: 720 };
 
 /** Ключ и формат overrides — SPEC §3, src/data/schema.ts. */
@@ -137,6 +139,12 @@ test('клик по карточке данных в колонке входов
 test('иконка link-external появляется при screen и не открывает Drawer (stopPropagation)', async ({
   page,
 }) => {
+  // Без перехвата клик по иконке доходил до настоящего window.open(url, '_top')
+  // и уводил страницу теста на example.com: ассерты ниже гонялись с живой
+  // навигацией, и тест падал примерно в половине прогонов (process-map-6ja).
+  // Ставится ДО goto и переживает reload — одного вызова хватает на весь тест.
+  await interceptWindowOpen(page);
+
   await page.goto('/');
   await openStage(page, 0);
 
@@ -172,12 +180,18 @@ test('иконка link-external появляется при screen и не от
     (box?.y ?? 0) + (box?.height ?? 0) / 2,
   );
 
-  // Открытие ссылки — задача process-map-lfj; здесь важно только, что клик по
-  // иконке НЕ выбрал узел и НЕ открыл панель. Проверяется и то, и другое:
-  // aria-current — состояние в store, панель — то, что видит пользователь
-  // (SPEC §4.2). Само отсутствие всплытия события к обёртке узла проверяется
-  // юнит-тестом в tests/stageDetail.test.tsx: соседство кнопок в разметке
-  // делает проверку «узел не выбран» истинной и без stopPropagation.
+  // Клик обязан дойти до openScreen. Без этой проверки тест остаётся зелёным и
+  // тогда, когда кнопка вообще перестала открывать ссылку: «панель не открылась»
+  // истинно и у мёртвой кнопки. В проекте такой пустой тест ловили уже не раз —
+  // условие должно проверять тот механизм, ради которого написано.
+  expect(await openCalls(page)).toEqual([['https://example.com/', '_top']]);
+
+  // Дальше — то, ради чего тест назван: клик по иконке НЕ выбрал узел и НЕ
+  // открыл панель. Проверяется и то, и другое: aria-current — состояние в
+  // store, панель — то, что видит пользователь (SPEC §4.2). Само отсутствие
+  // всплытия события к обёртке узла проверяется юнит-тестом в
+  // tests/stageDetail.test.tsx: соседство кнопок в разметке делает проверку
+  // «узел не выбран» истинной и без stopPropagation.
   await expect(page.locator(`[data-id="${stepId}"] button[aria-current="true"]`)).toHaveCount(0);
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(page.locator('[data-testid="drawer-scrim"]')).toHaveCount(0);
