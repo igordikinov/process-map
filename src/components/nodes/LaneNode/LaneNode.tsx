@@ -9,7 +9,16 @@ export interface LaneNodeData extends Record<string, unknown> {
 
 export type LaneNodeType = Node<LaneNodeData, 'lane'>;
 
-export function LaneNode({ data }: NodeProps<LaneNodeType>) {
+/**
+ * Рамка вокруг основного потока этапов (process-map-sni). Оформление то же, что
+ * у свимлейнов, поэтому компонент общий, а тип узла отдельный: React Flow кладёт
+ * тип в класс `.react-flow__node-<type>`, и общий тип слил бы в один счётчик
+ * свимлейны и рамку потока — а они появляются по разным условиям (свимлейны
+ * пропадают вместе с интеграциями, рамка потока остаётся).
+ */
+export type FlowLaneNodeType = Node<LaneNodeData, 'flowLane'>;
+
+export function LaneNode({ data }: NodeProps<LaneNodeType | FlowLaneNodeType>) {
   return (
     <div className={styles.lane}>
       <div className={styles.title}>{data.title}</div>

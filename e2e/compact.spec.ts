@@ -125,6 +125,8 @@ test.describe('компактный режим 1024×600 (артборд A4)', (
 
   test('свимлейнов нет, вместо них строка-бейдж внешних систем', async ({ page }) => {
     await expect(page.locator('.react-flow__node-lane')).toHaveCount(0);
+    // Рамка вокруг потока этапов в компактном режиме тоже снята (process-map-sni).
+    await expect(page.locator('.react-flow__node-flowLane')).toHaveCount(0);
 
     const badge = page.getByRole('group', { name: 'Внешние системы процесса' });
     await expect(badge).toBeVisible();
@@ -236,6 +238,7 @@ test('уменьшение окна БЕЗ перезагрузки включа
   // Исходное состояние — обычный режим (артборд A1).
   expect((await layoutSize(page, 'header')).h).toBe(HEADER_HEIGHT);
   await expect(page.locator('.react-flow__node-lane')).toHaveCount(2);
+  await expect(page.locator('.react-flow__node-flowLane')).toHaveCount(1);
   await expect(page.getByRole('group', { name: 'Внешние системы процесса' })).toHaveCount(0);
 
   const transformBefore = await viewportTransform(page);
@@ -244,6 +247,7 @@ test('уменьшение окна БЕЗ перезагрузки включа
   // Раскладка переключилась сама, без reload: сработал ResizeObserver.
   await expect.poll(async () => (await layoutSize(page, 'header')).h).toBe(HEADER_HEIGHT_COMPACT);
   await expect(page.locator('.react-flow__node-lane')).toHaveCount(0);
+  await expect(page.locator('.react-flow__node-flowLane')).toHaveCount(0);
   await expect(page.getByRole('group', { name: 'Внешние системы процесса' })).toBeVisible();
   const compactCard = await page.evaluate(() => {
     const el = document.querySelector('.react-flow__node-stage button');

@@ -17,11 +17,12 @@ import { ru } from '../../i18n/ru';
 import { IO_NODE_SIZE, STAGE_NODE_SIZE, STAGE_NODE_SIZE_COMPACT } from '../../theme/sizes';
 import { STAGE_HANDLE, type StageNodeType } from '../nodes/StageNode';
 import { SYSTEM_HANDLE, type IntegrationNodeType } from '../nodes/IntegrationNode';
-import type { LaneNodeType } from '../nodes/LaneNode';
+import type { FlowLaneNodeType, LaneNodeType } from '../nodes/LaneNode';
 import type { SystemsBadgeNodeType } from '../nodes/SystemsBadge';
 
 export type OverviewNode =
   | LaneNodeType
+  | FlowLaneNodeType
   | IntegrationNodeType
   | StageNodeType
   | SystemsBadgeNodeType;
@@ -54,6 +55,22 @@ const IO_OFFSET_Y = 24;
 
 export const LANE_IN_ID = 'lane-in';
 export const LANE_OUT_ID = 'lane-out';
+
+// ─────────── рамка вокруг основного потока этапов (process-map-sni) ───────────
+//
+// Отступы не выдуманы, а взяты у свимлейнов, чтобы три рамки на обзоре читались
+// как одна система: в свимлейне входа карточка стоит на IO_OFFSET_Y (24) от
+// верха рамки, а под ней остаётся LANE_IN_HEIGHT − IO_OFFSET_Y − IO_HEIGHT (28).
+// Те же 24 сверху и 28 снизу вокруг карточки этапа 274×210 дают y = 176 и
+// height = 262, то есть низ рамки на 438 — выше свимлейна выхода (474).
+// Ширина общая с свимлейнами (laneWidth), поэтому все три рамки выровнены.
+const FLOW_LANE_TOP_PADDING = IO_OFFSET_Y;
+const FLOW_LANE_BOTTOM_PADDING = LANE_IN_HEIGHT - IO_OFFSET_Y - IO_HEIGHT;
+const FLOW_LANE_Y = STAGE_Y - FLOW_LANE_TOP_PADDING;
+const FLOW_LANE_HEIGHT =
+  FLOW_LANE_TOP_PADDING + STAGE_NODE_SIZE.height + FLOW_LANE_BOTTOM_PADDING;
+
+export const FLOW_LANE_ID = 'lane-flow';
 
 // ───────────────── геометрия компактного режима (SPEC §4.5, A4) ─────────────────
 //
@@ -338,6 +355,26 @@ export function buildOverviewGraph(
         });
       });
     }
+  }
+
+  // Рамка вокруг основного потока (process-map-sni). Рисуется НЕЗАВИСИМО от
+  // showIntegrations: она описывает сам процесс, а не интеграции, поэтому
+  // тумблер «Показать интеграции» её не касается. В компактном режиме её нет —
+  // там и свимлейны схлопнуты в строку-бейдж (SPEC §4.5), лишней вертикали нет.
+  // Идёт в массиве раньше карточек этапов: React Flow рисует узлы в порядке
+  // массива, и рамка обязана оказаться ПОД ними.
+  if (!compact && stageCount > 0) {
+    nodes.push({
+      id: FLOW_LANE_ID,
+      type: 'flowLane',
+      position: { x: LANE_X, y: FLOW_LANE_Y },
+      data: { title: ru.overview.laneFlow },
+      style: { width: laneWidth, height: FLOW_LANE_HEIGHT },
+      draggable: false,
+      selectable: false,
+      connectable: false,
+      focusable: false,
+    });
   }
 
   map.stages.forEach((stage, index) => {

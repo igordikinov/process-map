@@ -19,6 +19,7 @@ import { Legend } from '../src/components/Legend';
 import { OverviewHeader } from '../src/components/Overview/OverviewHeader';
 import {
   buildOverviewGraph,
+  FLOW_LANE_ID,
   LANE_IN_ID,
   LANE_OUT_ID,
   stageSystemsEdgeId,
@@ -220,6 +221,11 @@ describe('buildOverviewGraph: компактный режим (SPEC §4.5)', () 
     expect(nodes.filter((node) => node.type === 'lane')).toHaveLength(0);
     expect(nodes.some((node) => node.id === LANE_IN_ID)).toBe(false);
     expect(nodes.some((node) => node.id === LANE_OUT_ID)).toBe(false);
+    // Рамка вокруг потока этапов (process-map-sni) в компактном режиме тоже не
+    // рисуется: 200 px высоты карточки и так впритык, лишняя вертикаль на
+    // отступы и заголовок рамки взяться неоткуда.
+    expect(nodes.filter((node) => node.type === 'flowLane')).toHaveLength(0);
+    expect(nodes.some((node) => node.id === FLOW_LANE_ID)).toBe(false);
 
     const badges = nodes.filter((node) => node.type === 'systemsBadge');
     expect(badges).toHaveLength(1);

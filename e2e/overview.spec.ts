@@ -22,8 +22,36 @@ test('шапка показывает заголовок, число этапо�
 test('на полотне 4 карточки этапов, оба свимлейна и рёбра', async ({ page }) => {
   await expect(page.locator('.react-flow__node-stage')).toHaveCount(4);
   await expect(page.locator('.react-flow__node-lane')).toHaveCount(2);
+  await expect(page.locator('.react-flow__node-flowLane')).toHaveCount(1);
   await expect(page.locator('.react-flow__node-system')).toHaveCount(8);
   await expect(page.locator('.react-flow__edge')).toHaveCount(9);
+});
+
+// Соседние блоки обзора подписаны, а сам процесс оставался безымянным
+// (process-map-sni). Рамка вокруг потока этапов — третий контейнер того же
+// стиля; проверяем и подпись, и то, что карточки этапов реально внутри неё.
+test('поток этапов обведён рамкой «Модуль SNP», карточки внутри неё', async ({ page }) => {
+  const frame = page.locator('.react-flow__node-flowLane');
+  await expect(frame).toHaveCount(1);
+  await expect(frame).toHaveText('Модуль SNP');
+
+  const frameBox = await frame.boundingBox();
+  expect(frameBox).not.toBeNull();
+
+  const cards = page.locator('.react-flow__node-stage');
+  await expect(cards).toHaveCount(4);
+  for (let index = 0; index < 4; index += 1) {
+    const box = await cards.nth(index).boundingBox();
+    expect(box, `у карточки ${index} нет геометрии`).not.toBeNull();
+    expect(box?.x ?? 0).toBeGreaterThanOrEqual(frameBox?.x ?? 0);
+    expect((box?.x ?? 0) + (box?.width ?? 0)).toBeLessThanOrEqual(
+      (frameBox?.x ?? 0) + (frameBox?.width ?? 0),
+    );
+    expect(box?.y ?? 0).toBeGreaterThan(frameBox?.y ?? 0);
+    expect((box?.y ?? 0) + (box?.height ?? 0)).toBeLessThan(
+      (frameBox?.y ?? 0) + (frameBox?.height ?? 0),
+    );
+  }
 });
 
 // В данных label входа ERP дословно равен коду системы («ERP» — весь текст

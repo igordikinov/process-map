@@ -36,6 +36,9 @@ import styles from './Overview.module.css';
 // или edgeTypes меняют идентичность между рендерами.
 const nodeTypes = {
   lane: LaneNode,
+  // Рамка вокруг потока этапов (process-map-sni) — тот же компонент, отдельный
+  // тип: он попадает в класс узла, и общий тип слил бы счётчики в e2e.
+  flowLane: LaneNode,
   system: IntegrationNode,
   stage: StageNode,
   systemsBadge: SystemsBadge,

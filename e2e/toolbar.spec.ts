@@ -213,8 +213,10 @@ test.describe('Тулбар и легенда, уровень 1 (обзор)', (
     await expect(page.locator('.react-flow__node-lane')).toHaveCount(0);
     await expect(page.locator('.react-flow__node-system')).toHaveCount(0);
     await expect(page.locator('.react-flow__edge-integration')).toHaveCount(0);
-    // Этапы и процессные рёбра остаются.
+    // Этапы, рамка потока и процессные рёбра остаются: рамка описывает сам
+    // процесс, а не интеграции, поэтому тумблер её не касается (process-map-sni).
     await expect(page.locator('.react-flow__node-stage')).toHaveCount(4);
+    await expect(page.locator('.react-flow__node-flowLane')).toHaveCount(1);
     await expect(page.locator('.react-flow__edge-process')).toHaveCount(3);
 
     await mouseClickCenter(page, toggle);

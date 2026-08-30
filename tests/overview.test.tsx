@@ -9,7 +9,12 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { OverviewHeader } from '../src/components/Overview/OverviewHeader';
-import { buildOverviewGraph, systemNodeId } from '../src/components/Overview/overviewGraph';
+import {
+  buildOverviewGraph,
+  FLOW_LANE_ID,
+  LANE_OUT_ID,
+  systemNodeId,
+} from '../src/components/Overview/overviewGraph';
 import { StageCard } from '../src/components/nodes/StageNode/StageCard';
 import { loadBaseProcessMap } from '../src/data/loader';
 import type { Stage } from '../src/data/schema';
@@ -195,13 +200,67 @@ describe('buildOverviewGraph', () => {
     }
   });
 
-  it('при выключенных интеграциях остаются только этапы и процессные рёбра', () => {
+  it('при выключенных интеграциях остаются этапы, рамка потока и процессные рёбра', () => {
     const { nodes, edges } = buildOverviewGraph(map, false);
 
-    expect(nodes).toHaveLength(4);
-    expect(nodes.every((node) => node.type === 'stage')).toBe(true);
+    // Рамка потока (process-map-sni) не зависит от тумблера «Показать
+    // интеграции»: она описывает сам процесс, а не интеграции. Свимлейнов и
+    // узлов систем при этом не остаётся.
+    expect(nodes).toHaveLength(5);
+    expect(nodes.filter((node) => node.type === 'stage')).toHaveLength(4);
+    expect(nodes.filter((node) => node.type === 'flowLane')).toHaveLength(1);
+    expect(nodes.filter((node) => node.type === 'lane')).toHaveLength(0);
+    expect(nodes.filter((node) => node.type === 'system')).toHaveLength(0);
     expect(edges).toHaveLength(3);
     expect(edges.every((edge) => edge.type === 'process')).toBe(true);
+  });
+
+  it('рамка потока лежит в массиве раньше карточек этапов и охватывает их', () => {
+    const { nodes } = buildOverviewGraph(map, true);
+
+    const frameIndex = nodes.findIndex((node) => node.id === FLOW_LANE_ID);
+    const firstStageIndex = nodes.findIndex((node) => node.type === 'stage');
+    expect(frameIndex).toBeGreaterThanOrEqual(0);
+    // React Flow рисует узлы в порядке массива: рамка обязана быть ПОД
+    // карточками, иначе её полупрозрачный фон ляжет поверх них.
+    expect(frameIndex).toBeLessThan(firstStageIndex);
+
+    const frame = nodes[frameIndex];
+    const style = frame?.style as { width: number; height: number } | undefined;
+    expect(style).toBeDefined();
+
+    const top = frame?.position.y ?? 0;
+    const bottom = top + (style?.height ?? 0);
+    const left = frame?.position.x ?? 0;
+    const right = left + (style?.width ?? 0);
+
+    // Каждая карточка этапа целиком внутри рамки.
+    const stages = nodes.filter((node) => node.type === 'stage');
+    expect(stages).toHaveLength(4);
+    for (const stage of stages) {
+      expect(stage.position.x).toBeGreaterThanOrEqual(left);
+      expect(stage.position.x + (stage.width ?? 0)).toBeLessThanOrEqual(right);
+      expect(stage.position.y).toBeGreaterThan(top);
+      expect(stage.position.y + (stage.height ?? 0)).toBeLessThan(bottom);
+    }
+
+    // И рамка не налезает на свимлейны: вход кончается на 156, выход с 474.
+    const laneOut = nodes.find((node) => node.id === LANE_OUT_ID);
+    expect(bottom).toBeLessThan(laneOut?.position.y ?? 0);
+  });
+
+  it('в компактном режиме рамки потока нет (SPEC §4.5)', () => {
+    const { nodes } = buildOverviewGraph(map, true, true);
+
+    expect(nodes.filter((node) => node.type === 'flowLane')).toHaveLength(0);
+    expect(nodes.some((node) => node.id === FLOW_LANE_ID)).toBe(false);
+  });
+
+  it('рамка потока подписана строкой из ru.ts', () => {
+    const { nodes } = buildOverviewGraph(map, true);
+    const frame = nodes.find((node) => node.id === FLOW_LANE_ID);
+
+    expect(frame?.data).toEqual({ title: ru.overview.laneFlow });
   });
 
   it('карточки этапов не накладываются друг на друга', () => {
