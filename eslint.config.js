@@ -45,6 +45,45 @@ export default tseslint.config(
     },
   },
   {
+    /*
+     * Node в бандл не попадает (process-map-1pp).
+     *
+     * ПОЧЕМУ ЛИНТЕР, А НЕ TYPESCRIPT. Настройками tsc эту границу провести
+     * нельзя: `compilerOptions.types` — параметр уровня проекта, а сверх того
+     * vite/dist/node/index.d.ts сам содержит `/// <reference types="node" />`,
+     * поэтому глобалы Node видны из любого файла программы независимо от
+     * настроек. Раньше их приносил самодельный шим scripts/node-builtins.d.ts
+     * (в его шапке было написано, что на src/ он не влияет, — это оказалось
+     * неверно), теперь приносит @types/node. Единственный работающий механизм
+     * границы — правило линтера, как и с hex-цветами выше.
+     *
+     * src/** — это код, который уезжает в браузер: `process` там превратится
+     * в ReferenceError, а импорт node:* уронит сборку Vite.
+     */
+    files: ['src/**/*.ts', 'src/**/*.tsx'],
+    rules: {
+      'no-restricted-globals': [
+        'error',
+        {
+          name: 'process',
+          message:
+            'src/** уезжает в браузер: process там не существует. Значения времени сборки — через import.meta.env.',
+        },
+      ],
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['node:*'],
+              message: 'src/** уезжает в браузер: встроенные модули Node в бандле недоступны.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
     files: ['**/*.{test,spec}.{ts,tsx}', 'tests/**/*.{ts,tsx}', 'e2e/**/*.{ts,tsx}'],
     languageOptions: {
       globals: { ...globals.node },
