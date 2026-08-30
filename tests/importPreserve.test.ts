@@ -301,3 +301,95 @@ describe('import-pptx.py: входы по слайду обзора', () => {
     }
   });
 });
+
+/**
+ * Читает STAGE_GROUP_SPLIT из scripts/import-pptx.py — деление узлов этапа на
+ * группы, которого на слайде детализации нет (задача process-map-028).
+ */
+function readGroupSplit(): GroupSplit[] {
+  const block = /^STAGE_GROUP_SPLIT[^\n]*=\s*\(\n([\s\S]*?)\n\)\n/m.exec(importerSource);
+  if (block === null) {
+    return [];
+  }
+  const entries =
+    /"task":\s*"([^"]+)",\s*"stage":\s*(\d+),\s*"label":\s*"([^"]+)",\s*"nodes":\s*\(([\s\S]*?)\),/g;
+  return [...block[1]!.matchAll(entries)].map((match) => ({
+    task: match[1]!,
+    stage: Number(match[2]!),
+    label: match[3]!,
+    nodes: [...match[4]!.matchAll(/"([^"]+)"/g)].map((item) => item[1]!),
+  }));
+}
+
+interface GroupSplit {
+  task: string;
+  stage: number;
+  label: string;
+  nodes: string[];
+}
+
+// Деление группы по решению владельца (process-map-028). Причина отдельного
+// объявления та же, что у рёбер и входов выше: импортёр пересобирает
+// process.json с нуля. Тест сторожит связь в ОБЕ стороны — объявленные узлы
+// обязаны лежать в новой группе, а сама группа обязана существовать у этапа.
+describe('import-pptx.py: деление группы по решению владельца', () => {
+  const splits = readGroupSplit();
+
+  it('объявление не потеряно и называет задачу-основание', () => {
+    expect(
+      splits.length,
+      'STAGE_GROUP_SPLIT в scripts/import-pptx.py пуст или не найден — ' +
+        'деление групп не переживёт следующий npm run data',
+    ).toBeGreaterThan(0);
+    for (const split of splits) {
+      expect(split.task, 'источник решения').toMatch(/^process-map-/);
+      expect(split.nodes.length).toBeGreaterThan(0);
+    }
+  });
+
+  it('новая группа есть у этапа, и объявленные узлы лежат именно в ней', () => {
+    for (const split of splits) {
+      const stage = map.stages.find((candidate) => candidate.number === split.stage);
+      expect(stage, `этап ${split.stage}`).toBeDefined();
+
+      const group = stage!.groups.find((candidate) => candidate.label === split.label);
+      expect(
+        group,
+        `${split.task}: группа «${split.label}» не доехала в process.json`,
+      ).toBeDefined();
+
+      const byLabel = new Map(stage!.nodes.map((node) => [node.label, node]));
+      for (const label of split.nodes) {
+        const node = byLabel.get(label);
+        expect(node, `${split.task}: узла «${label}» нет на этапе ${split.stage}`).toBeDefined();
+        expect(
+          node!.group,
+          `${split.task}: «${label}» остался в прежней группе — деление не применилось`,
+        ).toBe(group!.id);
+      }
+    }
+  });
+});
+
+// Правило 7v1: узел, назвавший внешнюю систему и направление, стоит на границе
+// с ней — значит это интеграция, даже если в презентации у него обычная заливка
+// шага. Серый цвет A6A6A6 есть только у входящих интеграций слайдов 3-4;
+// исходящие слайда 5 нарисованы как обычные шаги, поэтому опознать их можно
+// только по коду системы.
+describe('import-pptx.py: интеграции по коду системы (process-map-7v1)', () => {
+  const withSystem = map.stages.flatMap((stage) =>
+    stage.nodes.filter((node) => node.system !== undefined),
+  );
+
+  it('узлы с кодом системы вообще есть — иначе правило проверять не на чем', () => {
+    expect(withSystem.length).toBeGreaterThan(0);
+  });
+
+  it('каждый узел с кодом системы — интеграция, ни одного шага', () => {
+    const steps = withSystem.filter((node) => node.type === 'step');
+    expect(
+      steps.map((node) => node.label),
+      'узел назвал внешнюю систему, но остался шагом — правило 7v1 перестало применяться',
+    ).toEqual([]);
+  });
+});

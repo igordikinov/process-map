@@ -404,6 +404,16 @@ export function buildStageGraph(stage: Stage, showIntegrations = true): StageGra
     if (members === undefined || members.length === 0) {
       continue;
     }
+    // То же самое, когда выключенный toggle спрятал ВСЕ узлы группы. С задачи
+    // process-map-7v1 такая группа появилась: все четыре узла «Публикации
+    // планов» — интеграции, и при выключенном toggle от неё оставалась рамка
+    // 323×336 с заголовком и пустотой внутри.
+    if (!showIntegrations && members.every((node) => node.type === 'integration')) {
+      continue;
+    }
+    // Габарит считается по ПОЛНОМУ набору узлов, а не по видимым: иначе
+    // частично скрытая группа меняла бы размер при переключении toggle и
+    // раскладка прыгала бы.
     const bbox = boundingBox(members);
     const box: Box = {
       x: bbox.x - GROUP_PADDING.x,

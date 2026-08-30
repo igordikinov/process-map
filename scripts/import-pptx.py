@@ -40,14 +40,17 @@ dagre). Порядок обязателен и обратного не имее�
 
 ЧТО В ДОКУМЕНТЕ НЕ ИЗ ПРЕЗЕНТАЦИИ
 ---------------------------------
-Ровно три места, и все три на виду — потому что правило проекта «не изобретать
-процесс» иначе не проверить:
+Ровно четыре места, и все четыре на виду — потому что правило проекта «не
+изобретать процесс» иначе не проверить:
 
   · OWNER_DECISION_EDGES — рёбра по решению владельца процесса, которых на
     слайде нет (задача process-map-7bz). Отчёт печатает их отдельным блоком;
   · STAGE_INPUT_ENRICHMENT — входы этапа, взятые со слайда ОБЗОРА вместо слайда
     детализации (задача process-map-qjl): текст всё равно из презентации, но
     выбор источника сделан владельцем. Тоже печатается отдельным блоком;
+  · STAGE_GROUP_SPLIT — деление узлов этапа на группы, которого на слайде
+    детализации нет (задача process-map-028): обзор показывает две группы,
+    детализация — один контейнер. Отдельный блок в отчёте;
   · ручные поля `screen`/`owner` — их проставляет человек в редакторе, см.
     ниже.
 
@@ -268,6 +271,31 @@ STAGE_INPUT_ENRICHMENT: tuple[dict, ...] = (
     },
 )
 
+STAGE_GROUP_SPLIT: tuple[dict, ...] = (
+    {
+        "task": "process-map-028",
+        "stage": 4,
+        "label": "TLB",
+        "nodes": (
+            "Формирование рекомендаций с учетом параметров нагрузки на транспорт",
+            "Корректировки рекомендаций (заявок на перемещение)",
+            "Публикация рекомендаций (заявок на перемещение)",
+        ),
+        "why": (
+            "решение владельца процесса. На слайде 2 у этапа 4 две группы — "
+            "«Расчёт плана пополнения (DRP/Deployment)» и «TLB», — а на слайде 6 "
+            "контейнер один, и геометрия деления не показывает: равные зазоры "
+            "(407049 EMU, разброс 1 EMU), сплошная цепочка стрелок, единый "
+            "заголовок по центру над всеми четырьмя шагами. Связка нашлась через "
+            "выходы: подпись под первым шагом — «План пополнения по дням», это "
+            "выход DRP на обзоре; подписи под вторым и четвёртым — «Схема "
+            "загрузки транспортных средств», это выход TLB; третий зажат между "
+            "ними в той же цепочке. Заголовок слайда 6 сам делит этап надвое: "
+            "«Расчёт плана пополнения (DRP/Deployment) + Транспортбилдер»"
+        ),
+    },
+)
+
 A = "{http://schemas.openxmlformats.org/drawingml/2006/main}"
 P = "{http://schemas.openxmlformats.org/presentationml/2006/main}"
 
@@ -406,6 +434,11 @@ class SlideReport:
     # Входы, добавленные и переформулированные по слайду обзора
     # (STAGE_INPUT_ENRICHMENT, задача process-map-qjl).
     owner_inputs: list[str] = field(default_factory=list)
+    # Узлы, повышенные из step в integration по коду системы (process-map-7v1).
+    promoted_integrations: list[str] = field(default_factory=list)
+    # Узлы, перенесённые в отдельную группу по решению владельца
+    # (STAGE_GROUP_SPLIT, задача process-map-028).
+    owner_groups: list[str] = field(default_factory=list)
 
 
 # --------------------------------------------------------------------------------------
@@ -1164,6 +1197,29 @@ def build_stage(
             if add_external_io(bucket, entry) and draft.system is None:
                 draft.system = system
 
+    # 7b. Узел с проставленным кодом системы — интеграция, даже если заливка
+    #     обычная (решение владельца, process-map-7v1).
+    #
+    #     ПОЧЕМУ ПРАВИЛО, А НЕ СПИСОК. Признак «серая заливка A6A6A6» есть ровно
+    #     у четырёх фигур на всю презентацию, и все четыре — входящие интеграции
+    #     слайдов 3-4. Исходящие интеграции слайда 5 нарисованы штатной заливкой
+    #     шага, а слово «модуль» из их текста убрано («Передача ограниченного
+    #     прогноза в DP»), хотя на слайде обзора тот же шаг записан «в модуль DP».
+    #     То есть оба признака is_integration промахиваются по вине вёрстки.
+    #
+    #     Код системы при этом проставляется от подписи-выгрузки и служит честным
+    #     признаком: узел назвал внешнюю систему и направление — значит он на
+    #     границе с ней. На текущих данных правило даёт ровно те четыре узла,
+    #     которые назвал владелец, и ни одного лишнего: код системы несут восемь
+    #     узлов, четыре из них уже были интеграциями.
+    for draft in drafts:
+        if draft.system is not None and draft.node_type == "step":
+            draft.node_type = "integration"
+            report.promoted_integrations.append(
+                f"слайд {slide_no}: «{draft.label[:60]}» — step → integration "
+                f"(код системы {draft.system}, заливка обычная)"
+            )
+
     # 8. Отчёт по потерянным текстовым фигурам.
     for tb in textboxes:
         if tb.consumed_by is None:
@@ -1435,6 +1491,10 @@ def build_process_map(
     # рёбра решения новых id не создают, так что пропуск ни на что не влияет.
     if collisions is not None:
         apply_owner_decision_edges(stages, reports)
+        # Деление группы сверяется по подписям узлов, а не по id, поэтому
+        # временные id первой фазы ему не мешают — но держим рядом с рёбрами:
+        # обе таблицы описывают решения владельца поверх презентации.
+        apply_stage_group_split(stages, reports)
 
     # Правая колонка выходов этапа (SPEC §4.2) — блоки под контейнером на слайде 2.
     # direction='out' — по происхождению: это блок выходов этапа в обзоре
@@ -1554,6 +1614,60 @@ def build_process_map(
         "overviewEdges": overview_edges,
     }
     return process_map, reports, questions, ids.counts
+
+
+def apply_stage_group_split(
+    stages: list[dict],
+    stage_reports: Sequence[SlideReport],
+    splits: Sequence[dict] = STAGE_GROUP_SPLIT,
+) -> None:
+    """
+    Выделяет часть узлов этапа в отдельную группу (STAGE_GROUP_SPLIT, process-map-028).
+
+    Нужно там, где обзорный слайд показывает у этапа две группы, а слайд
+    детализации рисует один контейнер: геометрии для деления нет, и вывести его
+    нельзя — только записать решение владельца.
+
+    Расхождение с презентацией останавливает импорт, как и в остальных таблицах
+    решений: если шаг переименовали, молча потерять деление нельзя.
+    """
+    by_number = {stage["number"]: stage for stage in stages}
+    for split in splits:
+        report = stage_reports[split["stage"] - 1]
+        stage = by_number.get(split["stage"])
+        if stage is None:
+            raise SystemExit(
+                f"STAGE_GROUP_SPLIT ({split['task']}): этапа {split['stage']} нет "
+                f"в презентации — решение владельца применить не к чему"
+            )
+
+        by_label = {node["label"]: node for node in stage["nodes"]}
+        missing = [label for label in split["nodes"] if label not in by_label]
+        if missing:
+            raise SystemExit(
+                f"STAGE_GROUP_SPLIT ({split['task']}): на этапе {split['stage']} нет "
+                f"узлов {', '.join(repr(m) for m in missing)} — презентация изменилась. "
+                f"Импорт остановлен, чтобы решение владельца не потерялось молча: "
+                f"обновите список в scripts/import-pptx.py."
+            )
+
+        group_id = slugify(split["label"])
+        if any(group["id"] == group_id for group in stage["groups"]):
+            raise SystemExit(
+                f"STAGE_GROUP_SPLIT ({split['task']}): группа «{split['label']}» уже есть "
+                f"на этапе {split['stage']} — презентация изменилась и делить больше "
+                f"не нужно. Обновите список в scripts/import-pptx.py."
+            )
+        stage["groups"].append({"id": group_id, "label": split["label"]})
+
+        for label in split["nodes"]:
+            node = by_label[label]
+            was = node.get("group")
+            node["group"] = group_id
+            report.owner_groups.append(
+                f"этап {split['stage']}: «{label[:60]}» — группа «{was}» → «{group_id}» "
+                f"({split['task']}), на слайде детализации деления нет"
+            )
 
 
 def apply_owner_decision_edges(
@@ -1778,6 +1892,32 @@ def print_report(process_map: dict, reports: Sequence[SlideReport], questions: S
             print(f"    · {item}")
     else:
         print("  список STAGE_INPUT_ENRICHMENT пуст — все входы прочитаны со слайдов детализации")
+
+    # Деление группы, которого на слайде детализации нет (process-map-028).
+    owner_groups = [item for report in reports for item in report.owner_groups]
+    print("\n" + "=" * 78)
+    print("ГРУППЫ ПО РЕШЕНИЮ ВЛАДЕЛЬЦА — НА СЛАЙДЕ ДЕТАЛИЗАЦИИ ДЕЛЕНИЯ НЕТ")
+    print("=" * 78)
+    if owner_groups:
+        print("  Источник — STAGE_GROUP_SPLIT в scripts/import-pptx.py: обзорный слайд")
+        print("  показывает две группы, слайд детализации — один контейнер.")
+        for item in owner_groups:
+            print(f"    · {item}")
+    else:
+        print("  список STAGE_GROUP_SPLIT пуст — все группы прочитаны со слайдов детализации")
+
+    # Узлы, ставшие интеграциями не по заливке, а по коду системы (7v1).
+    promoted = [item for report in reports for item in report.promoted_integrations]
+    print("\n" + "=" * 78)
+    print("ИНТЕГРАЦИИ ПО КОДУ СИСТЕМЫ — ЗАЛИВКА В ПРЕЗЕНТАЦИИ ОБЫЧНАЯ")
+    print("=" * 78)
+    if promoted:
+        print("  Серая заливка A6A6A6 есть только у входящих интеграций слайдов 3-4.")
+        print("  Исходящие нарисованы как обычные шаги, поэтому тип выведен из кода системы.")
+        for item in promoted:
+            print(f"    · {item}")
+    else:
+        print("  повышений не было — все интеграции распознаны по заливке или тексту")
 
     print("\n" + "=" * 78)
     print("ИЗОЛИРОВАННЫЕ не-data УЗЛЫ — где в презентации связи нет")
