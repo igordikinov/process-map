@@ -201,6 +201,16 @@ test('иконка link-external появляется при screen и не от
   }, OVERRIDES_KEY);
 });
 
+// Второе полотно приложения — attribution убран и здесь (process-map-4hv,
+// обоснование в Overview.tsx). Отдельная проверка нужна потому, что proOptions
+// задаётся в каждом <ReactFlow> свой.
+test('ссылка-attribution React Flow на полотне детализации не отрисована', async ({ page }) => {
+  await page.goto('/');
+  await openStage(page, 0);
+
+  await expect(page.locator('.react-flow__attribution')).toHaveCount(0);
+});
+
 test('узлы уровня 2 не перетаскиваются (CLAUDE.md, v1)', async ({ page }) => {
   await page.goto('/');
   await openStage(page, 0);

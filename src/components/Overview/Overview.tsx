@@ -48,6 +48,17 @@ const edgeTypes = {
 
 const fitViewOptions = { padding: FIT_VIEW_PADDING };
 
+/*
+ * Убирает ссылку-attribution React Flow из правого нижнего угла полотна
+ * (решение владельца, process-map-4hv): карта встроена в In.Plan, и на демо
+ * клиентам в углу висел посторонний бренд.
+ *
+ * hideAttribution — публичный проп библиотеки, а @xyflow/react распространяется
+ * под обычным MIT без оговорок про attribution: подписка Pro у авторов — просьба
+ * о поддержке, а не условие лицензии. Поэтому штатный проп, а не CSS-хак.
+ */
+const proOptions = { hideAttribution: true };
+
 export function Overview() {
   const showIntegrations = useProcessStore((state) => state.showIntegrations);
 
@@ -101,6 +112,7 @@ export function Overview() {
               fitViewOptions={fitViewOptions}
               minZoom={MIN_ZOOM}
               maxZoom={MAX_ZOOM}
+              proOptions={proOptions}
             >
               <Background variant={BackgroundVariant.Dots} gap={GRID_GAP} size={GRID_DOT_SIZE} />
               {/* SPEC §4.5: при смене режима вид подгоняется заново — карточки

@@ -26,6 +26,14 @@ test('на полотне 4 карточки этапов, оба свимлей
   await expect(page.locator('.react-flow__edge')).toHaveCount(9);
 });
 
+// Полотно встроено в In.Plan, и в правом нижнем углу висела ссылка-attribution
+// React Flow — посторонний бренд на демо клиентам (process-map-4hv). Убрана
+// штатным proOptions.hideAttribution; проверка сторожит именно её отсутствие,
+// потому что проп легко потерять при следующей правке пропов <ReactFlow>.
+test('ссылка-attribution React Flow на полотне не отрисована', async ({ page }) => {
+  await expect(page.locator('.react-flow__attribution')).toHaveCount(0);
+});
+
 test('центр карточки этапа принимает события мыши, а не полотно', async ({ page }) => {
   const card = page.locator('.react-flow__node-stage button').first();
   const box = await card.boundingBox();

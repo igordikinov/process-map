@@ -47,6 +47,9 @@ const edgeTypes = {
   integration: IntegrationEdge,
 } as unknown as EdgeTypes;
 
+/** Убирает ссылку-attribution React Flow — обоснование в Overview.tsx (4hv). */
+const proOptions = { hideAttribution: true };
+
 export function StageDetail() {
   const currentStageId = useProcessStore((state) => state.currentStageId);
   const showIntegrations = useProcessStore((state) => state.showIntegrations);
@@ -118,6 +121,7 @@ export function StageDetail() {
               // тулбар): отдалить схему целиком пользователь по-прежнему может.
               minZoom={MIN_ZOOM}
               maxZoom={MAX_ZOOM}
+              proOptions={proOptions}
             >
               <StartViewport
                 bounds={graph.bounds}
