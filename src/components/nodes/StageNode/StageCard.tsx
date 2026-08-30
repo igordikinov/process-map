@@ -72,8 +72,14 @@ export function StageCard({ stage, compact = false }: StageCardProps) {
         )}
       </div>
 
+      {/* shortTitle, а не title: карточка 274×210 фиксирована по SPEC §4.1, и
+          полные названия этапов 3 и 4 в неё не влезали — клэмп срезал их
+          многоточием («Анализ и корректировка результатов /Сценарное…»), хотя в
+          данных для этого случая уже лежало короткое название (process-map-vjz.1).
+          Полное остаётся в подсказке и в aria-label: срезать его для
+          скринридера незачем. У этапов 1 и 2 оба поля совпадают. */}
       <div className={styles.title} title={stage.title}>
-        {stage.title}
+        {stage.shortTitle}
       </div>
       <div className={styles.divider} />
       {/* «Эйбр» блока в компактном режиме снят (A4): в 200 px высоты он занимал

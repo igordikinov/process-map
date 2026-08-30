@@ -76,8 +76,27 @@ describe('StageCard', () => {
       const card = cards[index];
       expect(card).toBeDefined();
       expect(within(card as HTMLElement).getByText(String(stage.number))).toBeInTheDocument();
-      expect(within(card as HTMLElement).getByText(stage.title)).toBeInTheDocument();
+      // В карточке короткое название (process-map-vjz.1); полное остаётся в
+      // подсказке и в aria-label — они проверяются отдельным тестом ниже.
+      expect(within(card as HTMLElement).getByText(stage.shortTitle)).toBeInTheDocument();
     });
+  });
+
+  it('карточка показывает короткое название, а полное отдаёт в подсказку и aria-label', () => {
+    // Этап 3 — тот, у которого поля различаются: title «Анализ и корректировка
+    // результатов /Сценарное планирование», shortTitle «Анализ и корректировка
+    // результатов». На этапах 1 и 2 оба поля совпадают, и тест был бы пустым.
+    const stage = stageAt(2);
+    expect(stage.shortTitle, 'нужен этап, где короткое название отличается').not.toBe(stage.title);
+
+    render(<StageCard stage={stage} />);
+
+    const title = screen.getByText(stage.shortTitle);
+    expect(title).toHaveAttribute('title', stage.title);
+    expect(screen.queryByText(stage.title)).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: ru.stageNode.ariaLabel(stage.number, stage.title) }),
+    ).toBeInTheDocument();
   });
 
   it('показывает блок «Ключевые выходы» со всеми строками этапа', () => {
