@@ -6,7 +6,8 @@
 // полотна React Flow (см. CLAUDE.md «Ловушки»). Здесь клик идёт реальной
 // мышью по координатам, попадание проверяется через document.elementFromPoint,
 // как в остальных e2e файлах проекта.
-import { expect, test, type Page } from '@playwright/test';
+import type { Page } from '@playwright/test';
+import { expect, test } from './fixtures';
 
 const VIEWPORT = { width: 1280, height: 720 };
 

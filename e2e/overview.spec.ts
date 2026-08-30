@@ -3,7 +3,7 @@
 // Смысл этих проверок — именно настоящий браузер: jsdom не делает hit-testing,
 // поэтому дефект «React Flow глушит pointer-events у обёртки узла» юнит-тестом
 // не ловится. Здесь клик идёт реальной мышью по координатам.
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures';
 
 const VIEWPORT = { width: 1280, height: 720 };
 

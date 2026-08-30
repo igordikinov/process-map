@@ -11,9 +11,10 @@
 // Открытие ссылки (SPEC §7: «перехват window.open») проверяется здесь же.
 // Сам перехват живёт в e2e/helpers.ts: он понадобился и в stage-detail.spec.ts,
 // где его отсутствие давало флак (process-map-6ja).
-import { expect, test, type Page } from '@playwright/test';
+import type { Page } from '@playwright/test';
+import { expect, test } from './fixtures';
 
-import { interceptWindowOpen, openCalls } from './helpers';
+import { openCalls } from './helpers';
 
 const VIEWPORT = { width: 1280, height: 720 };
 
@@ -123,7 +124,6 @@ async function seedScreenLinkOnFirstStep(page: Page): Promise<string> {
     },
     { key: OVERRIDES_KEY, id: stepId ?? '', screen: SCREEN_LINK },
   );
-  await interceptWindowOpen(page);
   return stepId ?? '';
 }
 

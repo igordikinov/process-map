@@ -4,7 +4,8 @@
 // затемнению полотна и попадание по кнопкам футера юнит-тестом не проверяются
 // (fireEvent «сработает» и по перекрытому элементу). Здесь клик идёт настоящей
 // мышью по координатам, а перекрытие проверяется document.elementFromPoint.
-import { expect, test, type Page } from '@playwright/test';
+import type { Page } from '@playwright/test';
+import { expect, test } from './fixtures';
 
 const VIEWPORT = { width: 1280, height: 720 };
 

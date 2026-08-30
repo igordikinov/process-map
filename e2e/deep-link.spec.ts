@@ -7,7 +7,8 @@
 // настоящий цикл монтирования приложения (в отличие от повторных render()
 // в одном jsdom-окне юнит-тестов, где window.location приходится вручную
 // сбрасывать между тестами — см. tests/useDeepLink.test.tsx).
-import { expect, test, type Page } from '@playwright/test';
+import type { Page } from '@playwright/test';
+import { expect, test } from './fixtures';
 
 const VIEWPORT = { width: 1280, height: 720 };
 

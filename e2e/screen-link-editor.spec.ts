@@ -9,7 +9,8 @@
 // hit-testing (CLAUDE.md «Ловушки»). Форма живёт внутри панели ПОВЕРХ полотна
 // React Flow, поэтому её поля и кнопки проверяются настоящей мышью и
 // document.elementFromPoint, а не fireEvent.
-import { expect, test, type Page } from '@playwright/test';
+import type { Page } from '@playwright/test';
+import { expect, test } from './fixtures';
 
 const VIEWPORT = { width: 1280, height: 720 };
 

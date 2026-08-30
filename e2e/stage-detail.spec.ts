@@ -5,9 +5,10 @@
 // не ловится (fireEvent «сработает» и по мёртвому узлу). Здесь клик идёт
 // реальной мышью по координатам, а попадание проверяется через
 // document.elementFromPoint.
-import { expect, test, type Page } from '@playwright/test';
+import type { Page } from '@playwright/test';
+import { expect, test } from './fixtures';
 
-import { interceptWindowOpen, openCalls } from './helpers';
+import { openCalls } from './helpers';
 
 const VIEWPORT = { width: 1280, height: 720 };
 
@@ -139,12 +140,9 @@ test('клик по карточке данных в колонке входов
 test('иконка link-external появляется при screen и не открывает Drawer (stopPropagation)', async ({
   page,
 }) => {
-  // Без перехвата клик по иконке доходил до настоящего window.open(url, '_top')
-  // и уводил страницу теста на example.com: ассерты ниже гонялись с живой
-  // навигацией, и тест падал примерно в половине прогонов (process-map-6ja).
-  // Ставится ДО goto и переживает reload — одного вызова хватает на весь тест.
-  await interceptWindowOpen(page);
-
+  // Перехват window.open ставит авто-fixture из e2e/fixtures.ts — до этого тела
+  // и до любого goto. Без него клик по иконке уводил страницу теста на
+  // example.com, и ассерты гонялись с живой навигацией (process-map-6ja).
   await page.goto('/');
   await openStage(page, 0);
 

@@ -8,7 +8,8 @@
 //   · «карточка шага попала в первый кадр» — это про реальный transform
 //     полотна и реальные размеры узлов, а не про числа в чистой функции
 //     (её проверяет tests/stageGraph.test.ts).
-import { expect, test, type Page } from '@playwright/test';
+import type { Page } from '@playwright/test';
+import { expect, test } from './fixtures';
 
 /** Артборд A4. Высота 600 < config.compactHeight (640). */
 const COMPACT = { width: 1024, height: 600 };
