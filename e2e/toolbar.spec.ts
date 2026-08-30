@@ -244,7 +244,12 @@ test.describe('Тулбар и легенда, уровень 1 (обзор)', (
     const labels: (string | null)[] = [];
     for (let i = 0; i < 10; i += 1) {
       await page.keyboard.press('Tab');
-      labels.push(await page.evaluate(() => document.activeElement?.getAttribute('aria-label')));
+      // ?? null: опциональная цепочка добавляет undefined на случай, когда
+      // activeElement пуст, но для теста это то же самое, что элемент без
+      // подписи, — оба означают «подписи нет».
+      labels.push(
+        await page.evaluate(() => document.activeElement?.getAttribute('aria-label') ?? null),
+      );
       if (labels[labels.length - 1] === 'Показать интеграции') {
         break;
       }
