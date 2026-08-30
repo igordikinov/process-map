@@ -166,6 +166,40 @@ test('фокус уходит в панель при открытии, Tab не 
   }
 });
 
+/**
+ * process-map-9ji. Ловушка Tab (тест выше) держит только клавиатурный обход:
+ * она срабатывает на keydown ВНУТРИ панели, поэтому фокус, поставленный
+ * программно или полученный курсором скринридера, ей неподвластен. Это и
+ * закрывает `inert` — он делает элемент нефокусируемым в принципе.
+ *
+ * Проверка живёт в e2e, а не в юнит-тестах, намеренно: jsdom семантику `inert`
+ * не реализует, для него это просто атрибут, и в vitest эта проверка прошла бы
+ * при любом коде. Там (tests/stageDetail.test.tsx) сторожится расстановка
+ * атрибута, здесь — то, что он действительно работает.
+ */
+test('при открытой панели полотно нефокусируемо, а тулбар остаётся рабочим', async ({ page }) => {
+  await page.goto('/');
+  await openFirstStepDrawer(page);
+
+  // Программный focus() по карточке полотна не должен сработать: элемент inert.
+  const focusEscaped = await page.evaluate(() => {
+    const target = document.querySelector<HTMLElement>('.react-flow__node-step button');
+    if (target === null) {
+      return 'карточки шага нет в DOM';
+    }
+    target.focus();
+    return document.activeElement === target;
+  });
+  expect(focusEscaped, 'фокус ушёл на полотно при открытой панели').toBe(false);
+
+  // Обратная сторона: перестараться нельзя. Тулбар при открытой панели
+  // остаётся рабочим по замыслу — он лишь сдвигается (.shifted).
+  const toggle = page.getByRole('switch', { name: 'Показать интеграции' });
+  await expect(toggle).toHaveAttribute('aria-checked', 'true');
+  await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-checked', 'false');
+});
+
 test('узел без ссылки: «Ссылка не задана», «Открыть в модуле» заблокирована', async ({ page }) => {
   await page.goto('/');
   await openFirstStepDrawer(page);

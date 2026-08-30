@@ -130,6 +130,16 @@ export function StageDetail() {
               minZoom={MIN_ZOOM}
               maxZoom={MAX_ZOOM}
               proOptions={proOptions}
+              /* process-map-9ji: при открытой панели полотно выпадает и из
+                 обхода Tab, и из режима чтения скринридера. Помечено РОВНО
+                 полотно — то, что накрывает затемнение. Крошки и легенда лежат
+                 вне .canvas, затемнение до них не достаёт, и они обязаны
+                 оставаться рабочими (e2e/journey.spec.ts, «открытая панель не
+                 отменяет остальной интерфейс»); тулбар лежит внутри .canvas, но
+                 живёт поверх панели и лишь сдвигается (.shifted).
+                 Атрибут ложится на обёртку полотна: ReactFlowProps наследует
+                 HTMLAttributes<HTMLDivElement>, и лишние пропы спредятся на неё. */
+              inert={drawerOpen ? '' : undefined}
             >
               <StartViewport bounds={graph.bounds} anchor={graph.startAnchor} compact={compact} />
               <Background variant={BackgroundVariant.Dots} gap={GRID_GAP} size={GRID_DOT_SIZE} />

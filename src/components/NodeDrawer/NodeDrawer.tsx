@@ -101,7 +101,10 @@ function NodeDrawerPanel({ node, onClose }: NodeDrawerPanelProps) {
   }, [onClose]);
 
   // Ловушка Tab: пока панель открыта, обход не должен уходить на крошки и
-  // полотно за её пределами (role="dialog" + aria-modal этого сам не делает).
+  // полотно за её пределами. С process-map-9ji это второй рубеж — соседей
+  // помечает `inert` (StageDetail.tsx), — но не лишний: `inert` снимает с
+  // обхода полотно, крошки и легенду, а тулбар остаётся живым намеренно, и
+  // ловушка держит фокус в панели именно от него.
   const handleKeyDown = useCallback((event: KeyboardEvent<HTMLDivElement>): void => {
     if (event.key !== 'Tab') {
       return;
@@ -149,7 +152,12 @@ function NodeDrawerPanel({ node, onClose }: NodeDrawerPanelProps) {
         ref={panelRef}
         className={styles.panel}
         role="dialog"
-        aria-modal="true"
+        /* aria-modal НЕ ставим (process-map-9ji): панель немодальна по замыслу —
+           тулбар при ней остаётся рабочим и лишь сдвигается (.shifted в
+           Toolbar.module.css), а e2e/journey.spec.ts переключает интеграции с
+           открытой панелью. aria-modal="true" утверждал бы, что всё остальное
+           недоступно, и это была бы неправда. Недоступным помечено ровно то,
+           что недоступно, — атрибутом `inert` в StageDetail.tsx. */
         aria-labelledby={titleId}
         tabIndex={-1}
         onKeyDown={handleKeyDown}

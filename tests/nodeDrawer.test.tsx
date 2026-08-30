@@ -83,7 +83,11 @@ describe('NodeDrawer', () => {
     const { container } = openDrawer([node], node.id);
 
     const dialog = screen.getByRole('dialog');
-    expect(dialog).toHaveAttribute('aria-modal', 'true');
+    // aria-modal тут быть НЕ должно (process-map-9ji): панель немодальна по
+    // замыслу — тулбар при ней остаётся рабочим. Раньше атрибут стоял и
+    // утверждал обратное. Недоступность соседей выражена `inert` в
+    // StageDetail.tsx, и проверяется она там же (tests/stageDetail.test.tsx).
+    expect(dialog).not.toHaveAttribute('aria-modal');
     expect(within(dialog).getByRole('heading', { level: 2 })).toHaveTextContent(node.label);
     // Затемнение — отдельный слой поверх полотна (SPEC §4.3).
     expect(container.querySelector('[data-testid="drawer-scrim"]')).not.toBeNull();

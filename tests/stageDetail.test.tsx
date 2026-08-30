@@ -179,6 +179,45 @@ describe('StageDetail', () => {
     expect(labels.every((label) => label?.startsWith('Шаг: ') === true)).toBe(true);
   });
 
+  // process-map-9ji. Ловушка Tab держала только клавиатуру; в режиме чтения
+  // скринридер формально мог уйти на полотно. Помечается РОВНО полотно — то,
+  // что накрывает затемнение. Крошки и легенда лежат вне .canvas и обязаны
+  // остаться рабочими; тулбар внутри .canvas, но живёт поверх панели. Поэтому
+  // же с панели снят aria-modal: он утверждал бы недоступность всего.
+  it('открытая панель помечает inert полотно, но не крошки, легенду и тулбар', () => {
+    const stage = map.stages[1];
+    expect(stage).toBeDefined();
+    if (stage === undefined) {
+      return;
+    }
+    const step = firstOfType(stage, 'step');
+    useProcessStore.getState().navigateToStage(stage.id);
+    const { container } = render(<App />);
+
+    expect(container.querySelectorAll('[inert]')).toHaveLength(0);
+
+    fireEvent.click(screen.getByRole('button', { name: ru.stepNode.ariaLabel(step.label) }));
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+
+    expect(container.querySelectorAll('[inert]'), 'только полотно').toHaveLength(1);
+    expect(container.querySelector('.react-flow')?.hasAttribute('inert')).toBe(true);
+    // Три контрола, которые обязаны остаться живыми. Ищем через их собственные
+    // подписи, а не через классы: так проверка переживёт переверстку.
+    expect(
+      screen.getByRole('switch', { name: ru.toolbar.showIntegrations }).closest('[inert]'),
+      'тулбар обязан остаться доступным при открытой панели',
+    ).toBeNull();
+    expect(
+      screen.getByRole('button', { name: ru.breadcrumbs.backAriaLabel }).closest('[inert]'),
+      'крошки лежат выше полотна, затемнение до них не достаёт',
+    ).toBeNull();
+
+    act(() => {
+      useProcessStore.getState().closeDrawer();
+    });
+    expect(container.querySelectorAll('[inert]')).toHaveLength(0);
+  });
+
   // Стык двух задач M2: toggle тулбара (process-map-jl8) и панель узла
   // (process-map-lo7). Каждая проверена по отдельности, а вместе давали
   // висящую панель: карточка узла-интеграции уходила с полотна, панель с его
