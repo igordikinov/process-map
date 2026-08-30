@@ -42,6 +42,10 @@ import styles from './StageDetail.module.css';
 const nodeTypes = {
   groupBox: GroupNode,
   step: StepNode,
+  // Интеграция — тот же компонент, отдельный тип (process-map-73m, process-map-e21):
+  // тип попадает в класс узла, и общий тип означал бы, что `.react-flow__node-step`
+  // выбирает «шаг ИЛИ интеграцию». Тот же приём, что у `lane` / `flowLane` уровня 1.
+  integration: StepNode,
   warning: WarningNode,
   data: DataNode,
 } satisfies NodeTypes;

@@ -112,9 +112,9 @@ test('настоящий клик мышью по карточке уводит 
   await card.click();
 
   await expect(page.locator('.react-flow__node-stage')).toHaveCount(0);
-  // Фильтр по aria-label обязателен: класс `.react-flow__node-step` носят и
-  // узлы-интеграции, и предупреждения (общий StepCard), поэтому «виден хоть
-  // один .react-flow__node-step» ещё не значит «виден процесс».
+  // Фильтр по aria-label — второй сторож поверх класса: до process-map-73m
+  // `.react-flow__node-step` носили и интеграции, поэтому «виден хоть один
+  // .react-flow__node-step» ещё не значило «виден процесс».
   await expect(
     page.locator('.react-flow__node-step button[aria-label^="Шаг: "]').first(),
   ).toBeVisible();

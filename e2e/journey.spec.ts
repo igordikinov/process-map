@@ -31,13 +31,14 @@ const SCREEN_LINK = {
 const STAGE_2_INDEX = 1;
 
 /**
- * Карточка ШАГА, а не любой узел `.react-flow__node-step`.
+ * Карточка ШАГА.
  *
- * Этим же классом React Flow рисует узлы типов `integration` и `warning`
- * (StepNode.tsx, WarningNode.tsx рендерят общий StepCard), и на этапе 2 первым
- * в DOM идёт именно интеграция. Поэтому «первый шаг» без фильтра по aria-label
- * — это не шаг, и сценарий SPEC §7 («обзор → этап 2 → ШАГ → Drawer») проходил
- * бы мимо своего предмета.
+ * До process-map-73m этот класс носили и интеграции (StepNode рисует обе
+ * карточки), и на этапе 2 первым в DOM шла как раз интеграция — сценарий SPEC §7
+ * («обзор → этап 2 → ШАГ → Drawer») проходил мимо своего предмета. Теперь у
+ * интеграции свой тип узла, и класс означает ровно шаг.
+ * Фильтр по aria-label оставлен вторым, независимым сторожем: класс приходит
+ * из stageGraph.ts, подпись — из i18n, и поломка одного не отключает оба.
  */
 const STEP_CARD = '.react-flow__node-step button[aria-label^="Шаг: "]';
 
@@ -226,9 +227,9 @@ test.describe('открытая панель не отменяет осталь�
   /**
    * Открывает панель на первом ОБЫЧНОМ шаге этапа 2 и возвращает его data-id.
    *
-   * Именно «Шаг:», а не первый `.react-flow__node-step`: этим же типом узла
-   * React Flow рисует и интеграции (см. StepNode.tsx), и на этапе 2 первым в
-   * DOM идёт как раз интеграция. Узел-интеграция исчезает с полотна вместе с
+   * Именно «Шаг:», а не первый `.react-flow__node-step`: до process-map-73m
+   * этот класс носили и интеграции, и на этапе 2 первой в DOM шла как раз
+   * интеграция. Узел-интеграция исчезает с полотна вместе с
    * toggle — для проверок «панель пережила действие тулбара» нужен узел,
    * который никуда не девается. Случай интеграции проверяется отдельно ниже.
    */
@@ -250,9 +251,8 @@ test.describe('открытая панель не отменяет осталь�
       }
       for (const button of document.querySelectorAll('.react-flow__node button[aria-label]')) {
         // Именно «Шаг: …», а не «всё, кроме интеграции»: прежний фильтр
-        // пропускал и узлы-предупреждения (тот же .react-flow__node-step), и
-        // карточки данных — то есть функция с именем openDrawerOnFirstStep
-        // могла открыть панель вовсе не на шаге.
+        // пропускал и узлы-предупреждения, и карточки данных — то есть функция
+        // с именем openDrawerOnFirstStep могла открыть панель вовсе не на шаге.
         if (button.getAttribute('aria-label')?.startsWith('Шаг: ') !== true) {
           continue;
         }
@@ -345,7 +345,7 @@ test.describe('открытая панель не отменяет осталь�
 
     // Этап 2 — единственный с несколькими узлами-интеграциями (см. process.json).
     const integrationCards = page.locator(
-      '.react-flow__node-step button[aria-label^="Интеграция:"]',
+      '.react-flow__node-integration button[aria-label^="Интеграция:"]',
     );
     const before = await integrationCards.count();
     expect(before).toBeGreaterThan(0);
@@ -367,7 +367,8 @@ test.describe('открытая панель не отменяет осталь�
   });
 
   // Дефект, найденный этой задачей (он же уронил тест выше, когда тот брал
-  // первый `.react-flow__node-step` — им на этапе 2 оказалась интеграция):
+  // первый `.react-flow__node-step` — тогда этот класс носили и интеграции,
+  // и им на этапе 2 оказалась интеграция; тип разделён в process-map-73m):
   // toggle убирал карточку узла-интеграции с полотна, а панель с его описанием
   // оставалась висеть — без подсветки узла, поверх пустого затемнения, и с
   // некуда-возвращать фокусом при закрытии. Теперь панель получает только
@@ -379,7 +380,7 @@ test.describe('открытая панель не отменяет осталь�
     await openStage(page, STAGE_2_INDEX);
 
     const integrationCard = page
-      .locator('.react-flow__node-step button[aria-label^="Интеграция:"]')
+      .locator('.react-flow__node-integration button[aria-label^="Интеграция:"]')
       .first();
     await expect(integrationCard).toBeVisible();
     const nodeId = await integrationCard.evaluate(

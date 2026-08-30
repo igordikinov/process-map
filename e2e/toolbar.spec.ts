@@ -267,8 +267,8 @@ test.describe('Тулбар, уровень 2 (детализация)', () => {
       (box?.x ?? 0) + (box?.width ?? 0) / 2,
       (box?.y ?? 0) + (box?.height ?? 0) / 2,
     );
-    // Карточка ШАГА, а не любой `.react-flow__node-step`: тем же классом
-    // рисуются интеграции и предупреждения (общий StepCard).
+    // Карточка ШАГА. Фильтр по aria-label — второй сторож поверх класса: до
+    // process-map-73m `.react-flow__node-step` носили и интеграции.
     await page.waitForSelector('.react-flow__node-step button[aria-label^="Шаг: "]');
     await page.waitForFunction(() => {
       const viewport = document.querySelector('.react-flow__viewport') as HTMLElement | null;
@@ -320,7 +320,7 @@ test.describe('Тулбар, уровень 2 (детализация)', () => {
     await openStage(page, 1);
 
     const integrationCards = page.locator(
-      '.react-flow__node-step button[aria-label^="Интеграция:"]',
+      '.react-flow__node-integration button[aria-label^="Интеграция:"]',
     );
     const before = await integrationCards.count();
     expect(before).toBeGreaterThan(0);

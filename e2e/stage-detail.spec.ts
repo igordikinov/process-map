@@ -16,10 +16,11 @@ const VIEWPORT = { width: 1280, height: 720 };
 const OVERRIDES_KEY = 'inplan-process-map:overrides:v1';
 
 /**
- * Карточка ШАГА, а не любой узел `.react-flow__node-step`: тем же классом
- * рисуются узлы типов `integration` и `warning` (общий StepCard в StepNode.tsx
- * и WarningNode.tsx). «Первый .react-flow__node-step» — это первый узел в DOM,
- * и на этапе 2 им оказывается интеграция, а не шаг процесса.
+ * Карточка ШАГА. До process-map-73m этот класс носили и интеграции, поэтому
+ * «первый .react-flow__node-step» на этапе 2 оказывался интеграцией, а не шагом
+ * процесса. Теперь у интеграции свой тип узла.
+ * Фильтр по aria-label оставлен вторым, независимым сторожем: класс приходит
+ * из stageGraph.ts, подпись — из i18n, и поломка одного не отключает оба.
  */
 const STEP_CARD = '.react-flow__node-step button[aria-label^="Шаг: "]';
 
@@ -283,10 +284,9 @@ test('этап открывается на первой карточке шаг�
     return Number(/scale\(([^)]+)\)/.exec(viewport?.style.transform ?? '')?.[1] ?? '0') > 0.5;
   });
 
-  // Селектор по aria-label, а не по классу: узлы-интеграции и предупреждения
-  // рисуются той же карточкой `.react-flow__node-step` (stageGraph.ts), и без
-  // фильтра «Шаг: …» проверка снова считала бы за процесс то, что процессом
-  // не является — ровно ту ошибку, которую чинит эта задача.
+  // Фильтр «Шаг: …» оставлен вторым сторожем поверх класса: до process-map-73m
+  // он был единственным, потому что `.react-flow__node-step` носили и
+  // интеграции, и проверка считала за процесс то, что процессом не является.
   const first = await page.evaluate(() => {
     let best: { id: string; x: number } | null = null;
     document.querySelectorAll('.react-flow__node-step').forEach((el) => {

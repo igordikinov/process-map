@@ -196,8 +196,8 @@ async function openStage(page: Page, index: number): Promise<void> {
     (box?.x ?? 0) + (box?.width ?? 0) / 2,
     (box?.y ?? 0) + (box?.height ?? 0) / 2,
   );
-  // Карточка ШАГА, а не любой `.react-flow__node-step`: тем же классом рисуются
-  // узлы интеграций и предупреждений (общий StepCard в StepNode.tsx).
+  // Карточка ШАГА. Фильтр по aria-label — второй сторож поверх класса: до
+  // process-map-73m `.react-flow__node-step` носили и интеграции.
   await page.waitForSelector(STEP_CARD);
 }
 

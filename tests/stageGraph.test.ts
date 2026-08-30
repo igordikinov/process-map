@@ -97,13 +97,12 @@ describe('buildStageGraph', () => {
 
       for (const node of stage.nodes) {
         const flowNode = byId.get(node.id);
-        // integration рисуется карточкой шага (variant), собственного типа
-        // узла у него нет — см. комментарий в stageGraph.ts.
-        const expected =
-          node.type === 'data' ? 'data' : node.type === 'warning' ? 'warning' : 'step';
-        expect(flowNode?.type).toBe(expected);
-        if (node.type === 'integration') {
-          expect(flowNode?.data).toMatchObject({ variant: 'integration' });
+        // Соответствие один к одному: с process-map-73m у integration свой тип
+        // узла. Раньше он рисовался типом `step`, и класс `.react-flow__node-step`
+        // означал «шаг ИЛИ интеграция» — этот тест закреплял именно то слияние.
+        expect(flowNode?.type).toBe(node.type);
+        if (node.type === 'integration' || node.type === 'step') {
+          expect(flowNode?.data).toMatchObject({ variant: node.type });
         }
       }
     },

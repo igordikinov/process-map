@@ -40,9 +40,9 @@ async function layoutSize(page: Page, selector: string): Promise<{ w: number; h:
  * координаты уже с учётом transform — но узел, уехавший за край полотна,
  * остаётся в DOM и «видимым» по меркам toBeVisible().
  *
- * Фильтр по aria-label «Шаг: …» обязателен: узлы-интеграции и предупреждения
- * рисуются той же карточкой `.react-flow__node-step` (stageGraph.ts), а
- * задача process-map-c18 ровно про то, что интеграции — не процесс.
+ * Фильтр по aria-label «Шаг: …» — второй сторож поверх класса: до
+ * process-map-73m `.react-flow__node-step` носили и интеграции, а задача
+ * process-map-c18 ровно про то, что интеграции — не процесс.
  */
 async function fullyVisibleSteps(page: Page): Promise<number> {
   return page.evaluate(() => {
@@ -76,9 +76,9 @@ async function openStage(page: Page, index: number): Promise<void> {
     (box?.x ?? 0) + (box?.width ?? 0) / 2,
     (box?.y ?? 0) + (box?.height ?? 0) / 2,
   );
-  // Ждём именно карточку ШАГА: класс `.react-flow__node-step` носят также узлы
-  // интеграций и предупреждений (см. fullyVisibleSteps выше), и ожидание по
-  // голому классу могло бы завершиться на узле, который процессом не является.
+  // Ждём именно карточку ШАГА: до process-map-73m этот класс носили и
+  // интеграции (см. fullyVisibleSteps выше), и ожидание по голому классу
+  // завершалось на узле, который процессом не является.
   await page.waitForSelector('.react-flow__node-step button[aria-label^="Шаг: "]');
 }
 

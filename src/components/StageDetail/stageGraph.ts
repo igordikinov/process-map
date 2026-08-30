@@ -14,10 +14,16 @@ import { DATA_NODE_SIZE, STEP_NODE_SIZE, type NodeSize } from '../../theme/sizes
 import { splitStageDataNodes } from '../../utils/stageNodes';
 import type { DataNodeType } from '../nodes/DataNode';
 import type { GroupNodeType } from '../nodes/GroupNode';
-import { STEP_HANDLE, type StepCardVariant, type StepNodeType } from '../nodes/StepNode';
+import {
+  STEP_HANDLE,
+  type IntegrationNodeType,
+  type StepCardVariant,
+  type StepNodeType,
+} from '../nodes/StepNode';
 import type { WarningNodeType } from '../nodes/WarningNode';
 
-export type StageDetailNode = GroupNodeType | StepNodeType | WarningNodeType | DataNodeType;
+export type StageDetailNode =
+  GroupNodeType | StepNodeType | IntegrationNodeType | WarningNodeType | DataNodeType;
 
 // ───────────────────────────── геометрия ─────────────────────────────
 
@@ -310,7 +316,10 @@ function pickStartAnchor(stage: Stage, groupOrigin: ReadonlyMap<string, Box>, bo
   return { x: first.position.x, y: first.position.y, ...sizeOf(first) };
 }
 
-/** Тип узла React Flow по ProcessNode.type. `integration` рисуется карточкой шага. */
+/**
+ * Тип узла React Flow по ProcessNode.type. `integration` рисуется карточкой шага,
+ * но своим типом узла, а не типом `step` — см. IntegrationNodeType в StepNode.tsx.
+ */
 function flowNodeOf(node: ProcessNode, parentId: string | undefined, origin: Box | undefined) {
   const size = sizeOf(node);
   const position =
@@ -338,7 +347,15 @@ function flowNodeOf(node: ProcessNode, parentId: string | undefined, origin: Box
   if (node.type === 'warning') {
     return { ...common, type: 'warning' as const, data: { node } } satisfies WarningNodeType;
   }
-  const variant: StepCardVariant = node.type === 'integration' ? 'integration' : 'step';
+  if (node.type === 'integration') {
+    const variant: StepCardVariant = 'integration';
+    return {
+      ...common,
+      type: 'integration' as const,
+      data: { node, variant },
+    } satisfies IntegrationNodeType;
+  }
+  const variant: StepCardVariant = 'step';
   return { ...common, type: 'step' as const, data: { node, variant } } satisfies StepNodeType;
 }
 

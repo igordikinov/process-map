@@ -143,6 +143,42 @@ describe('StageDetail', () => {
     expect(useProcessStore.getState().selectedNodeId).toBe(warning.id);
   });
 
+  // process-map-73m / process-map-e21. До них интеграция рисовалась типом узла
+  // `step`, поэтому класс `.react-flow__node-step` означал «шаг ИЛИ интеграция».
+  // Это дважды подставило: первым в DOM на этапе 2 идёт как раз интеграция, и
+  // проверки «в кадре виден процесс» засчитывали её за шаг. Тест сторожит обе
+  // стороны разделения: интеграция носит свой класс, и ни один узел с классом
+  // шага не является интеграцией.
+  it('интеграция рисуется своим типом узла, а класс шага не захватывает интеграции', () => {
+    const stage = map.stages.find((candidate) =>
+      candidate.nodes.some((node) => node.type === 'integration'),
+    );
+    expect(stage, 'в process.json нет ни одного узла-интеграции').toBeDefined();
+    if (stage === undefined) {
+      return;
+    }
+    const integration = firstOfType(stage, 'integration');
+    useProcessStore.getState().navigateToStage(stage.id);
+    const { container } = render(<App />);
+
+    expect(
+      container.querySelector(`.react-flow__node-integration[data-id="${integration.id}"]`),
+      'интеграция должна рисоваться типом узла integration',
+    ).not.toBeNull();
+    expect(
+      container.querySelector(`.react-flow__node-step[data-id="${integration.id}"]`),
+      'интеграция не должна носить класс шага',
+    ).toBeNull();
+
+    // Обратная сторона: класс шага теперь означает ровно шаг. Проверяем через
+    // подпись, потому что она приходит из i18n, а класс — из stageGraph.ts:
+    // сторож остаётся честным, даже если сломается что-то одно.
+    const stepNodes = [...container.querySelectorAll('.react-flow__node-step')];
+    expect(stepNodes.length, 'на этапе должен быть хотя бы один шаг').toBeGreaterThan(0);
+    const labels = stepNodes.map((el) => el.querySelector('button')?.getAttribute('aria-label'));
+    expect(labels.every((label) => label?.startsWith('Шаг: ') === true)).toBe(true);
+  });
+
   // Стык двух задач M2: toggle тулбара (process-map-jl8) и панель узла
   // (process-map-lo7). Каждая проверена по отдельности, а вместе давали
   // висящую панель: карточка узла-интеграции уходила с полотна, панель с его

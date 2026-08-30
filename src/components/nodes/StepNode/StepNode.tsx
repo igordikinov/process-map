@@ -17,6 +17,18 @@ export interface StepNodeData extends Record<string, unknown> {
 export type StepNodeType = Node<StepNodeData, 'step'>;
 
 /**
+ * Интеграция рисуется тем же компонентом, но отдельным типом узла
+ * (process-map-73m, process-map-e21). Причина та же, что у пары
+ * `lane` / `flowLane` уровня 1: React Flow кладёт тип в класс
+ * `.react-flow__node-<type>`, и общий тип означал бы, что
+ * `.react-flow__node-step` выбирает «шаг ИЛИ интеграцию». Это уже дважды
+ * подставило — первый в DOM `.react-flow__node-step` на этапе 2 оказывался
+ * интеграцией, и любая проверка «в кадре виден процесс» засчитывала её за шаг.
+ * Разница видом не ограничивается: интеграции пропадают по toggle тулбара, шаги — нет.
+ */
+export type IntegrationNodeType = Node<StepNodeData, 'integration'>;
+
+/**
  * Идентификаторы хэндлов узлов потока — используются в stageGraph.ts.
  * Раскладка dagre идёт слева направо (rankdir LR), поэтому основная пара —
  * right → left; bottom → top остаётся для редких обратных рёбер.

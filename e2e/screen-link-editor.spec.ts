@@ -18,10 +18,11 @@ const VIEWPORT = { width: 1280, height: 720 };
 const OVERRIDES_KEY = 'inplan-process-map:overrides:v1';
 
 /**
- * Карточка ШАГА, а не любой узел `.react-flow__node-step`: тем же классом
- * рисуются узлы типов `integration` и `warning` (общий StepCard). Сценарий
+ * Карточка ШАГА. До process-map-73m этот класс носили и интеграции, а сценарий
  * SPEC §7 («редактор: сохранить ссылку, перезагрузить») должен идти по шагу
  * процесса, а не по тому, что первым попало в DOM.
+ * Фильтр по aria-label оставлен вторым, независимым сторожем: класс приходит
+ * из stageGraph.ts, подпись — из i18n, и поломка одного не отключает оба.
  */
 const STEP_CARD = '.react-flow__node-step button[aria-label^="Шаг: "]';
 

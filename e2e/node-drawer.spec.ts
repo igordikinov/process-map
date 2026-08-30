@@ -16,10 +16,11 @@ const OVERRIDES_KEY = 'inplan-process-map:overrides:v1';
 const DRAWER_WIDTH = 360;
 
 /**
- * Карточка ШАГА, а не любой узел `.react-flow__node-step`: этим же классом
- * React Flow рисует узлы типов `integration` и `warning` (общий StepCard в
- * StepNode.tsx / WarningNode.tsx). Без фильтра по aria-label «первый шаг» —
- * это просто первый узел в DOM, и на этапе 2 им оказывается интеграция.
+ * Карточка ШАГА. До process-map-73m этот класс носили и интеграции, поэтому
+ * «первый шаг» был просто первым узлом в DOM — а им на этапе 2 оказывалась
+ * интеграция. Теперь у интеграции свой тип узла.
+ * Фильтр по aria-label оставлен вторым, независимым сторожем: класс приходит
+ * из stageGraph.ts, подпись — из i18n, и поломка одного не отключает оба.
  */
 const STEP_CARD = '.react-flow__node-step button[aria-label^="Шаг: "]';
 
