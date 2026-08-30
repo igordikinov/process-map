@@ -23,7 +23,19 @@ if (typeof globalThis.ResizeObserver === 'undefined') {
 // падал бы с «file.text is not a function», то есть на пробеле окружения, а не
 // на поведении приложения. Полифилл достраивает ровно чтение текста и ничего
 // в логике импорта не подменяет.
-if (typeof Blob.prototype.text !== 'function') {
+/**
+ * Понадобился ли полифилл. Вычисляется ДО присваивания ниже, поэтому отвечает
+ * на вопрос «умеет ли jsdom сам», а не «есть ли метод сейчас».
+ *
+ * За значением следит сторож в tests/blobTextPolyfill.test.ts: когда jsdom
+ * реализует метод штатно, полифилл не установится, константа станет false и
+ * сторож покраснеет с инструкцией удалить и его, и этот код (process-map-wu8).
+ * Иначе мёртвый полифилл остался бы в проекте навсегда — заметку «при
+ * обновлении jsdom проверить» проверять некому.
+ */
+export const blobTextPolyfilled = typeof Blob.prototype.text !== 'function';
+
+if (blobTextPolyfilled) {
   Blob.prototype.text = function text(this: Blob): Promise<string> {
     return new Promise<string>((resolve, reject) => {
       const reader = new FileReader();
