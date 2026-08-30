@@ -1,5 +1,30 @@
+# Артефакты сборки и прогонов.
 dist
 coverage
 playwright-report
 test-results
 node_modules
+
+# ── Не форматировать (задача process-map-mx2) ────────────────────────────────
+
+# ГЛАВНОЕ. process.json prettier схлопнул бы односэлементные массивы
+# ("outputs": [\n  "X"\n] → "outputs": ["X"]), а это ровно тот формат, который
+# выдаёт src/utils/processTransfer.ts::serializeProcessMap. tests/loader.test.ts
+# сверяет файл с выгрузкой БАЙТ В БАЙТ, и на этом же совпадении держится
+# передача ссылок на экраны из браузера в репозиторий (docs/ссылки-на-экраны.md,
+# ради неё же заведён .gitattributes). Формат файла задаёт JSON.stringify, а не
+# prettier.
+src/data/process.json
+
+# Макет Claude Design — только чтение (CLAUDE.md «Чего не делать»).
+design/
+
+# Генерируется инструментами: переформатирование воевало бы с генератором.
+.beads/
+.codex/
+.agents/
+
+# Содержат управляемый блок beads (маркер BEGIN BEADS INTEGRATION с хешем) —
+# prettier трогает и его, и пустые строки вокруг.
+CLAUDE.md
+AGENTS.md

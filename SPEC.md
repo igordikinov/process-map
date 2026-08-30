@@ -4,17 +4,17 @@
 
 ## 1. Стек
 
-| Слой | Выбор | Почему |
-|---|---|---|
-| Сборка | Vite 5, TypeScript strict | статический бандл, быстрый dev |
-| UI | React 18 | требование React Flow |
-| Граф | `@xyflow/react` (React Flow 12) | зум/пан, кастомные узлы, ортогональные рёбра (`smoothstep`) |
-| Автолейаут | `@dagrejs/dagre` — только в скрипте `scripts/layout.ts` | генерация стартовых координат, в рантайме не используется |
-| Стили | CSS Modules + CSS-переменные из токенов In.Plan | без Tailwind, чтобы совпасть с макетом |
-| Состояние | `zustand` | компактно, без бойлерплейта |
-| Валидация JSON | `zod` | схема данных + проверка импорта |
-| Тесты | Vitest + Testing Library, Playwright для e2e | |
-| Линт | ESLint + Prettier | |
+| Слой           | Выбор                                                   | Почему                                                      |
+| -------------- | ------------------------------------------------------- | ----------------------------------------------------------- |
+| Сборка         | Vite 5, TypeScript strict                               | статический бандл, быстрый dev                              |
+| UI             | React 18                                                | требование React Flow                                       |
+| Граф           | `@xyflow/react` (React Flow 12)                         | зум/пан, кастомные узлы, ортогональные рёбра (`smoothstep`) |
+| Автолейаут     | `@dagrejs/dagre` — только в скрипте `scripts/layout.ts` | генерация стартовых координат, в рантайме не используется   |
+| Стили          | CSS Modules + CSS-переменные из токенов In.Plan         | без Tailwind, чтобы совпасть с макетом                      |
+| Состояние      | `zustand`                                               | компактно, без бойлерплейта                                 |
+| Валидация JSON | `zod`                                                   | схема данных + проверка импорта                             |
+| Тесты          | Vitest + Testing Library, Playwright для e2e            |                                                             |
+| Линт           | ESLint + Prettier                                       |                                                             |
 
 Пакетов помимо перечисленных не добавлять без записи в `bd`-задаче.
 
@@ -67,55 +67,68 @@ type NodeType = 'step' | 'data' | 'integration' | 'warning';
 type SystemCode = 'DP' | 'PS' | 'IO' | 'ERP' | 'MRP' | 'INPLAN';
 
 interface ScreenLink {
-  title: string;          // «Планирование поставок › Объёмный план»
-  url: string;            // https://...
+  title: string; // «Планирование поставок › Объёмный план»
+  url: string; // https://...
 }
 
 interface ProcessNode {
-  id: string;             // kebab-case, уникален глобально
+  id: string; // kebab-case, уникален глобально
   type: NodeType;
-  label: string;          // ≤ 2 строки
+  label: string; // ≤ 2 строки
   description?: string;
-  group?: string;         // id группы (dashed-контейнер), напр. "unconstrained"
-  direction?: 'in' | 'out';  // колонка data-узла: вход или выход этапа
-  inputs?: string[];      // человекочитаемые
+  group?: string; // id группы (dashed-контейнер), напр. "unconstrained"
+  direction?: 'in' | 'out'; // колонка data-узла: вход или выход этапа
+  inputs?: string[]; // человекочитаемые
   outputs?: string[];
   system?: SystemCode;
   owner?: string;
   screen?: ScreenLink;
-  position: { x: number; y: number };        // что показывает приложение (считает layout.ts)
-  slidePosition?: { x: number; y: number };  // исходная геометрия слайда (пишет import-pptx.py)
+  position: { x: number; y: number }; // что показывает приложение (считает layout.ts)
+  slidePosition?: { x: number; y: number }; // исходная геометрия слайда (пишет import-pptx.py)
 }
 
-interface Group { id: string; label: string; }
+interface Group {
+  id: string;
+  label: string;
+}
 
 interface Edge {
   id: string;
-  source: string; target: string;
+  source: string;
+  target: string;
   kind: 'process' | 'integration' | 'data';
   label?: string;
 }
 
-interface ExternalIO {           // свимлейны уровня 1 и колонки уровня 2
-  system: SystemCode; label: string; stage: number; direction: 'in' | 'out';
+interface ExternalIO {
+  // свимлейны уровня 1 и колонки уровня 2
+  system: SystemCode;
+  label: string;
+  stage: number;
+  direction: 'in' | 'out';
 }
 
 interface Stage {
-  id: string; number: 1|2|3|4;
-  title: string; shortTitle: string;
-  keyOutputs: string[];          // ≤ 3
+  id: string;
+  number: 1 | 2 | 3 | 4;
+  title: string;
+  shortTitle: string;
+  keyOutputs: string[]; // ≤ 3
   warningsCount?: number;
   screen?: ScreenLink;
   groups: Group[];
   nodes: ProcessNode[];
   edges: Edge[];
-  inputs: ExternalIO[]; outputs: ExternalIO[];
+  inputs: ExternalIO[];
+  outputs: ExternalIO[];
 }
 
 interface ProcessMap {
-  version: string; updatedAt: string; title: string;
+  version: string;
+  updatedAt: string;
+  title: string;
   stages: Stage[];
-  overviewEdges: Edge[];         // связи этап→этап и система→этап
+  overviewEdges: Edge[]; // связи этап→этап и система→этап
 }
 ```
 
@@ -155,6 +168,7 @@ interface ProcessMap {
 ## 4. Экраны и поведение
 
 ### 4.1 Обзор (A1)
+
 - Верхняя полоса 52 px: заголовок, бейдж «4 этапа», справа дата `updatedAt`.
 - Полотно React Flow с точечной сеткой (`Background variant=dots gap=16`).
 - Два dashed-контейнера свимлейнов (in/out) как узлы типа `group`, не перетаскиваются.
@@ -164,6 +178,7 @@ interface ProcessMap {
 - Все узлы `draggable=false`, `nodesConnectable=false`. Клик по StageNode → `navigate(stage)`.
 
 ### 4.2 Детализация (A2)
+
 - Хлебные крошки «E2E-процесс › {stage.title}» + бейдж «Этап N» + кнопка назад; справа счётчик «N шагов · M входов · K выходов».
 - Слева колонка `DataNode` входов (200×56, подпись-источник), справа — выходов; посередине группы шагов (`group`-узлы с dashed-рамкой и заголовком).
 - `StepNode` 318×52: иконка по типу, текст, справа иконка `link-external.svg` если `node.screen` (клик по иконке → `openScreen`, `stopPropagation`).
@@ -171,6 +186,7 @@ interface ProcessMap {
 - Клик по любому узлу → Drawer.
 
 ### 4.3 Drawer (A3)
+
 - Ширина 360, справа, поверх полотна; полотно приглушается `rgba(31,31,32,.10)`, выбранный узел подсвечен `box-shadow 0 0 0 4px rgba(144,0,255,.14)`.
 - Секции по порядку: описание → **Экран в системе** → Входы → Выходы → Система/модуль → Ответственный.
 - «Экран в системе»: иконка + `screen.title` + url серым в одну строку с `text-overflow`. Нет ссылки → «Ссылка не задана» + action «Добавить» (только в редакторе).
@@ -178,20 +194,25 @@ interface ProcessMap {
 - Esc / клик по фону закрывает.
 
 ### 4.4 Редактор (A5)
+
 - Toggle «Просмотр / Редактор» в тулбаре. В `localStorage` не сохраняется — при загрузке всегда «Просмотр».
 - Форма: `title` (обязательно, ≤ 80), `url` (обязательно, `new URL()` + протокол `https:`; `http:` допускается с предупреждением). Ошибка «Введите корректный URL». Сохранить → override, Отмена → откат. Кнопка «Удалить ссылку» пишет `screen: null`.
 - В тулбаре редактора: «Экспорт JSON» (скачивает `process.json`), «Импорт JSON» (file input), «Сбросить правки».
 
 ### 4.5 Компактный режим (A4)
+
 Триггер: высота контейнера < `config.compactHeight` (640). Изменения: шапка 44 px, свимлейны заменяются на одну строку-бейдж «Внешние системы DP PS IO ERP MRP», карточки этапов 228×200 с 2 выходами, легенда сворачивается в кнопку-иконку, `fitView` вызывается заново.
 
 ### 4.6 Тулбар
+
 Справа сверху: toggle «Показать интеграции» (скрывает `IntegrationEdge` и узлы систем), зум −/%/+/fit. Реализация через `useReactFlow()`.
 
 ### 4.7 Deep-link
+
 `?stage=2` → сразу уровень 2; `&node=<id>` → плюс открытый Drawer. При навигации URL обновляется через `history.replaceState` (не `pushState`, чтобы не ломать историю родительской вики).
 
 ### 4.8 Открытие ссылок
+
 `utils/url.ts::openScreen(url)`: `window.open(url, config.linkTarget)`; если `linkTarget === '_top'` и `window.top` недоступен (SecurityError), фолбэк на `_blank`. Тест покрывает оба пути.
 
 ## 5. Визуальные токены
@@ -201,9 +222,13 @@ interface ProcessMap {
 ## 6. Встраивание в In.Plan
 
 ```html
-<iframe src="https://<host>/process-map/?stage=1"
-        style="width:100%;height:720px;border:0" loading="lazy"></iframe>
+<iframe
+  src="https://<host>/process-map/?stage=1"
+  style="width:100%;height:720px;border:0"
+  loading="lazy"
+></iframe>
 ```
+
 `vite.config.ts`: `base: './'` — чтобы бандл работал из любого подкаталога. В `dist/` не должно быть абсолютных путей. Сервер не должен отдавать `X-Frame-Options: DENY`; при необходимости `Content-Security-Policy: frame-ancestors https://*.company.ru`.
 
 Атрибут `allow="clipboard-write"` из версии 1.0 убран: в v1 приложение с буфером обмена не работает (`process-map-dps`, проверено grep'ом по `src/`).

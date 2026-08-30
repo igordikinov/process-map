@@ -135,9 +135,15 @@ describe('import-pptx.py: контракт переноса ручных пол�
     for (const [index, stage] of map.stages.entries()) {
       const rawStage = (processJson as { stages: Record<string, unknown>[] }).stages[index]!;
       const stageKeys = Object.keys(rawStage);
-      expect(stageKeys.filter((key) => !stageIndex.has(key)), `этап ${stage.id}`).toEqual([]);
+      expect(
+        stageKeys.filter((key) => !stageIndex.has(key)),
+        `этап ${stage.id}`,
+      ).toEqual([]);
       const stagePositions = stageKeys.map((key) => stageIndex.get(key)!);
-      expect([...stagePositions].sort((a, b) => a - b), `этап ${stage.id}`).toEqual(stagePositions);
+      expect(
+        [...stagePositions].sort((a, b) => a - b),
+        `этап ${stage.id}`,
+      ).toEqual(stagePositions);
 
       const rawNodes = rawStage['nodes'] as Record<string, unknown>[];
       for (const rawNode of rawNodes) {
@@ -148,7 +154,10 @@ describe('import-pptx.py: контракт переноса ручных пол�
           label,
         ).toEqual([]);
         const positions = keys.map((key) => nodeIndex.get(key)!);
-        expect([...positions].sort((a, b) => a - b), label).toEqual(positions);
+        expect(
+          [...positions].sort((a, b) => a - b),
+          label,
+        ).toEqual(positions);
       }
     }
   });
@@ -220,7 +229,8 @@ function readInputEnrichment(): InputEnrichment[] {
   if (block === null) {
     return [];
   }
-  const entries = /"task":\s*"([^"]+)",[\s\S]*?"stage":\s*(\d+),[\s\S]*?"add":\s*\(([\s\S]*?)\),\s*(?:#[^\n]*\n\s*)*"expand":\s*\(([\s\S]*?)\n\s*\),/g;
+  const entries =
+    /"task":\s*"([^"]+)",[\s\S]*?"stage":\s*(\d+),[\s\S]*?"add":\s*\(([\s\S]*?)\),\s*(?:#[^\n]*\n\s*)*"expand":\s*\(([\s\S]*?)\n\s*\),/g;
   return [...block[1]!.matchAll(entries)].map((match) => ({
     task: match[1]!,
     stage: Number(match[2]!),
@@ -265,9 +275,7 @@ describe('import-pptx.py: входы по слайду обзора', () => {
     for (const entry of enrichments) {
       const stage = map.stages.find((candidate) => candidate.number === entry.stage);
       expect(stage, `этап ${entry.stage}`).toBeDefined();
-      const inputs = stage!.nodes.filter(
-        (node) => node.type === 'data' && node.direction === 'in',
-      );
+      const inputs = stage!.nodes.filter((node) => node.type === 'data' && node.direction === 'in');
       const labels = new Set(inputs.map((node) => node.label));
       for (const extra of entry.add) {
         expect(
@@ -284,10 +292,7 @@ describe('import-pptx.py: входы по слайду обзора', () => {
       expect(stage, `этап ${entry.stage}`).toBeDefined();
       const labels = new Set(stage!.nodes.map((node) => node.label));
       for (const { short, full } of entry.expand) {
-        expect(
-          labels.has(full),
-          `${entry.task}: «${full}» не доехало в process.json`,
-        ).toBe(true);
+        expect(labels.has(full), `${entry.task}: «${full}» не доехало в process.json`).toBe(true);
         expect(
           labels.has(short),
           `${entry.task}: «${short}» осталось в process.json — замена не применилась`,

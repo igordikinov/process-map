@@ -123,11 +123,7 @@ export function StageDetail() {
               maxZoom={MAX_ZOOM}
               proOptions={proOptions}
             >
-              <StartViewport
-                bounds={graph.bounds}
-                anchor={graph.startAnchor}
-                compact={compact}
-              />
+              <StartViewport bounds={graph.bounds} anchor={graph.startAnchor} compact={compact} />
               <Background variant={BackgroundVariant.Dots} gap={GRID_GAP} size={GRID_DOT_SIZE} />
             </ReactFlow>
           </EdgeMarkers>

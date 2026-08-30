@@ -42,7 +42,8 @@ export function splitStageDataNodes(stage: Stage): StageDataSplit {
   // Фолбэк для узлов без direction: середина области шагов. Без узлов потока
   // делить нечем — такие узлы уходят во входы, как и раньше.
   const xs = flow.map((node) => node.position.x);
-  const midpoint = xs.length > 0 ? (Math.min(...xs) + Math.max(...xs)) / 2 : Number.POSITIVE_INFINITY;
+  const midpoint =
+    xs.length > 0 ? (Math.min(...xs) + Math.max(...xs)) / 2 : Number.POSITIVE_INFINITY;
 
   const inputs: ProcessNode[] = [];
   const outputs: ProcessNode[] = [];

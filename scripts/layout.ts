@@ -121,9 +121,7 @@ export function rectOf(node: ProcessNode): Rect {
 }
 
 function overlaps(a: Rect, b: Rect): boolean {
-  return (
-    a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height
-  );
+  return a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
 }
 
 /** Число пар прямоугольников с ненулевой площадью пересечения — главная метрика раскладки. */
@@ -411,7 +409,9 @@ function layoutOverview(map: ProcessMap): OverviewPlacement[] {
     sizes.set(system, SYSTEM_NODE_SIZE);
     graph.setNode(system, { ...SYSTEM_NODE_SIZE });
   }
-  for (const edge of [...map.overviewEdges].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))) {
+  for (const edge of [...map.overviewEdges].sort((a, b) =>
+    a.id < b.id ? -1 : a.id > b.id ? 1 : 0,
+  )) {
     if (edge.source !== edge.target) {
       graph.setEdge(edge.source, edge.target, {});
     }
@@ -506,9 +506,7 @@ export function runLayout(): number {
     );
     lines.push(`  групп:                ${stage.groups.length}`);
     lines.push(`  рёбер:                ${stage.edges.length}`);
-    lines.push(
-      `  пересечений узлов:    ${countOverlappingPairs(rects)} (было ${wasOverlaps})`,
-    );
+    lines.push(`  пересечений узлов:    ${countOverlappingPairs(rects)} (было ${wasOverlaps})`);
     const orphans = countWithoutSlidePosition(stage);
     if (orphans > 0) {
       lines.push(
@@ -533,7 +531,9 @@ export function runLayout(): number {
   lines.push(`  пересечений узлов:    ${countOverlappingPairs(overview)}`);
   lines.push('  координаты (в схеме Stage поля position нет — в JSON не пишутся):');
   for (const item of overview) {
-    lines.push(`    ${item.kind === 'stage' ? 'этап  ' : 'система'} ${item.id}: x=${item.x} y=${item.y}`);
+    lines.push(
+      `    ${item.kind === 'stage' ? 'этап  ' : 'система'} ${item.id}: x=${item.x} y=${item.y}`,
+    );
   }
 
   const updated = serialize(raw);

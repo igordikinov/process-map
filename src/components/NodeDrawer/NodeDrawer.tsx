@@ -196,9 +196,7 @@ function NodeDrawerPanel({ node, onClose }: NodeDrawerPanelProps) {
               {/* Расшифровка появится в ru.systems, когда её пришлёт владелец
                   процесса (process-map-b67, SPEC §4.3). Пока словарь пуст —
                   показываем код, а не пустую строку. */}
-              <span className={styles.fieldValue}>
-                {ru.systems[node.system] || node.system}
-              </span>
+              <span className={styles.fieldValue}>{ru.systems[node.system] || node.system}</span>
             </Section>
           )}
           {node.owner !== undefined && (

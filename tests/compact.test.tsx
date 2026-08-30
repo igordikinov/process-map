@@ -111,7 +111,8 @@ class ControllableResizeObserver implements ResizeObserver {
     }
     this.callback(
       [...this.targets].map(
-        (target) => ({ target, contentRect: target.getBoundingClientRect() }) as ResizeObserverEntry,
+        (target) =>
+          ({ target, contentRect: target.getBoundingClientRect() }) as ResizeObserverEntry,
       ),
       this,
     );
@@ -141,7 +142,12 @@ function setElementHeight(element: HTMLElement, width: number, height: number): 
 function FrameProbe() {
   const { ref, height, compact } = useFrameSize();
   return (
-    <div ref={ref} data-testid="frame" data-height={String(height)} data-compact={String(compact)} />
+    <div
+      ref={ref}
+      data-testid="frame"
+      data-height={String(height)}
+      data-compact={String(compact)}
+    />
   );
 }
 
@@ -240,7 +246,9 @@ describe('buildOverviewGraph: компактный режим (SPEC §4.5)', () 
     const systems = (badge?.data as { systems: string[] }).systems;
 
     const expected = [
-      ...new Set(map.stages.flatMap((stage) => [...stage.inputs, ...stage.outputs]).map((io) => io.system)),
+      ...new Set(
+        map.stages.flatMap((stage) => [...stage.inputs, ...stage.outputs]).map((io) => io.system),
+      ),
     ];
     expect(systems).toEqual(expected);
     expect(new Set(systems).size).toBe(systems.length);
@@ -366,9 +374,7 @@ describe('StageCard: компактный режим', () => {
 
 describe('OverviewHeader: компактный режим', () => {
   it('дата обновления снимается (артборд A4), заголовок и бейдж остаются', () => {
-    render(
-      <OverviewHeader title={map.title} stagesCount={4} updatedAt={map.updatedAt} compact />,
-    );
+    render(<OverviewHeader title={map.title} stagesCount={4} updatedAt={map.updatedAt} compact />);
 
     expect(screen.getByRole('heading', { name: map.title })).toBeInTheDocument();
     expect(screen.getByText('4 этапа')).toBeInTheDocument();
@@ -385,9 +391,7 @@ describe('Breadcrumbs: компактный режим', () => {
     expect(screen.getByText(ru.breadcrumbs.root)).toBeInTheDocument();
     expect(screen.getByText(stage.title)).toBeInTheDocument();
     expect(screen.getByText(ru.breadcrumbs.stageBadge(stage.number))).toBeInTheDocument();
-    expect(
-      screen.getByRole('button', { name: ru.breadcrumbs.backAriaLabel }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: ru.breadcrumbs.backAriaLabel })).toBeInTheDocument();
   });
 });
 

@@ -238,9 +238,10 @@ describe('конвейер данных: slidePosition как исходная �
         ['слайдовые координаты', bySlide],
         ['вырожденные координаты', byNothing],
       ] as const) {
-        expect(split.inputs.map((node) => node.id), `этап ${stage.number}: входы, ${name}`).toEqual(
-          byPosition.inputs.map((node) => node.id),
-        );
+        expect(
+          split.inputs.map((node) => node.id),
+          `этап ${stage.number}: входы, ${name}`,
+        ).toEqual(byPosition.inputs.map((node) => node.id));
         expect(
           split.outputs.map((node) => node.id),
           `этап ${stage.number}: выходы, ${name}`,

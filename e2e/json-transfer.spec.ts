@@ -223,10 +223,7 @@ test.describe('Тулбар редактора: три кнопки SPEC §4.4',
       const box = await button.boundingBox();
       const hits = await page.evaluate(
         ({ x, y, name }) =>
-          document
-            .elementFromPoint(x, y)
-            ?.closest('button')
-            ?.textContent?.trim() === name,
+          document.elementFromPoint(x, y)?.closest('button')?.textContent?.trim() === name,
         {
           x: (box?.x ?? 0) + (box?.width ?? 0) / 2,
           y: (box?.y ?? 0) + (box?.height ?? 0) / 2,
@@ -350,9 +347,7 @@ test.describe('Импорт JSON', () => {
     await importJson(page, exported.fileName, exported.text);
 
     // Правка восстановлена в хранилище ровно в формате SPEC §3…
-    await expect
-      .poll(() => storedOverrides(page))
-      .toEqual({ [nodeId]: { screen: LINK } });
+    await expect.poll(() => storedOverrides(page)).toEqual({ [nodeId]: { screen: LINK } });
 
     // …и повторный экспорт даёт байт в байт тот же файл.
     const again = await exportJson(page);
@@ -375,9 +370,7 @@ test.describe('Импорт JSON', () => {
     await enterEditMode(page);
     await importJson(page, 'process.json', `${JSON.stringify(edited, null, 2)}\n`);
 
-    await expect
-      .poll(() => storedOverrides(page))
-      .toEqual({ [nodeId]: { screen: LINK } });
+    await expect.poll(() => storedOverrides(page)).toEqual({ [nodeId]: { screen: LINK } });
 
     // Никакой перезагрузки: переходим на уровень 2 и открываем узел.
     await openStage(page, 0);

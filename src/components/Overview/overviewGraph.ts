@@ -21,11 +21,7 @@ import type { FlowLaneNodeType, LaneNodeType } from '../nodes/LaneNode';
 import type { SystemsBadgeNodeType } from '../nodes/SystemsBadge';
 
 export type OverviewNode =
-  | LaneNodeType
-  | FlowLaneNodeType
-  | IntegrationNodeType
-  | StageNodeType
-  | SystemsBadgeNodeType;
+  LaneNodeType | FlowLaneNodeType | IntegrationNodeType | StageNodeType | SystemsBadgeNodeType;
 
 // ───────────────────────────── геометрия макета ─────────────────────────────
 
@@ -67,8 +63,7 @@ export const LANE_OUT_ID = 'lane-out';
 const FLOW_LANE_TOP_PADDING = IO_OFFSET_Y;
 const FLOW_LANE_BOTTOM_PADDING = LANE_IN_HEIGHT - IO_OFFSET_Y - IO_HEIGHT;
 const FLOW_LANE_Y = STAGE_Y - FLOW_LANE_TOP_PADDING;
-const FLOW_LANE_HEIGHT =
-  FLOW_LANE_TOP_PADDING + STAGE_NODE_SIZE.height + FLOW_LANE_BOTTOM_PADDING;
+const FLOW_LANE_HEIGHT = FLOW_LANE_TOP_PADDING + STAGE_NODE_SIZE.height + FLOW_LANE_BOTTOM_PADDING;
 
 export const FLOW_LANE_ID = 'lane-flow';
 

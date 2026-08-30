@@ -267,9 +267,9 @@ test('уменьшение окна БЕЗ перезагрузки включа
   //   2) вид УЖЕ подогнан: ручное «Уместить в экран» не меняет масштаб.
   //      Без повторного fitView масштаб здесь 0.974 (подогнан под раскладку
   //      обычного режима), а кнопка ставит 0.984 — разница видна сразу.
-  await expect.poll(async () => viewportTransform(page), { timeout: 5000 }).not.toBe(
-    transformBefore,
-  );
+  await expect
+    .poll(async () => viewportTransform(page), { timeout: 5000 })
+    .not.toBe(transformBefore);
   await expect.poll(async () => fullyVisibleStages(page), { timeout: 5000 }).toBe(4);
 
   const zoomAfterSwitch = await viewportZoom(page);

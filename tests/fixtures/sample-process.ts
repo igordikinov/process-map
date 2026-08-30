@@ -4,7 +4,14 @@
 // (импорт из презентации). До тех пор позитивные тесты схемы/целостности
 // гоняются против этой фикстуры: ≥ 40 узлов, целостные рёбра, реалистичный
 // набор groups/inputs/outputs/overviewEdges.
-import type { Edge, ExternalIO, Group, ProcessMap, ProcessNode, Stage } from '../../src/data/schema.ts';
+import type {
+  Edge,
+  ExternalIO,
+  Group,
+  ProcessMap,
+  ProcessNode,
+  Stage,
+} from '../../src/data/schema.ts';
 
 const SYSTEM_CODES = ['DP', 'PS', 'IO', 'ERP'] as const;
 const NODES_PER_STAGE = 11; // 4 этапа × 11 = 44 узла, что удовлетворяет "≥ 40".
@@ -42,10 +49,20 @@ function buildStage(stageNumber: 1 | 2 | 3 | 4): Stage {
   });
 
   const inputs: ExternalIO[] = [
-    { system: SYSTEM_CODES[stageNumber - 1] ?? 'DP', label: `Вход из системы, этап ${stageNumber}`, stage: stageNumber, direction: 'in' },
+    {
+      system: SYSTEM_CODES[stageNumber - 1] ?? 'DP',
+      label: `Вход из системы, этап ${stageNumber}`,
+      stage: stageNumber,
+      direction: 'in',
+    },
   ];
   const outputs: ExternalIO[] = [
-    { system: SYSTEM_CODES[stageNumber % SYSTEM_CODES.length] ?? 'PS', label: `Выход в систему, этап ${stageNumber}`, stage: stageNumber, direction: 'out' },
+    {
+      system: SYSTEM_CODES[stageNumber % SYSTEM_CODES.length] ?? 'PS',
+      label: `Выход в систему, этап ${stageNumber}`,
+      stage: stageNumber,
+      direction: 'out',
+    },
   ];
 
   return {

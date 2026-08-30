@@ -258,7 +258,10 @@ test.describe('Тулбар, уровень 2 (детализация)', () => {
     await page.waitForSelector('.react-flow__node-stage');
     const card = page.locator('.react-flow__node-stage button').nth(index);
     const box = await card.boundingBox();
-    await page.mouse.click((box?.x ?? 0) + (box?.width ?? 0) / 2, (box?.y ?? 0) + (box?.height ?? 0) / 2);
+    await page.mouse.click(
+      (box?.x ?? 0) + (box?.width ?? 0) / 2,
+      (box?.y ?? 0) + (box?.height ?? 0) / 2,
+    );
     // Карточка ШАГА, а не любой `.react-flow__node-step`: тем же классом
     // рисуются интеграции и предупреждения (общий StepCard).
     await page.waitForSelector('.react-flow__node-step button[aria-label^="Шаг: "]');
@@ -311,7 +314,9 @@ test.describe('Тулбар, уровень 2 (детализация)', () => {
     // Этап 2 содержит узлы типа integration (см. tests/stageGraph-integrations.test.ts).
     await openStage(page, 1);
 
-    const integrationCards = page.locator('.react-flow__node-step button[aria-label^="Интеграция:"]');
+    const integrationCards = page.locator(
+      '.react-flow__node-step button[aria-label^="Интеграция:"]',
+    );
     const before = await integrationCards.count();
     expect(before).toBeGreaterThan(0);
 

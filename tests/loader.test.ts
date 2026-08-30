@@ -350,7 +350,9 @@ describe('сброс правок', () => {
 
     expect(readStoredOverrides()).toEqual({});
     expect(getMergedProcessMap()).toEqual(base);
-    expect(serializeProcessMap(getMergedProcessMap())).toBe(readFileSync(PROCESS_JSON_PATH, 'utf8'));
+    expect(serializeProcessMap(getMergedProcessMap())).toBe(
+      readFileSync(PROCESS_JSON_PATH, 'utf8'),
+    );
   });
 
   it('сброс после импорта тоже работает: правки импорта не «прилипают»', () => {

@@ -285,11 +285,7 @@ export interface StageGraph {
  *      схема этого не запрещает) — якоря нет, и initialViewport вернётся к
  *      прежнему поведению «угол габарита».
  */
-function pickStartAnchor(
-  stage: Stage,
-  groupOrigin: ReadonlyMap<string, Box>,
-  bounds: Box,
-): Box {
+function pickStartAnchor(stage: Stage, groupOrigin: ReadonlyMap<string, Box>, bounds: Box): Box {
   const steps = stage.nodes.filter((node) => node.type === 'step');
   if (steps.length === 0) {
     return bounds;
@@ -491,7 +487,9 @@ export function buildStageGraph(stage: Stage, showIntegrations = true): StageGra
     // React Flow получил бы edge.source/target без соответствующего node.id.
     if (
       !showIntegrations &&
-      (edge.kind === 'integration' || source.type === 'integration' || target.type === 'integration')
+      (edge.kind === 'integration' ||
+        source.type === 'integration' ||
+        target.type === 'integration')
     ) {
       continue;
     }

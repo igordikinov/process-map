@@ -287,9 +287,7 @@ describe('Toolbar', () => {
     expect(screen.queryByRole('button', { name: ru.toolbar.resetOverrides })).toBeNull();
     expect(screen.getByRole('group', { name: ru.toolbar.resetConfirm })).toBeInTheDocument();
     expect(screen.getByText(ru.toolbar.resetConfirm)).toBeInTheDocument();
-    expect(
-      screen.getByRole('button', { name: ru.toolbar.resetConfirmAccept }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: ru.toolbar.resetConfirmAccept })).toBeInTheDocument();
   });
 
   it('подтверждение достижимо клавиатурой: фокус на «Удалить» сразу, «Отмена» следующая', () => {

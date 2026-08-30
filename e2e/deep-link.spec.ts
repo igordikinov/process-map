@@ -82,7 +82,9 @@ test.describe('устойчивость', () => {
   });
 
   test('?node=не-существует: открывается обзор, без падения', async ({ page }) => {
-    await page.goto('/?node=%D0%BD%D0%B5-%D1%81%D1%83%D1%89%D0%B5%D1%81%D1%82%D0%B2%D1%83%D0%B5%D1%82');
+    await page.goto(
+      '/?node=%D0%BD%D0%B5-%D1%81%D1%83%D1%89%D0%B5%D1%81%D1%82%D0%B2%D1%83%D0%B5%D1%82',
+    );
     await waitForOverview(page);
     expect(new URL(page.url()).search).toBe('');
   });
