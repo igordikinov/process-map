@@ -120,6 +120,21 @@ export function useDeepLink(): void {
     const url = `${window.location.pathname}${query ? `?${query}` : ''}${window.location.hash}`;
     // SPEC §4.7: replaceState, НЕ pushState — история родительской вики не
     // должна расти при навигации внутри iframe.
-    window.history.replaceState(window.history.state as unknown, '', url);
+    //
+    // try/catch обязателен (process-map-cxd). При sandbox без allow-same-origin
+    // фрейм получает opaque origin, и браузер отвечает на replaceState
+    // SecurityError. Без перехвата падает ВСЁ приложение, а не эта строка:
+    // error boundary в проекте нет ни одного, App висит прямо под createRoot,
+    // и React 18, не найдя boundary для исключения из эффекта, размонтирует
+    // корень — карта показывается один кадр и гаснет в пустой белый фрейм.
+    //
+    // Молчаливое проглатывание здесь уместно: синхронизация адреса — удобство
+    // (deep-link на перезагрузку), а не функция. Карта обязана работать и без
+    // неё. Тот же приём применён к localStorage в data/loader.ts::getStorage.
+    try {
+      window.history.replaceState(window.history.state as unknown, '', url);
+    } catch {
+      // Адрес не синхронизируется — карта продолжает работать.
+    }
   }, [map, currentStageId, selectedNodeId, navigateToStage, selectNode]);
 }

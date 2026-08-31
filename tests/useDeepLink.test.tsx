@@ -195,4 +195,36 @@ describe('useDeepLink — синхронизация URL', () => {
     replaceSpy.mockRestore();
     pushSpy.mockRestore();
   });
+
+  // process-map-cxd. При sandbox без allow-same-origin фрейм получает opaque
+  // origin, и браузер отвечает на replaceState SecurityError. Без перехвата
+  // падало ВСЁ приложение, а не эта строка: error boundary в проекте нет ни
+  // одного, App висит прямо под createRoot, и React 18, не найдя boundary для
+  // исключения из эффекта, размонтирует корень — карта показывалась один кадр
+  // и гасла в пустой фрейм.
+  //
+  // Проверяется именно то, что карта ОСТАЁТСЯ на экране: «render не бросил» —
+  // недостаточное утверждение, размонтирование корня происходит после paint.
+  it('отказ replaceState (opaque origin) не роняет приложение', () => {
+    const replaceSpy = vi.spyOn(window.history, 'replaceState').mockImplementation(() => {
+      throw new DOMException(
+        "A history state object with URL 'http://localhost/' cannot be created in a document with origin 'null'",
+        'SecurityError',
+      );
+    });
+
+    render(<App />);
+    // Навигация внутри карты — второй вызов replaceState, уже после монтирования.
+    act(() => {
+      useProcessStore.getState().navigateToStage(stage2.id);
+    });
+
+    expect(replaceSpy, 'синхронизация URL должна была быть попытана').toHaveBeenCalled();
+    expect(
+      screen.getByText(stage2.title),
+      'карта обязана остаться на экране, несмотря на отказ history',
+    ).toBeInTheDocument();
+
+    replaceSpy.mockRestore();
+  });
 });
