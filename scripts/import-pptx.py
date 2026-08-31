@@ -84,7 +84,7 @@ import sys
 from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Iterable, Sequence
+from typing import AbstractSet, Iterable, Sequence
 
 from lxml import etree
 from pptx import Presentation
@@ -121,7 +121,7 @@ MAP_VERSION = "1.0.0"
 # ЧТО НЕ ДАЁТ ЕЙ ПРОТУХНУТЬ СНОВА — соседняя константа: отпечаток содержания
 # process.json. Расходятся — краснеет tests/updatedAt.test.ts. Проверка на
 # TypeScript, а не здесь, потому что Python в CI не запускается вовсе.
-MAP_UPDATED_AT = "2026-08-30"
+MAP_UPDATED_AT = "2026-08-31"
 
 # sha256 содержания src/data/process.json с НЕЙТРАЛИЗОВАННЫМ updatedAt.
 #
@@ -134,9 +134,15 @@ MAP_UPDATED_AT = "2026-08-30"
 # дата протухнет ровно тем же способом. Python и не смог бы посчитать финальный
 # отпечаток — после него файл переписывает scripts/layout.ts.
 # Значение печатает падающий тест; алгоритм — в tests/updatedAt.test.ts.
-MAP_DATA_FINGERPRINT = "41319cd0d790603997e0de9391b8b76ed4105f0c4176b428cb2da5c5c89166dd"
+MAP_DATA_FINGERPRINT = "df5a34d6be2782d7ab6f5edd7739cd5d4c3edeb0b297ffe20aeba10212e8dde6"
 
-MAP_TITLE = "E2E процесс планирования In.Plan"
+# Заголовок шапки обзора. Решение владельца от 31.08.2026 (process-map-4d2):
+# формулировка макета A1, она же в заголовке PRD.md. Прежняя — «E2E процесс
+# планирования In.Plan» — расходилась и с макетом, и с PRD.
+#
+# Это КОНСТАНТА, а не текст из презентации: правка одного process.json была бы
+# затёрта первым же `npm run data`. Задача 4d2 предполагала обратное.
+MAP_TITLE = "E2E-процесс планирования поставок"
 
 # 1 px = 9525 EMU (96 dpi). Слайд 12192000 EMU = 1280 px по ширине.
 EMU_PER_PX = 9525
@@ -1458,18 +1464,39 @@ def block_items_start(paragraphs: Sequence[str]) -> int:
     return 1 if paragraphs and paragraphs[0].endswith(":") else 0
 
 
-def choose_key_outputs(blocks: Sequence[tuple[list[str], Box, int]]) -> list[str]:
+def choose_key_outputs(
+    blocks: Sequence[tuple[list[str], Box, int]],
+    inbound_labels: AbstractSet[str],
+) -> list[str]:
     """
     Ключевые выходы этапа. Если среди блоков есть перечень с заголовком-двоеточием
     («Опубликованные планы:»), берём его пункты — это и есть выходы этапа.
     Иначе — первые MAX_KEY_OUTPUTS абзацев в порядке чтения.
+
+    ЧТО ОТБРАСЫВАЕТСЯ (process-map-tze). Пункт, который на слайде детализации
+    этого же этапа нарисован ВХОДОМ, ключевым выходом не считается: иначе
+    карточка обзора называет выходом то, что на экране этапа стоит в левой
+    колонке, и карта противоречит сама себе на двух соседних экранах.
+
+    Так вышло из презентации, и это не её ошибка: блоки выходов слайда 2 стоят
+    под боксами ГРУПП, а не под этапом (process-map-2of). «Прогноз продаж в
+    требуемой гранулярности» — выход группы «Преобразование прогноза к
+    требуемой гранулярности» и одновременно вход следующей группы. Для этапа
+    целиком это вход, для группы внутри него — выход.
+
+    Отбор идёт ДО среза по MAX_KEY_OUTPUTS: иначе отброшенный пункт занимал бы
+    место, и на карточке оказалось бы меньше выходов, чем мест.
     """
+
+    def keep(paragraphs: Iterable[str]) -> list[str]:
+        return [p for p in paragraphs if p.casefold() not in inbound_labels]
+
     for paragraphs, _box, _sid in blocks:
         start = block_items_start(paragraphs)
         if start:
-            return list(paragraphs[start : start + MAX_KEY_OUTPUTS])
+            return keep(paragraphs[start:])[:MAX_KEY_OUTPUTS]
     flat = [p for paragraphs, _box, _sid in blocks for p in paragraphs]
-    return flat[:MAX_KEY_OUTPUTS]
+    return keep(flat)[:MAX_KEY_OUTPUTS]
 
 
 # --------------------------------------------------------------------------------------
@@ -1571,7 +1598,12 @@ def build_process_map(
     # отчёте (report.dedup_key_outputs).
     for index, stage in enumerate(stages):
         blocks = overview.output_blocks[index] if index < len(overview.output_blocks) else []
-        stage["keyOutputs"] = choose_key_outputs(blocks)
+        inbound = {
+            node["label"].casefold()
+            for node in stage["nodes"]
+            if node.get("direction") == "in"
+        }
+        stage["keyOutputs"] = choose_key_outputs(blocks, inbound)
         existing = {node["label"].casefold() for node in stage["nodes"]}
         added: list[dict] = []
         for paragraphs, box, sid in blocks:
