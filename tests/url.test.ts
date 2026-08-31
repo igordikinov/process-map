@@ -1,22 +1,18 @@
-// Открытие ссылок и валидация URL (SPEC §4.8, §4.4; задача process-map-6mi).
+// Открытие ссылок и валидация URL (SPEC §4.8, §4.4; задачи process-map-6mi,
+// process-map-6ap).
 //
-// SPEC §4.8 прямо требует покрыть ОБА пути openScreen: обычный (`window.top`
-// доступен, целимся в `_top`) и фолбэк (`window.top` недоступен → `_blank`).
-// Второй путь — не экзотика: в проде приложение живёт в iframe на чужом домене
-// (SPEC §6), и без фолбэка ссылка там просто не откроется.
+// Раньше здесь проверялись ОБА пути выбора цели: `_top` при доступном
+// `window.top` и фолбэк на `_blank`. Пути больше нет — цель берётся из
+// `config.linkTarget` напрямую (process-map-6ap). Причина: проба читала
+// `top.document`, а он для чужого origin бросает SecurityError всегда, и
+// карта по построению живёт на чужом origin (SPEC §6) — то есть «фолбэк» был
+// единственным поведением, а четыре теста ниже описывали ветвление, которого
+// в проде не существовало.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { config } from '../src/config';
 import { openScreen, validateUrl } from '../src/utils/url';
 
 const URL_OK = 'https://example.com/plan';
-
-/** Исключение, которое браузер бросает при обращении к чужому origin. */
-function securityError(): DOMException {
-  return new DOMException(
-    'Blocked a frame with origin from accessing a cross-origin frame.',
-    'SecurityError',
-  );
-}
 
 /**
  * Подменяет `window.top` на время теста.
@@ -54,75 +50,33 @@ afterEach(() => {
 });
 
 describe('openScreen', () => {
-  it('открывает в _top, когда window.top доступен', () => {
-    config.linkTarget = '_top';
-    // Штатный jsdom: window.top — само окно, document читается свободно.
-    expect(window.top?.document).toBeDefined();
+  // Контракт после process-map-6ap: цель — ровно `config.linkTarget`, без
+  // угадывания. Дефолт — новая вкладка.
+  it('открывает в новой вкладке и не читает window.top', () => {
+    // Если бы проба доступности верхнего окна вернулась, этот геттер сработал
+    // бы — а сработать он не должен ни разу.
+    const topGetter = vi.fn(() => window);
+    stubTop({ get: topGetter });
 
     openScreen(URL_OK);
 
     expect(openSpy).toHaveBeenCalledTimes(1);
+    expect(openSpy).toHaveBeenCalledWith(URL_OK, '_blank');
+    expect(topGetter, 'верхнее окно не должно опрашиваться вовсе').not.toHaveBeenCalled();
+  });
+
+  // Ручка остаётся: если карту положат на тот же origin, что и вики, уход всей
+  // страницы снова станет достижим — но уже осознанным переключением, а не
+  // автоматикой, и без фолбэка.
+  it('уважает config.linkTarget, когда его переключили на _top', () => {
+    config.linkTarget = '_top';
+
+    openScreen(URL_OK);
+
     expect(openSpy).toHaveBeenCalledWith(URL_OK, '_top');
   });
 
-  // Ровно тот случай, ради которого фолбэк и написан: iframe на чужом домене.
-  // Обращение к window.top при этом НЕ бросает (top в белом списке кросс-
-  // доменного WindowProxy) — бросает первое обращение к document.
-  it('фолбэк на _blank, когда document верхнего окна кидает SecurityError', () => {
-    config.linkTarget = '_top';
-    const crossOrigin = {
-      get document(): Document {
-        throw securityError();
-      },
-    } as unknown as Window;
-    stubTop({ get: () => crossOrigin });
-
-    openScreen(URL_OK);
-
-    expect(openSpy).toHaveBeenCalledWith(URL_OK, '_blank');
-  });
-
-  // Второй способ получить ту же недоступность: некоторые движки бросают уже
-  // на самом обращении к window.top.
-  it('фолбэк на _blank, когда обращение к window.top кидает SecurityError', () => {
-    config.linkTarget = '_top';
-    stubTop({
-      get: () => {
-        throw securityError();
-      },
-    });
-
-    openScreen(URL_OK);
-
-    expect(openSpy).toHaveBeenCalledWith(URL_OK, '_blank');
-  });
-
-  it('фолбэк на _blank, когда window.top === null (окно отсоединено)', () => {
-    config.linkTarget = '_top';
-    stubTop({ get: () => null });
-
-    openScreen(URL_OK);
-
-    expect(openSpy).toHaveBeenCalledWith(URL_OK, '_blank');
-  });
-
-  // Фолбэк касается только '_top': при явном '_blank' проверять верхнее окно
-  // незачем, и подмена target была бы отсебятиной.
-  it('при linkTarget _blank открывает в _blank и не трогает window.top', () => {
-    config.linkTarget = '_blank';
-    const top = vi.fn(() => {
-      throw securityError();
-    });
-    stubTop({ get: top });
-
-    openScreen(URL_OK);
-
-    expect(openSpy).toHaveBeenCalledWith(URL_OK, '_blank');
-    expect(top).not.toHaveBeenCalled();
-  });
-
   it('возвращает то, что вернул window.open, и не пытается открыть повторно', () => {
-    config.linkTarget = '_top';
     // null от window.open = блокировщик всплывающих окон (или успешное
     // открытие с noopener). Повторная попытка открыла бы вторую вкладку.
     expect(openScreen(URL_OK)).toBeNull();
@@ -134,11 +88,9 @@ describe('openScreen', () => {
   });
 
   // screen.url приезжает из overrides в localStorage (SPEC §3) — то есть из
-  // данных, которые может подменить кто угодно. javascript: в '_top' выполнил
-  // бы скрипт в контексте страницы-хозяина (SPEC §6, iframe на чужом домене).
+  // данных, которые может подменить кто угодно. window.open('javascript:…')
+  // выполнил бы скрипт, поэтому невалидная ссылка не открывается вовсе.
   it('не открывает ссылку, не прошедшую валидацию', () => {
-    config.linkTarget = '_top';
-
     expect(openScreen('javascript:alert(1)')).toBeNull();
     expect(openScreen('не ссылка')).toBeNull();
     expect(openScreen('')).toBeNull();

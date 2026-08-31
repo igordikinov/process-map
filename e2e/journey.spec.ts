@@ -195,10 +195,9 @@ test('обзор → этап 2 → шаг → Drawer → «Открыть в м
   );
   expect(await openCalls(page), 'ссылка открылась до клика').toEqual([]);
   await clickCenter(page, openInModule);
-  // Страница-тест не в iframe, значит window.top свой и target остаётся '_top'
-  // (config.linkTarget). Фолбэк на '_blank' — случай кросс-доменного iframe
-  // (SPEC §6), он проверяется в tests/url.test.ts.
-  expect(await openCalls(page)).toEqual([[SCREEN_LINK.url, '_top']]);
+  // Цель — ровно config.linkTarget, без угадывания по доступности верхнего
+  // окна (process-map-6ap). Дефолт — новая вкладка, и он же ожидается здесь.
+  expect(await openCalls(page)).toEqual([[SCREEN_LINK.url, '_blank']]);
   // Открытие ссылки не должно ни ронять приложение, ни закрывать панель.
   await expect(dialog).toBeVisible();
   await expect(stepCard).toHaveAttribute('aria-current', 'true');
@@ -214,8 +213,8 @@ test('обзор → этап 2 → шаг → Drawer → «Открыть в м
   await expect(linkButton).toHaveCount(1);
   await clickCenter(page, linkButton);
   expect(await openCalls(page)).toEqual([
-    [SCREEN_LINK.url, '_top'],
-    [SCREEN_LINK.url, '_top'],
+    [SCREEN_LINK.url, '_blank'],
+    [SCREEN_LINK.url, '_blank'],
   ]);
   // stopPropagation на карточке: клик по иконке ссылки не открывает панель.
   await expect(page.getByRole('dialog')).toHaveCount(0);

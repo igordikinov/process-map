@@ -26,8 +26,7 @@ declare global {
  * Переживает page.reload().
  *
  * Подмена обязательна не только ради проверки аргументов: openScreen зовёт
- * window.open(url, '_top'), а страница теста не в iframe, поэтому фолбэк на
- * '_blank' не срабатывает и настоящий вызов увёл бы весь тест на чужой сайт.
+ * настоящий window.open, и без неё вызов увёл бы браузер на чужой сайт.
  */
 export async function interceptWindowOpen(page: Page): Promise<void> {
   await page.addInitScript(() => {
