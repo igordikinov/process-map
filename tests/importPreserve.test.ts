@@ -223,6 +223,80 @@ describe('import-pptx.py: рёбра по решению владельца пр
 });
 
 /**
+ * Читает OWNER_DECISION_EXTERNAL_IO — внешние системы этапа, названные
+ * владельцем, а не выведенные из текста (process-map-vjz.5). Разбор регуляркой
+ * по той же причине, что и у соседних таблиц: интерпретатора Python в CI нет.
+ */
+function readOwnerExternalIo(): OwnerExternalIo[] {
+  const block = new RegExp(
+    '^OWNER_DECISION_EXTERNAL_IO[^\\n]*=\\s*\\(\\n([\\s\\S]*?)\\n\\)\\n',
+    'm',
+  ).exec(importerSource);
+  if (block === null) {
+    return [];
+  }
+  const entries =
+    /"task":\s*"([^"]+)",\s*"stage":\s*(\d+),\s*"system":\s*"([^"]+)",\s*"label":\s*"([^"]+)",\s*"direction":\s*"([^"]+)"/g;
+  return [...block[1]!.matchAll(entries)].map((match) => ({
+    task: match[1]!,
+    stage: Number(match[2]!),
+    system: match[3]!,
+    label: match[4]!,
+    direction: match[5]!,
+  }));
+}
+
+interface OwnerExternalIo {
+  task: string;
+  stage: number;
+  system: string;
+  label: string;
+  direction: string;
+}
+
+// Внешняя система, которую автоматика взять не могла: ExternalIO собирается,
+// только когда в тексте нашлись И код системы, И направление, а во фразе
+// «Управление транзакционными данными» нет ни того, ни другого — код назвал
+// владелец. Тест сторожит, что объявление не потерялось и доехало в данные:
+// импортёр пересобирает process.json с нуля, и правка прямо в JSON не пережила
+// бы следующий npm run data.
+describe('import-pptx.py: внешние системы по решению владельца', () => {
+  const declared = readOwnerExternalIo();
+
+  it('объявление не потеряно и называет задачу-основание', () => {
+    expect(
+      declared.length,
+      'OWNER_DECISION_EXTERNAL_IO в scripts/import-pptx.py пуст или не найден — ' +
+        'названный владельцем источник данных не переживёт следующий npm run data',
+    ).toBeGreaterThan(0);
+    for (const entry of declared) {
+      expect(entry.task, 'источник решения').toMatch(/^process-map-/);
+      expect(['in', 'out']).toContain(entry.direction);
+    }
+  });
+
+  it('код системы объявлен в схеме — иначе zod отверг бы карту', () => {
+    // Прямая связка Python ↔ TypeScript: код, названный владельцем, обязан
+    // существовать в SystemCode. Без этой проверки рассинхрон всплыл бы уже
+    // падением разбора process.json, то есть позже и невнятнее.
+    for (const entry of declared) {
+      expect(SystemCodeSchema.options as readonly string[]).toContain(entry.system);
+    }
+  });
+
+  it('объявленная система доехала в process.json своим этапом и направлением', () => {
+    for (const entry of declared) {
+      const stage = map.stages.find((candidate) => candidate.number === entry.stage);
+      expect(stage, `этап ${entry.stage}`).toBeDefined();
+      const bucket = entry.direction === 'in' ? stage!.inputs : stage!.outputs;
+      const found = bucket.find((io) => io.label === entry.label);
+      expect(found, `${entry.task}: «${entry.label}» не доехало в process.json`).toBeDefined();
+      expect(found!.system).toBe(entry.system);
+    }
+  });
+});
+
+/**
  * Читает STAGE_INPUT_ENRICHMENT из scripts/import-pptx.py — входы этапа, взятые
  * со слайда ОБЗОРА вместо слайда детализации (задача process-map-qjl). Разбор
  * регуляркой по той же причине, что и у OWNER_DECISION_EDGES: интерпретатора

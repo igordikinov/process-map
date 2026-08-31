@@ -200,7 +200,10 @@ describe('buildOverviewGraph', () => {
     const ids = new Set(nodes.map((node) => node.id));
 
     expect(edges.filter((edge) => edge.type === 'process')).toHaveLength(3);
-    expect(edges.filter((edge) => edge.type === 'integration')).toHaveLength(6);
+    // Шесть рёбер прочитаны с линий слайда 2, седьмое объявлено владельцем:
+    // ERP → этап 1 (process-map-vjz.5). Линии для него на слайде нет — её
+    // отсутствие и есть причина, по которой автоматика систему не нашла.
+    expect(edges.filter((edge) => edge.type === 'integration')).toHaveLength(7);
     for (const edge of edges) {
       expect(ids.has(edge.source)).toBe(true);
       expect(ids.has(edge.target)).toBe(true);

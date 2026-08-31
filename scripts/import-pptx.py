@@ -134,7 +134,7 @@ MAP_UPDATED_AT = "2026-08-31"
 # дата протухнет ровно тем же способом. Python и не смог бы посчитать финальный
 # отпечаток — после него файл переписывает scripts/layout.ts.
 # Значение печатает падающий тест; алгоритм — в tests/updatedAt.test.ts.
-MAP_DATA_FINGERPRINT = "df5a34d6be2782d7ab6f5edd7739cd5d4c3edeb0b297ffe20aeba10212e8dde6"
+MAP_DATA_FINGERPRINT = "1fbd5db4c0c464e80ee8f23796fa395e8ad4789a8818fc9e0b9f6a06ceca6c08"
 
 # Заголовок шапки обзора. Решение владельца от 31.08.2026 (process-map-4d2):
 # формулировка макета A1, она же в заголовке PRD.md. Прежняя — «E2E процесс
@@ -312,6 +312,27 @@ STAGE_INPUT_ENRICHMENT: tuple[dict, ...] = (
     },
 )
 
+OWNER_DECISION_EXTERNAL_IO: tuple[dict, ...] = (
+    {
+        "task": "process-map-vjz.5",
+        "stage": 1,
+        "system": "ERP",
+        "label": "Управление транзакционными данными",
+        "direction": "in",
+        "source": "слайд 2, текстбокс [130] — верхний ряд, между [40] и [129]",
+        "why": (
+            "решение владельца процесса: это самостоятельный источник данных этапа 1, "
+            "а не заголовок к соседнему тексту. Автоматика его не берёт, и не может: "
+            "ExternalIO строится, только когда сработали И detect_system, И "
+            "detect_direction, а во фразе нет ни кода системы, ни направления "
+            "(«из модуля» / «в модуль»). Код ERP назван владельцем 31.08.2026 — в "
+            "презентации его нет нигде. Ни одна из 13 линий слайда 2 к [130] не "
+            "подходит: ближайший конец линии [138] лежит в 352422 EMU ниже и внутри "
+            "текстбокса заголовка этапа [15]"
+        ),
+    },
+)
+
 STAGE_GROUP_SPLIT: tuple[dict, ...] = (
     {
         "task": "process-map-028",
@@ -475,6 +496,9 @@ class SlideReport:
     # Входы, добавленные и переформулированные по слайду обзора
     # (STAGE_INPUT_ENRICHMENT, задача process-map-qjl).
     owner_inputs: list[str] = field(default_factory=list)
+    # Внешние системы, названные владельцем, а не выведенные из текста
+    # (process-map-vjz.5). Живёт на отчёте слайда 2: таблица привязана к обзору.
+    owner_external_io: list[str] = field(default_factory=list)
     # Узлы, повышенные из step в integration по коду системы (process-map-7v1).
     promoted_integrations: list[str] = field(default_factory=list)
     # Узлы, перенесённые в отдельную группу по решению владельца
@@ -1540,7 +1564,8 @@ def build_process_map(
     questions: list[str] = []
 
     overview_report = SlideReport(slide_no=2)
-    overview = build_overview(read_slide(slides[1]), overview_report)
+    overview_shapes = read_slide(slides[1])
+    overview = build_overview(overview_shapes, overview_report)
 
     ids = IdFactory(collisions)
     seen_signatures: set[tuple] = set()
@@ -1576,6 +1601,16 @@ def build_process_map(
         # временные id первой фазы ему не мешают — но держим рядом с рёбрами:
         # обе таблицы описывают решения владельца поверх презентации.
         apply_stage_group_split(stages, reports)
+
+    # Внешние системы этапа, названные владельцем (process-map-vjz.5). Идёт
+    # ПОСЛЕ сборки этапов: таблица дописывает в stage["inputs"], которые к этому
+    # моменту уже собраны автоматикой, и проверяет, что запись не задвоилась.
+    overview_texts = {
+        normalize_text(shape.text).casefold()
+        for shape in overview_shapes
+        if shape.has_text
+    }
+    apply_owner_decision_external_io(stages, overview_texts, overview_report)
 
     # Правая колонка выходов этапа (SPEC §4.2) — блоки выходов слайда 2.
     #
@@ -1700,6 +1735,31 @@ def build_process_map(
         overview_edges.append(
             {"id": f"ov-{source}--{target}", "source": source, "target": target, "kind": kind}
         )
+    # Ребро для внешней системы, названной владельцем (process-map-vjz.5).
+    #
+    # Линии на слайде для неё нет — и не может быть: её отсутствие и есть причина,
+    # по которой автоматика систему не нашла. Но без ребра карточка встала бы в
+    # свимлейн с подписью входа этапа 1 и стрелкой в этап 2: свимлейн держит одну
+    # карточку на систему (collectSystems в overviewGraph.ts), и ERP этапов 1 и 2
+    # делят её. Подпись при этом от одного этапа, а пунктир — к другому.
+    for entry in OWNER_DECISION_EXTERNAL_IO:
+        stage = next(s for s in stages if s["number"] == entry["stage"])
+        pair = (
+            (entry["system"], stage["id"])
+            if entry["direction"] == "in"
+            else (stage["id"], entry["system"])
+        )
+        if pair in seen:
+            raise SystemExit(
+                f"OWNER_DECISION_EXTERNAL_IO ({entry['task']}): ребро {pair[0]} → {pair[1]} "
+                f"уже нашлось на слайде — презентация изменилась, и решение владельца "
+                f"больше не нужно. Обновите таблицу в scripts/import-pptx.py."
+            )
+        seen.add(pair)
+        overview_edges.append(
+            {"id": f"ov-{pair[0]}--{pair[1]}", "source": pair[0], "target": pair[1], "kind": "integration"}
+        )
+
     overview_report.edges = len(overview_edges)
 
     reports.insert(0, overview_report)
@@ -1714,6 +1774,58 @@ def build_process_map(
         "overviewEdges": overview_edges,
     }
     return process_map, reports, questions, ids.counts
+
+
+def apply_owner_decision_external_io(
+    stages: list[dict],
+    overview_texts: AbstractSet[str],
+    report: SlideReport,
+) -> None:
+    """
+    Добавляет внешние системы этапа, названные владельцем, а не выведенные из текста.
+
+    ЗАЧЕМ ОТДЕЛЬНАЯ ТАБЛИЦА. ExternalIO собирается автоматически только когда в
+    тексте фигуры нашлись И код системы, И направление. Для «Управление
+    транзакционными данными» нет ни того, ни другого: код ERP владелец назвал
+    отдельно, а слова «из модуля» в презентации нет. Дописать распознавание
+    нельзя — оно начало бы срабатывать на чужих текстах.
+
+    Расхождение с презентацией — остановка импорта, как в
+    apply_owner_decision_edges и apply_stage_input_enrichment: если слайд
+    поправят, решение владельца обязано упасть громко, а не рассосаться молча.
+    """
+    for entry in OWNER_DECISION_EXTERNAL_IO:
+        label = entry["label"]
+        if normalize_text(label).casefold() not in overview_texts:
+            raise SystemExit(
+                f"OWNER_DECISION_EXTERNAL_IO ({entry['task']}): на слайде обзора больше "
+                f"нет текста «{label}» — презентация изменилась. Импорт остановлен, "
+                f"чтобы решение владельца не потерялось молча: обновите таблицу в "
+                f"scripts/import-pptx.py."
+            )
+        stage = next((s for s in stages if s["number"] == entry["stage"]), None)
+        if stage is None:
+            raise SystemExit(
+                f"OWNER_DECISION_EXTERNAL_IO ({entry['task']}): этапа {entry['stage']} нет"
+            )
+        bucket = stage["inputs"] if entry["direction"] == "in" else stage["outputs"]
+        if any(normalize_text(io["label"]).casefold() == normalize_text(label).casefold() for io in bucket):
+            raise SystemExit(
+                f"OWNER_DECISION_EXTERNAL_IO ({entry['task']}): «{label}» уже есть среди "
+                f"внешних систем этапа {entry['stage']} — презентация изменилась и "
+                f"запись больше не нужна. Обновите таблицу в scripts/import-pptx.py."
+            )
+        bucket.append(
+            {
+                "system": entry["system"],
+                "label": label,
+                "stage": entry["stage"],
+                "direction": entry["direction"],
+            }
+        )
+        report.owner_external_io.append(
+            f"этап {entry['stage']}: {entry['system']} — «{label}» ({entry['source']})"
+        )
 
 
 def apply_stage_group_split(
@@ -1992,6 +2104,19 @@ def print_report(process_map: dict, reports: Sequence[SlideReport], questions: S
             print(f"    · {item}")
     else:
         print("  список STAGE_INPUT_ENRICHMENT пуст — все входы прочитаны со слайдов детализации")
+
+    # Внешние системы, названные владельцем (process-map-vjz.5): кода системы
+    # или направления в тексте презентации нет, автоматика их взять не могла.
+    print("\n" + "=" * 78)
+    print("ВНЕШНИЕ СИСТЕМЫ ПО РЕШЕНИЮ ВЛАДЕЛЬЦА — В ТЕКСТЕ НЕТ КОДА ИЛИ НАПРАВЛЕНИЯ")
+    print("=" * 78)
+    owner_external_io = [item for report in reports for item in report.owner_external_io]
+    if owner_external_io:
+        print("  Источник — OWNER_DECISION_EXTERNAL_IO в scripts/import-pptx.py.")
+        for item in owner_external_io:
+            print(f"    · {item}")
+    else:
+        print("  список OWNER_DECISION_EXTERNAL_IO пуст")
 
     # Деление группы, которого на слайде детализации нет (process-map-028).
     owner_groups = [item for report in reports for item in report.owner_groups]

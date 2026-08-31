@@ -255,6 +255,12 @@
           "label": "Передача неограниченного плана спроса из модуля DP с агрегацией до групп клиентов",
           "stage": 1,
           "direction": "in"
+        },
+        {
+          "system": "ERP",
+          "label": "Управление транзакционными данными",
+          "stage": 1,
+          "direction": "in"
         }
       ],
       "outputs": []
@@ -2058,6 +2064,12 @@
       "source": "stage-3-analiz-i-korrektirovka-rezultatov-scenarnoe-planirovanie",
       "target": "stage-4-raschet-plana-popolneniya-drp-deployment",
       "kind": "process"
+    },
+    {
+      "id": "ov-ERP--stage-1-obogaschenie-prognoza-zakazami",
+      "source": "ERP",
+      "target": "stage-1-obogaschenie-prognoza-zakazami",
+      "kind": "integration"
     }
   ]
 }

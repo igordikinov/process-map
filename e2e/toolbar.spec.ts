@@ -204,7 +204,8 @@ test.describe('Тулбар и легенда, уровень 1 (обзор)', (
 
     await expect(page.locator('.react-flow__node-lane')).toHaveCount(2);
     await expect(page.locator('.react-flow__node-system')).toHaveCount(8);
-    await expect(page.locator('.react-flow__edge-integration')).toHaveCount(6);
+    // Седьмое ребро объявлено владельцем: ERP → этап 1 (process-map-vjz.5).
+    await expect(page.locator('.react-flow__edge-integration')).toHaveCount(7);
 
     const toggle = page.getByRole('switch', { name: 'Показать интеграции' });
     await expect(toggle).toHaveAttribute('aria-checked', 'true');

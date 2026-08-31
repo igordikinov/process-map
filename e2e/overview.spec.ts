@@ -24,7 +24,9 @@ test('на полотне 4 карточки этапов, оба свимлей
   await expect(page.locator('.react-flow__node-lane')).toHaveCount(2);
   await expect(page.locator('.react-flow__node-flowLane')).toHaveCount(1);
   await expect(page.locator('.react-flow__node-system')).toHaveCount(8);
-  await expect(page.locator('.react-flow__edge')).toHaveCount(9);
+  // 3 процессных + 7 интеграционных: шесть с линий слайда 2 и одно,
+  // объявленное владельцем — ERP → этап 1 (process-map-vjz.5).
+  await expect(page.locator('.react-flow__edge')).toHaveCount(10);
 });
 
 // Соседние блоки обзора подписаны, а сам процесс оставался безымянным
@@ -59,8 +61,19 @@ test('поток этапов обведён рамкой «Модуль SNP», 
 // (process-map-2od). Проверка идёт в браузере, а не юнит-тестом: IntegrationNode
 // содержит <Handle>, которому нужен контекст React Flow.
 test('карточка входа ERP показывает код один раз, соседние подписи целы', async ({ page }) => {
-  // Дубля нет: подпись, повторяющая код, не рисуется.
-  await expect(page.locator('[data-id="io-in-ERP"]')).toHaveText('ERP');
+  // Дубля нет: подпись, повторяющая код, не рисуется. С process-map-vjz.5 у
+  // карточки появилась осмысленная подпись — «Управление транзакционными
+  // данными», вход этапа 1, названный владельцем. Свимлейн держит ОДНУ карточку
+  // на систему (collectSystems в overviewGraph.ts), поэтому ERP этапов 1 и 2
+  // делят её, и видна подпись первого по порядку. Так же давно живёт IO: у него
+  // две подписи на этапе 2, показывается первая.
+  //
+  // Сторожим именно то, ради чего тест заведён (process-map-2od): код в тексте
+  // ровно один раз, «ERP ERP» не вернулось.
+  const erp = page.locator('[data-id="io-in-ERP"]');
+  await expect(erp).toHaveCount(1);
+  expect((await erp.innerText()).match(/ERP/g)).toHaveLength(1);
+  await expect(erp).toContainText('Управление транзакционными данными');
 
   // Контроль в другую сторону — осмысленные подписи никуда не делись, иначе
   // «дубля нет» было бы истинно и у карточки вообще без текста.
