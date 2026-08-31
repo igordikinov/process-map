@@ -21,7 +21,11 @@ export function EdgeMarkers({ children }: EdgeMarkersProps) {
   const rawId = useId();
   const ids = useMemo<EdgeMarkerIds>(() => {
     const base = `pm-arrow-${rawId.replace(/:/g, '')}`;
-    return { process: `${base}-process`, integration: `${base}-integration` };
+    return {
+      process: `${base}-process`,
+      processInner: `${base}-process-inner`,
+      integration: `${base}-integration`,
+    };
   }, [rawId]);
 
   return (
@@ -38,6 +42,18 @@ export function EdgeMarkers({ children }: EdgeMarkersProps) {
             orient="auto"
           >
             <path className={styles.arrowProcess} d="M0,0.5 L7,4 L0,7.5 Z" />
+          </marker>
+          {/* Стрелка ребра внутри группы: та же геометрия, серая заливка. */}
+          <marker
+            id={ids.processInner}
+            viewBox="0 0 8 8"
+            refX="7"
+            refY="4"
+            markerWidth="7"
+            markerHeight="7"
+            orient="auto"
+          >
+            <path className={styles.arrowProcessInner} d="M0,0.5 L7,4 L0,7.5 Z" />
           </marker>
           <marker
             id={ids.integration}

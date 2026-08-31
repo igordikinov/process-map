@@ -238,8 +238,44 @@ describe('buildStageGraph', () => {
       for (const edge of edges) {
         expect(ids.has(edge.source)).toBe(true);
         expect(ids.has(edge.target)).toBe(true);
-        expect(['process', 'integration']).toContain(edge.type);
+        expect(['process', 'processInner', 'integration']).toContain(edge.type);
       }
+    },
+  );
+
+  // process-map-fxg. Артборд A2 красит поток внутри группы серым, а фиолетовым
+  // — только переход МЕЖДУ группами, и это несёт смысл: цвет показывает
+  // структуру процесса. Признак берётся из уже существующего node.group;
+  // исходная задача считала, что для этого нужно новое поле в данных.
+  it.each(map.stages.map((stage) => [stage.number, stage] as const))(
+    'этап %i: фиолетовым идёт только переход между группами шагов',
+    (_number, stage) => {
+      const byId = new Map(stage.nodes.map((node) => [node.id, node]));
+      const { edges } = buildStageGraph(stage);
+
+      let cross = 0;
+      for (const edge of edges) {
+        if (edge.type === 'integration') {
+          continue;
+        }
+        const source = byId.get(edge.source);
+        const target = byId.get(edge.target);
+        const crosses = source?.group !== target?.group;
+        expect(edge.type, `ребро ${edge.id}`).toBe(crosses ? 'process' : 'processInner');
+        if (crosses) {
+          cross += 1;
+        }
+      }
+
+      // Числа посчитаны по текущим данным и держат правило от вырождения:
+      // если бы сравнение групп исчезло, фиолетовыми стали бы ВСЕ рёбра
+      // потока, и проверка выше прошла бы только на этапе без групп.
+      //
+      // Шесть на этапе 3 — это переход монитор → корректировки, обратное ребро
+      // из группы «Дефицит ГП» и четыре ребра корректировки → публикация,
+      // достроенные решением владельца в process-map-7bz. Рёбер, у которых
+      // один конец без группы, в текущих данных нет ни одного.
+      expect(cross, 'межгрупповых переходов').toBe(stage.number === 3 ? 6 : 1);
     },
   );
 

@@ -11,6 +11,16 @@
   stroke-width: var(--pm-edge-process-width);
 }
 
+/*
+ * Ребро потока внутри группы (SPEC §4.2, артборд A2). Фиолетовым остаётся
+ * только переход МЕЖДУ группами — см. ProcessInnerEdge и stageGraph.ts.
+ */
+.processInner {
+  fill: none;
+  stroke: var(--pm-edge-process-inner-color);
+  stroke-width: var(--pm-edge-process-inner-width);
+}
+
 .integration {
   fill: none;
   stroke: var(--pm-integration);
@@ -28,6 +38,10 @@
 
 .arrowProcess {
   fill: var(--scp-accent-primary);
+}
+
+.arrowProcessInner {
+  fill: var(--pm-edge-process-inner-color);
 }
 
 .arrowIntegration {

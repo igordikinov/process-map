@@ -1,1 +1,6 @@
-export { ProcessEdge, type ProcessEdgeType } from './ProcessEdge';
+export {
+  ProcessEdge,
+  ProcessInnerEdge,
+  type ProcessEdgeType,
+  type ProcessInnerEdgeType,
+} from './ProcessEdge';

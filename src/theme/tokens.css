@@ -481,6 +481,12 @@
 
   /* Рёбра — SPEC §4.1 задаёт толщины явно. */
   --pm-edge-process-width: 1.8;
+  /* Ребро потока ВНУТРИ группы шагов — артборд A2 (process-map-fxg).
+     Фиолетовым остаётся только переход между группами, чтобы структура
+     процесса читалась цветом. Значение #bfbfc1 из макета — это штатный
+     --scp-color-neutral-300 дизайн-системы, новый цвет не заводится. */
+  --pm-edge-process-inner-color: var(--scp-color-neutral-300);
+  --pm-edge-process-inner-width: 1.4;
   --pm-edge-integration-width: 1.3;
   --pm-edge-integration-dash: 4 3;
 

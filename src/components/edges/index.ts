@@ -1,4 +1,9 @@
-export { ProcessEdge, type ProcessEdgeType } from './ProcessEdge';
+export {
+  ProcessEdge,
+  ProcessInnerEdge,
+  type ProcessEdgeType,
+  type ProcessInnerEdgeType,
+} from './ProcessEdge';
 export { IntegrationEdge, type IntegrationEdgeType } from './IntegrationEdge';
 export { EdgeMarkers, type EdgeMarkersProps } from './EdgeMarkers';
 export { useEdgeMarkers, type EdgeMarkerIds } from './edgeMarkerContext';

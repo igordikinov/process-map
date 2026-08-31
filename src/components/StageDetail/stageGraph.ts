@@ -524,9 +524,18 @@ export function buildStageGraph(stage: Stage, showIntegrations = true): StageGra
     // Обратное ребро (target левее source) пускаем снизу вверх, иначе smoothstep
     // рисует петлю поверх карточек. В текущих данных такое ребро одно (этап 2).
     const forward = target.position.x >= source.position.x;
+    // Цвет ребра потока (артборд A2, process-map-fxg): фиолетовым идёт только
+    // переход МЕЖДУ группами, поток внутри группы — серым.
+    //
+    // Признак берётся из уже существующего node.group, нового поля в данных не
+    // заводится — исходная задача предполагала обратное. Узел без группы
+    // (loose) считается своей «группой»: ребро от него к шагу внутри рамки —
+    // это тоже переход, а не движение внутри одного блока.
+    const crossesGroups = source.group !== target.group;
+    const processType = crossesGroups ? 'process' : 'processInner';
     edges.push({
       id: edge.id,
-      type: edge.kind === 'integration' ? 'integration' : 'process',
+      type: edge.kind === 'integration' ? 'integration' : processType,
       source: edge.source,
       target: edge.target,
       sourceHandle: forward ? STEP_HANDLE.right : STEP_HANDLE.bottom,

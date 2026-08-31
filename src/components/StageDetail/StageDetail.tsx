@@ -14,7 +14,7 @@ import { useProcessMap } from '../../hooks/useProcessMap';
 import { ru } from '../../i18n/ru';
 import { useProcessStore } from '../../store/useProcessStore';
 import { Breadcrumbs } from '../Breadcrumbs';
-import { EdgeMarkers, IntegrationEdge, ProcessEdge } from '../edges';
+import { EdgeMarkers, IntegrationEdge, ProcessEdge, ProcessInnerEdge } from '../edges';
 import { Legend } from '../Legend';
 import { NodeDrawer } from '../NodeDrawer';
 import { DataNode } from '../nodes/DataNode';
@@ -52,6 +52,10 @@ const nodeTypes = {
 
 const edgeTypes = {
   process: ProcessEdge,
+  // Поток внутри группы шагов рисуется серым (артборд A2, process-map-fxg).
+  // Отдельный тип, а не проп: тип попадает в класс ребра, и общий тип слил бы
+  // два вида в один счётчик — то же соображение, что у `lane` / `flowLane`.
+  processInner: ProcessInnerEdge,
   integration: IntegrationEdge,
 } satisfies EdgeTypes;
 

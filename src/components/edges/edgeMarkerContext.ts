@@ -11,12 +11,15 @@ import { createContext, useContext } from 'react';
 
 export interface EdgeMarkerIds {
   process: string;
+  /** Серая стрелка ребра внутри группы (process-map-fxg). */
+  processInner: string;
   integration: string;
 }
 
 /** Пустые id — маркер просто не будет найден, ребро отрисуется без стрелки. */
 export const EdgeMarkerContext = createContext<EdgeMarkerIds>({
   process: '',
+  processInner: '',
   integration: '',
 });
 
