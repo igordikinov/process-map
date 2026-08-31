@@ -581,6 +581,10 @@
           "type": "step",
           "label": "Запуск алгоритма (оптимизатор/эвристика)",
           "group": "raschet-obemnyh-planov-s-uchetom-ogranicheniy",
+          "screen": {
+            "title": "Запуск алгоритма",
+            "url": "https://front-prod.k8s.demo5.in-plan.ru/snp-process-map"
+          },
           "position": {
             "x": 1538,
             "y": 518
