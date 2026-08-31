@@ -232,7 +232,8 @@ function NodeDrawerPanel({ node, onClose }: NodeDrawerPanelProps) {
                 return;
               }
               // Открытие — только через utils/url.ts::openScreen (SPEC §4.8):
-              // там linkTarget из config.ts и фолбэк '_top' → '_blank'.
+              // там цель берётся из config.linkTarget (по умолчанию новая
+              // вкладка) и там же валидация url.
               openScreen(screen.url);
             }}
           >
