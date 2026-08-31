@@ -60,7 +60,11 @@ function readProcessJson(): { text: string; map: ProcessMapLike } {
  */
 function stepIds(map: ProcessMapLike, count: number): string[] {
   const steps = (map.stages[0]?.nodes ?? [])
-    .filter((node) => node.type === 'step')
+    // Шаги БЕЗ ссылки (process-map-071): тесты этого файла ставят ссылку сами
+    // через overrides и проверяют, что после сброса её не остаётся. Если бы
+    // ссылка была уже в самих данных, она вернулась бы из базы и проверка
+    // «Ссылка не задана» упала бы — не из-за дефекта, а из-за выбора узла.
+    .filter((node) => node.type === 'step' && node.screen === undefined)
     .sort(
       (a, b) =>
         a.position.x - b.position.x ||
@@ -68,7 +72,7 @@ function stepIds(map: ProcessMapLike, count: number): string[] {
         a.id.localeCompare(b.id, 'en'),
     );
   const ids = steps.slice(0, count).map((node) => node.id);
-  expect(ids.length, 'в process.json не хватает карточек шага').toBe(count);
+  expect(ids.length, 'в process.json не хватает карточек шага без ссылки').toBe(count);
   return ids;
 }
 

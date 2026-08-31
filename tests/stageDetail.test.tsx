@@ -96,9 +96,14 @@ describe('StageDetail', () => {
     expect(container.querySelectorAll('.react-flow [tabindex]:not([tabindex="-1"])')).toHaveLength(
       0,
     );
-    // Кнопок ровно столько, сколько узлов: карточка каждого узла — <button>,
-    // кнопка ссылки появляется только при node.screen (в данных их нет).
-    expect(container.querySelectorAll('.react-flow button')).toHaveLength(stage.nodes.length);
+    // Карточка каждого узла — <button>, плюс отдельная кнопка ссылки у тех, у
+    // кого задан screen. Число считается из данных, а не из допущения «ссылок
+    // нет»: раньше здесь стояло просто stage.nodes.length, и первая же ссылка
+    // владельца покрасила бы тест (process-map-071).
+    const withLink = stage.nodes.filter((node) => node.screen !== undefined).length;
+    expect(container.querySelectorAll('.react-flow button')).toHaveLength(
+      stage.nodes.length + withLink,
+    );
   });
 
   it('клик по карточке шага выбирает узел (Drawer — process-map-lo7)', () => {

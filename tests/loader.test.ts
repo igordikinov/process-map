@@ -37,17 +37,28 @@ const LINK: ScreenLink = {
 };
 const OTHER_LINK: ScreenLink = { title: 'Другой экран', url: 'https://example.com/other' };
 
-/** Первый узел первого этапа — годится для любых проверок про screen. */
+/**
+ * Узлы первого этапа БЕЗ ссылки в самих данных (process-map-071).
+ *
+ * Раньше брались просто nodes[0] и nodes[1]. Пока screen не заполнен ни у
+ * одного узла, разницы не было; первая же ссылка владельца в такой узел
+ * покрасила бы проверки вида «после сброса ссылки нет» — она вернулась бы из
+ * базы, и упал бы тест, а не код.
+ */
+function nodesWithoutScreen(map: ProcessMap): string[] {
+  const ids = (map.stages[0]?.nodes ?? [])
+    .filter((node) => node.screen === undefined)
+    .map((node) => node.id);
+  expect(ids.length, 'на этапе 1 не осталось узлов без ссылки').toBeGreaterThan(1);
+  return ids;
+}
+
 function firstNodeId(map: ProcessMap): string {
-  const id = map.stages[0]?.nodes[0]?.id;
-  expect(id).toBeTypeOf('string');
-  return id ?? '';
+  return nodesWithoutScreen(map)[0] ?? '';
 }
 
 function secondNodeId(map: ProcessMap): string {
-  const id = map.stages[0]?.nodes[1]?.id;
-  expect(id).toBeTypeOf('string');
-  return id ?? '';
+  return nodesWithoutScreen(map)[1] ?? '';
 }
 
 function findNode(map: ProcessMap, nodeId: string) {
@@ -63,10 +74,10 @@ function findNode(map: ProcessMap, nodeId: string) {
 /**
  * Клон базовой карты, в котором у узла `nodeId` ЕСТЬ ссылка прямо в JSON.
  *
- * Нужен для проверки «пользователь удалил ссылку»: в реальном process.json
- * поле screen не заполнено ни у одного узла (ссылки живут только в overrides),
- * поэтому на настоящих данных разница между «удалил» и «не было» ненаблюдаема
- * и тест был бы пустым. Синтетическая база делает её наблюдаемой.
+ * Нужен для проверки «пользователь удалил ссылку»: узел для тестов берётся
+ * заведомо без ссылки (см. nodesWithoutScreen), поэтому на нём разница между
+ * «удалил» и «не было» ненаблюдаема и тест был бы пустым. Синтетическая база
+ * делает её наблюдаемой независимо от того, что лежит в реальных данных.
  */
 function baseWithScreen(nodeId: string, screen: ScreenLink): ProcessMap {
   const map = loadBaseProcessMap();

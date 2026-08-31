@@ -6,6 +6,7 @@
 // мышью по координатам, а перекрытие проверяется document.elementFromPoint.
 import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures';
+import { firstStepWithoutLink } from './helpers';
 
 const VIEWPORT = { width: 1280, height: 720 };
 
@@ -202,7 +203,12 @@ test('при открытой панели полотно нефокусируе
 
 test('узел без ссылки: «Ссылка не задана», «Открыть в модуле» заблокирована', async ({ page }) => {
   await page.goto('/');
-  await openFirstStepDrawer(page);
+  await openStage(page, 0);
+  // Именно шаг БЕЗ ссылки (process-map-071): раньше бралась просто первая
+  // карточка шага, и ссылка владельца в неё покрасила бы этот тест.
+  const stepId = await firstStepWithoutLink(page);
+  await clickNode(page, `[data-id="${stepId}"] button`);
+  await expect(page.getByRole('dialog')).toBeVisible();
 
   const dialog = page.getByRole('dialog');
   await expect(dialog.getByText('Экран в системе')).toBeVisible();

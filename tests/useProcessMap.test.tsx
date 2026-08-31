@@ -8,11 +8,20 @@
 // бесконечный ререндер в useSyncExternalStore).
 import { beforeEach, describe, expect, it } from 'vitest';
 import { act, render, screen } from '@testing-library/react';
-import { readStoredOverrides, setNodeOverride } from '../src/data/loader';
+import { loadBaseProcessMap, readStoredOverrides, setNodeOverride } from '../src/data/loader';
 import type { ProcessMap } from '../src/data/schema';
 import { commitOverrides, refreshProcessMap, useProcessMap } from '../src/hooks/useProcessMap';
 
-const NODE_ID = 'dezagregaciya-prognoza-po-produktu';
+/**
+ * Узел БЕЗ ссылки в данных (process-map-071): тесты стартуют с пустого
+ * состояния — «нет ссылки» — и проверяют, что override его меняет. Ссылку в
+ * этот узел проставит владелец (process-map-lqa), и по захардкоженному id тест
+ * покраснел бы не из-за дефекта, а из-за выбора узла.
+ */
+const NODE_ID =
+  loadBaseProcessMap()
+    .stages.flatMap((stage) => stage.nodes)
+    .find((node) => node.screen === undefined)?.id ?? '';
 const LINK = { title: 'Объёмный план', url: 'https://example.com/plan' };
 
 function findNode(map: ProcessMap, nodeId: string) {

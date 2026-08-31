@@ -30,6 +30,25 @@ const WARNING_WITH_TABLE = 'formirovanie-preduprezhdeniy-sp-posle-progona-planir
 // Описание — 9 строк с маркерами «- ».
 const STEP_WITH_LIST = 'dezagregaciya-prognoza-po-produktu';
 
+/**
+ * Первый узел БЕЗ ссылки в данных (process-map-071).
+ *
+ * Тестам пустого состояния нужен именно такой узел, и брать для этого
+ * STEP_WITH_LIST нельзя: ссылки проставляет владелец (process-map-lqa), и
+ * попади она в этот узел — тесты покраснели бы не из-за дефекта, а из-за
+ * выбора узла. Остальные проверки файла продолжают опираться на
+ * STEP_WITH_LIST: им нужно описание ровно из 9 абзацев.
+ */
+function nodeWithoutScreen(): ProcessNode {
+  for (const stage of map.stages) {
+    const found = stage.nodes.find((node) => node.screen === undefined);
+    if (found !== undefined) {
+      return found;
+    }
+  }
+  throw new Error('в process.json не осталось узлов без ссылки');
+}
+
 function openDrawer(nodes: ProcessNode[], nodeId: string) {
   useProcessStore.getState().selectNode(nodeId);
   return render(<NodeDrawer nodes={nodes} />);
@@ -159,8 +178,7 @@ describe('NodeDrawer', () => {
   });
 
   it('без ссылки: «Ссылка не задана», «Добавить» скрыт вне редактора, кнопка модуля disabled', () => {
-    const node = nodeById(STEP_WITH_LIST);
-    expect(node.screen).toBeUndefined();
+    const node = nodeWithoutScreen();
     openDrawer([node], node.id);
 
     expect(screen.getByText(ru.drawer.screenEmpty)).toBeInTheDocument();
@@ -169,7 +187,9 @@ describe('NodeDrawer', () => {
   });
 
   it('в режиме редактора появляется action «Добавить» (SPEC §4.3)', () => {
-    const node = nodeById(STEP_WITH_LIST);
+    // «Добавить» есть только у узла без ссылки — у узла со ссылкой там
+    // «Изменить» (process-map-071).
+    const node = nodeWithoutScreen();
     useProcessStore.getState().setMode('edit');
     openDrawer([node], node.id);
 

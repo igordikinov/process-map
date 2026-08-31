@@ -15,8 +15,17 @@ import { createInitialState, useProcessStore } from '../src/store/useProcessStor
 
 const map = loadBaseProcessMap();
 
-/** Узел из реальных данных: тесты не выдумывают содержание процесса. */
-const NODE_ID = 'dezagregaciya-prognoza-po-produktu';
+/**
+ * Узел из реальных данных: тесты не выдумывают содержание процесса.
+ *
+ * Берётся ПЕРВЫЙ БЕЗ ССЫЛКИ (process-map-071), а не по захардкоженному id: весь
+ * файл начинает с пустого состояния и жмёт «Добавить», которого у узла со
+ * ссылкой не будет — там «Изменить». Ссылки проставляет владелец
+ * (process-map-lqa), и попади первая из них в прежний узел
+ * `dezagregaciya-prognoza-po-produktu` — покраснел бы весь файл.
+ */
+const NODE_ID =
+  map.stages.flatMap((stage) => stage.nodes).find((node) => node.screen === undefined)?.id ?? '';
 
 function nodeById(id: string): ProcessNode {
   for (const stage of map.stages) {

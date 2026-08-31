@@ -11,6 +11,7 @@
 // document.elementFromPoint, а не fireEvent.
 import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures';
+import { firstStepWithoutLink } from './helpers';
 
 const VIEWPORT = { width: 1280, height: 720 };
 
@@ -98,20 +99,17 @@ async function enterEditMode(page: Page): Promise<void> {
   await expect(button).toHaveAttribute('aria-pressed', 'true');
 }
 
-/** id первой карточки ШАГА на полотне уровня 2 (не интеграции, не данных). */
-async function firstStepId(page: Page): Promise<string> {
-  const stepId = await page
-    .locator(STEP_CARD)
-    .first()
-    .evaluate((el) => el.closest('.react-flow__node')?.getAttribute('data-id') ?? null);
-  expect(stepId, 'на полотне нет ни одной карточки шага').not.toBeNull();
-  return stepId ?? '';
-}
-
-/** Открывает панель первого шага этапа 1 и возвращает его data-id. */
+/**
+ * Открывает панель первого шага БЕЗ ссылки и возвращает его data-id.
+ *
+ * Именно без ссылки (process-map-071): все тесты этого файла начинают с пустого
+ * состояния и жмут «Добавить», которого у шага со ссылкой не будет — там будет
+ * «Изменить». Раньше бралась просто первая карточка шага, и первая же ссылка
+ * владельца в этот узел покрасила бы пять тестов сразу.
+ */
 async function openFirstStep(page: Page): Promise<string> {
   await openStage(page, 0);
-  const stepId = await firstStepId(page);
+  const stepId = await firstStepWithoutLink(page);
   await clickNode(page, stepId);
   await expect(page.getByRole('dialog')).toBeVisible();
   return stepId;
@@ -188,7 +186,8 @@ test('ссылка появляется на карточке шага икон�
 test('удалённая ссылка не возвращается после перезагрузки', async ({ page }) => {
   await page.goto('/');
   await openStage(page, 0);
-  const stepId = await firstStepId(page);
+  // Шаг без ссылки — ей мы его и снабдим ниже, через overrides.
+  const stepId = await firstStepWithoutLink(page);
 
   // Ссылка уже есть — кладём её штатным путём, через overrides.
   await page.evaluate(
