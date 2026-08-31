@@ -180,6 +180,9 @@ export function EditorActions() {
     commitOverrides(() => {
       resetOverrides();
     });
+    // Отклик об успехе (process-map-4vn): раньше строка сообщения просто
+    // очищалась, и сброс был единственным действием тулбара без ответа.
+    setMessage({ kind: 'success', text: ru.toolbar.resetDone });
   };
 
   /**

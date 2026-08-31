@@ -137,7 +137,7 @@ test('сохранённая ссылка переживает перезагр�
   const dialog = page.getByRole('dialog');
   await dialog.getByRole('button', { name: 'Добавить' }).click();
   await dialog.getByLabel('Название экрана').fill(LINK.title);
-  await dialog.getByLabel('Ссылка', { exact: true }).fill(LINK.url);
+  await dialog.getByLabel('URL', { exact: true }).fill(LINK.url);
   await dialog.getByRole('button', { name: 'Сохранить' }).click();
 
   // Форма закрылась, ссылка видна сразу — без перезагрузки (реактивность).
@@ -174,7 +174,7 @@ test('ссылка появляется на карточке шага икон�
   const dialog = page.getByRole('dialog');
   await dialog.getByRole('button', { name: 'Добавить' }).click();
   await dialog.getByLabel('Название экрана').fill(LINK.title);
-  await dialog.getByLabel('Ссылка', { exact: true }).fill(LINK.url);
+  await dialog.getByLabel('URL', { exact: true }).fill(LINK.url);
   await dialog.getByRole('button', { name: 'Сохранить' }).click();
 
   // Полотно перерисовалось от той же записи в localStorage: два источника
@@ -292,16 +292,16 @@ test('невалидный URL: клик по «Сохранить» не пиш
   const dialog = page.getByRole('dialog');
   await dialog.getByRole('button', { name: 'Добавить' }).click();
   await dialog.getByLabel('Название экрана').fill('Объёмный план');
-  await dialog.getByLabel('Ссылка', { exact: true }).fill('inplan/plan');
+  await dialog.getByLabel('URL', { exact: true }).fill('inplan/plan');
   await dialog.getByRole('button', { name: 'Сохранить' }).click();
 
   await expect(dialog.getByText('Введите корректный URL')).toBeVisible();
   // Форма не закрылась, в хранилище пусто.
-  await expect(dialog.getByLabel('Ссылка', { exact: true })).toBeVisible();
+  await expect(dialog.getByLabel('URL', { exact: true })).toBeVisible();
   expect(await storedOverrides(page)).toBeNull();
 
   // http: — предупреждение, а не ошибка: сохранение проходит (SPEC §4.4).
-  await dialog.getByLabel('Ссылка', { exact: true }).fill('http://inplan.local/plan');
+  await dialog.getByLabel('URL', { exact: true }).fill('http://inplan.local/plan');
   await expect(dialog.getByText('Ссылка без шифрования (http). Рекомендуется https')).toBeVisible();
   await dialog.getByRole('button', { name: 'Сохранить' }).click();
   await expect(dialog.getByText('http://inplan.local/plan')).toBeVisible();
@@ -315,7 +315,7 @@ test('«Отмена» закрывает форму и ничего не зап
   const dialog = page.getByRole('dialog');
   await dialog.getByRole('button', { name: 'Добавить' }).click();
   await dialog.getByLabel('Название экрана').fill(LINK.title);
-  await dialog.getByLabel('Ссылка', { exact: true }).fill(LINK.url);
+  await dialog.getByLabel('URL', { exact: true }).fill(LINK.url);
   await dialog.getByRole('button', { name: 'Отмена' }).click();
 
   await expect(dialog.getByText('Ссылка не задана')).toBeVisible();

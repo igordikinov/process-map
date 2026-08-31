@@ -216,7 +216,7 @@ describe('Toolbar', () => {
     });
   }
 
-  it('успешный импорт показывает «Применено ссылок: N» и объявляет его (role=status)', async () => {
+  it('успешный импорт показывает «Применено изменений: N» и объявляет его (role=status)', async () => {
     const text = mapFileWithScreens(2);
     renderEditor();
 
@@ -228,7 +228,7 @@ describe('Toolbar', () => {
     expect(Object.keys(readStoredOverrides()).length).toBe(2);
   });
 
-  it('файл без расхождений даёт отдельное сообщение, а не «Применено ссылок: 0»', async () => {
+  it('файл без расхождений даёт отдельное сообщение, а не «Применено изменений: 0»', async () => {
     const text = mapFileWithScreens(0);
     renderEditor();
 
@@ -288,6 +288,22 @@ describe('Toolbar', () => {
     expect(screen.getByRole('group', { name: ru.toolbar.resetConfirm })).toBeInTheDocument();
     expect(screen.getByText(ru.toolbar.resetConfirm)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: ru.toolbar.resetConfirmAccept })).toBeInTheDocument();
+  });
+
+  // process-map-4vn. До неё сброс был единственным действием тулбара без
+  // отклика: строка сообщения просто очищалась. Узнать об успехе можно было
+  // только по исчезновению ссылок с карточек — а если карточек со ссылками на
+  // экране нет, то никак.
+  it('успешный сброс сообщает об успехе и объявляет его (role=status)', () => {
+    seedOverride();
+    renderEditor();
+
+    fireEvent.click(resetButton());
+    fireEvent.click(screen.getByRole('button', { name: ru.toolbar.resetConfirmAccept }));
+
+    expect(Object.keys(readStoredOverrides())).toEqual([]);
+    const message = screen.getByText(ru.toolbar.resetDone);
+    expect(message).toHaveAttribute('role', 'status');
   });
 
   it('подтверждение достижимо клавиатурой: фокус на «Удалить» сразу, «Отмена» следующая', () => {

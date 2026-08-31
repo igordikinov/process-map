@@ -115,7 +115,7 @@ async function mouseClickButton(page: Page, name: string): Promise<void> {
 const MSG = {
   importError: 'Это не файл карты процесса. Правки не изменены',
   importNoChanges: 'Файл принят, расхождений нет',
-  importApplied: (count: number): string => `Применено ссылок: ${count}`,
+  importApplied: (count: number): string => `Применено изменений: ${count}`,
   resetConfirm: 'Удалить все правки?',
   resetAccept: 'Удалить',
   resetCancel: 'Отмена',
@@ -388,7 +388,7 @@ test.describe('Импорт JSON', () => {
   // не меняли на экране. Ровно эту неразличимость и проверяют три теста ниже:
   // каждому исходу — своя видимая строка.
 
-  test('валидная карта с N ссылками: «Применено ссылок: N» и ссылки на карточках', async ({
+  test('валидная карта с N ссылками: «Применено изменений: N» и ссылки на карточках', async ({
     page,
   }) => {
     const { text, map } = readProcessJson();
@@ -421,7 +421,7 @@ test.describe('Импорт JSON', () => {
     }
   });
 
-  test('файл без расхождений: «Файл принят, расхождений нет», а не «Применено ссылок: 0»', async ({
+  test('файл без расхождений: «Файл принят, расхождений нет», а не «Применено изменений: 0»', async ({
     page,
   }) => {
     const { text } = readProcessJson();
