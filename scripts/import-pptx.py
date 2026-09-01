@@ -484,6 +484,20 @@ class Shape:
     flip_v: bool
     head_arrow: bool
     tail_arrow: bool
+    # Явные привязки коннектора к фигурам (a:stCxn/a:endCxn).
+    #
+    # ВНИМАНИЕ, РАСПРОСТРАНЁННОЕ ЗАБЛУЖДЕНИЕ: считалось, что в презентации SNP
+    # привязок нет и потому связи приходится выводить геометрически. Это НЕВЕРНО
+    # (проверено перебором, process-map-3wh.8): из 66 линий 47 имеют ОБЕ
+    # привязки и только 10 не имеют ни одной. Импортёр их просто никогда не
+    # читал. Разбор SNP остаётся геометрическим — менять содержание
+    # опубликованной карты эта задача не может, — но см. process-map-3wh.16.
+    #
+    # Профилю «одиночный слайд» привязки нужны: у линии [112] слайда 8 bbox
+    # уходит на 1.28 млн EMU ниже слайда (растянутый коннектор после
+    # перемещения фигур), геометрия её теряет, а привязка — нет.
+    start_sid: int | None = None
+    end_sid: int | None = None
     consumed_by: str | None = None   # для отчёта: кто «съел» текстовую фигуру
 
     @property
@@ -638,6 +652,30 @@ def read_line_ends(element) -> tuple[bool, bool]:
     return (is_arrow("headEnd"), is_arrow("tailEnd"))
 
 
+def read_connection(element) -> tuple[int | None, int | None]:
+    """
+    Привязки коннектора к фигурам: (id начала, id конца) из a:stCxn / a:endCxn.
+
+    Живут в p:cxnSp/p:nvCxnSpPr/p:cNvCxnSpPr. У обычной фигуры этого узла нет,
+    у неприкреплённого коннектора — нет атрибутов; и то и другое даёт None.
+    """
+    nv = element.find(P + "nvCxnSpPr")
+    if nv is None:
+        return (None, None)
+    props = nv.find(P + "cNvCxnSpPr")
+    if props is None:
+        return (None, None)
+
+    def sid_of(tag: str) -> int | None:
+        node = props.find(A + tag)
+        if node is None:
+            return None
+        raw = node.get("id")
+        return int(raw) if raw is not None and raw.isdigit() else None
+
+    return (sid_of("stCxn"), sid_of("endCxn"))
+
+
 def read_flips(element) -> tuple[bool, bool]:
     sp_pr = element.find(P + "spPr")
     if sp_pr is None:
@@ -669,6 +707,7 @@ def read_slide(slide) -> list[Shape]:
         element = shape._element  # noqa: SLF001 — python-pptx не даёт публичного доступа к XML
         flip_h, flip_v = read_flips(element)
         head_arrow, tail_arrow = read_line_ends(element)
+        start_sid, end_sid = read_connection(element)
         shapes.append(
             Shape(
                 sid=int(shape.shape_id),
@@ -680,6 +719,8 @@ def read_slide(slide) -> list[Shape]:
                 flip_v=flip_v,
                 head_arrow=head_arrow,
                 tail_arrow=tail_arrow,
+                start_sid=start_sid,
+                end_sid=end_sid,
             )
         )
     shapes.sort(key=Shape.sort_key)
@@ -807,11 +848,22 @@ def is_container(shape: Shape) -> bool:
 
 
 def is_decor_arrow(shape: Shape) -> bool:
-    """Мелкая стрелка-коннектор обзора: без текста, без явной заливки, узкая."""
+    """
+    Мелкая стрелка-иконка между узлами: автофигура без текста, узкая.
+
+    ЗАЛИВКА НЕ ПРОВЕРЯЕТСЯ (process-map-3wh.8). Раньше требовалось fill is None,
+    и это работало, пока стрелки были только в презентации SNP. На слайде 8
+    презентации MRP такие же стрелки залиты scheme:accent1 — предикат не
+    срабатывал, и восемь связей «шаг → шаг» терялись целиком: линиями они там не
+    нарисованы вовсе.
+
+    Снятие условия для SNP безопасно и проверено перебором: маленьких
+    бестекстовых автофигур на всех шести слайдах ровно шесть, все на слайде 2,
+    у всех заливки нет. Сторож — побайтовое совпадение пересобранного файла.
+    """
     return (
         shape.kind == "auto"
         and not shape.has_text
-        and shape.fill is None
         and shape.box.width <= DECOR_ARROW_MAX_WIDTH
     )
 
@@ -951,6 +1003,38 @@ def nearest_target(
     if ranked and ranked[0][0] <= snap:
         return ranked[0][1]
     return None
+
+
+def arrow_edges(
+    arrows: Sequence[Shape],
+    endpoints: Sequence[tuple[Box, str]],
+    snap: float,
+) -> list[tuple[str, str]]:
+    """
+    Декоративные стрелки-иконки как рёбра: левая середина — источник, правая — цель.
+
+    ЗАЧЕМ ОБЩАЯ ФУНКЦИЯ (process-map-3wh.8). Приём был у обзора, но нужен и
+    профилю «одиночный слайд»: на слайде 8 презентации MRP связи «шаг → шаг»
+    линиями НЕ НАРИСОВАНЫ вовсе — их рисуют восемь таких стрелок. Правило
+    проекта «ребро есть, потому что на слайде есть стрелка» соблюдается
+    буквально; восстанавливать порядок по абсциссе значило бы догадываться.
+
+    flip_h разворачивает стрелку: с ним источником становится правый край.
+    В обеих презентациях отражённых стрелок нет, но правило выражено явно, а не
+    оставлено на удачу данных.
+    """
+    edges: list[tuple[str, str]] = []
+    for arrow in arrows:
+        left = (float(arrow.box.left), arrow.box.cy)
+        right = (float(arrow.box.right), arrow.box.cy)
+        start, end = (right, left) if arrow.flip_h else (left, right)
+        source = nearest_target(endpoints, start, snap)
+        target = nearest_target(endpoints, end, snap)
+        if source is None or target is None or source == target:
+            # Стрелка между группами внутри одного этапа — не обзорное ребро.
+            continue
+        edges.append((source, target))
+    return edges
 
 
 def resolve_second_pass(ranked: Sequence[tuple[float, str]], exclude: str) -> str | None:
@@ -1506,13 +1590,7 @@ def build_overview(shapes: Sequence[Shape], report: SlideReport) -> OverviewData
             continue
         raw_edges.append((source, target))
 
-    for arrow in arrows:
-        source = nearest_target(endpoints, (float(arrow.box.left), arrow.box.cy), EDGE_SNAP_OVERVIEW)
-        target = nearest_target(endpoints, (float(arrow.box.right), arrow.box.cy), EDGE_SNAP_OVERVIEW)
-        if source is None or target is None or source == target:
-            # Стрелка между группами внутри одного этапа — не обзорное ребро.
-            continue
-        raw_edges.append((source, target))
+    raw_edges.extend(arrow_edges(arrows, endpoints, EDGE_SNAP_OVERVIEW))
 
     for tb in textboxes:
         if tb.consumed_by is None:
