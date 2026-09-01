@@ -520,6 +520,10 @@ class Shape:
     fill: str | None     # 'srgb:RRGGBB' | 'scheme:name' | 'noFill' | None
     flip_h: bool
     flip_v: bool
+    # Поворот фигуры вокруг центра bbox, в градусах (a:xfrm/@rot делится на 60000).
+    # У повёрнутого коннектора left/top/width/height описывают НЕПОВЁРНУТУЮ
+    # рамку, поэтому концы линии надо доворачивать (process-map-3wh.18).
+    rot: float
     head_arrow: bool
     tail_arrow: bool
     # Явные привязки коннектора к фигурам (a:stCxn/a:endCxn).
@@ -717,6 +721,23 @@ def read_connection(element) -> tuple[int | None, int | None]:
     return (sid_of("stCxn"), sid_of("endCxn"))
 
 
+def read_rotation(element) -> float:
+    """Поворот фигуры в градусах из a:xfrm/@rot (единица — 1/60000 градуса)."""
+    sp_pr = element.find(P + "spPr")
+    if sp_pr is None:
+        return 0.0
+    node = sp_pr.find(A + "xfrm")
+    if node is None:
+        return 0.0
+    raw = node.get("rot")
+    if raw is None:
+        return 0.0
+    try:
+        return int(raw) / 60000.0
+    except ValueError:
+        return 0.0
+
+
 def read_flips(element) -> tuple[bool, bool]:
     sp_pr = element.find(P + "spPr")
     if sp_pr is None:
@@ -749,6 +770,7 @@ def read_slide(slide) -> list[Shape]:
         flip_h, flip_v = read_flips(element)
         head_arrow, tail_arrow = read_line_ends(element)
         start_sid, end_sid = read_connection(element)
+        rot = read_rotation(element)
         shapes.append(
             Shape(
                 sid=int(shape.shape_id),
@@ -758,6 +780,7 @@ def read_slide(slide) -> list[Shape]:
                 fill=read_fill(element),
                 flip_h=flip_h,
                 flip_v=flip_v,
+                rot=rot,
                 head_arrow=head_arrow,
                 tail_arrow=tail_arrow,
                 start_sid=start_sid,
@@ -1042,11 +1065,29 @@ def innermost_container(containers: Sequence[tuple[Shape, str]], box: Box) -> st
     return best[1] if best else None
 
 
+def rotate_point(point: tuple[float, float], cx: float, cy: float, degrees: float) -> tuple[float, float]:
+    """Поворот точки вокруг центра. Ось Y экранная (вниз), поэтому знак как в DrawingML."""
+    if not degrees:
+        return point
+    angle = math.radians(degrees)
+    cos_a, sin_a = math.cos(angle), math.sin(angle)
+    dx, dy = point[0] - cx, point[1] - cy
+    return (cx + dx * cos_a - dy * sin_a, cy + dx * sin_a + dy * cos_a)
+
+
 def line_endpoints(shape: Shape) -> tuple[tuple[float, float], tuple[float, float]]:
     """
-    Начало и конец линии из left/top/width/height + флагов отражения.
+    Начало и конец линии из left/top/width/height + флагов отражения и ПОВОРОТА.
     Стрелка на конце (a:tailEnd) означает направление начало→конец; стрелка
     на начале (a:headEnd) — обратное.
+
+    ПОВОРОТ (process-map-3wh.18). У повёрнутого коннектора left/top/width/height
+    описывают НЕПОВЁРНУТУЮ рамку, а рисуется он повёрнутым вокруг её центра.
+    Без доворота концы вычислялись по чужим координатам: у линии [112] слайда 8
+    карты MRP геометрия давала начало на «Анализе предупреждений» с расстоянием 0
+    — то есть выдуманное ребро, а не потерянную связь. Повёрнутых коннекторов
+    хватает и в презентации SNP (11 штук на слайдах 2-5), просто там их
+    промахи гасились привязками и вторым проходом.
     """
     x1 = shape.box.right if shape.flip_h else shape.box.left
     x2 = shape.box.left if shape.flip_h else shape.box.right
@@ -1054,6 +1095,10 @@ def line_endpoints(shape: Shape) -> tuple[tuple[float, float], tuple[float, floa
     y2 = shape.box.top if shape.flip_v else shape.box.bottom
     start = (float(x1), float(y1))
     end = (float(x2), float(y2))
+    if shape.rot:
+        cx, cy = float(shape.box.cx), float(shape.box.cy)
+        start = rotate_point(start, cx, cy, shape.rot)
+        end = rotate_point(end, cx, cy, shape.rot)
     if shape.head_arrow and not shape.tail_arrow:
         return end, start
     return start, end
@@ -3484,6 +3529,60 @@ def run_self_test() -> int:
     check(
         json.dumps(again, ensure_ascii=False, indent=2) == json.dumps(fresh, ensure_ascii=False, indent=2),
         "повторный перенос изменил документ — идемпотентность нарушена",
+    )
+
+    # 10. Поворот коннектора (process-map-3wh.18). Python в CI не запускается,
+    #     поэтому геометрия проверяется здесь: без доворота концы повёрнутой
+    #     линии вычисляются по чужим координатам, и разбор выдаёт правдоподобное,
+    #     но неверное ребро.
+    def probe(rot: float, head: bool = False, tail: bool = True) -> Shape:
+        return Shape(
+            sid=1,
+            kind="line",
+            box=Box(1000, 2000, 400, 200),  # центр (1200, 2100)
+            paragraphs=[],
+            fill=None,
+            flip_h=False,
+            flip_v=False,
+            rot=rot,
+            head_arrow=head,
+            tail_arrow=tail,
+        )
+
+    flat_start, flat_end = line_endpoints(probe(0))
+    check(
+        flat_start == (1000.0, 2000.0) and flat_end == (1400.0, 2200.0),
+        f"без поворота концы должны быть углами bbox, получено {flat_start} {flat_end}",
+    )
+
+    # 90°: угол (левый верхний) уезжает вправо-вверх относительно центра.
+    turned_start, turned_end = line_endpoints(probe(90))
+    check(
+        all(abs(a - b) < 0.5 for a, b in zip(turned_start, (1300.0, 1900.0))),
+        f"поворот 90°: начало ожидалось (1300, 1900), получено {turned_start}",
+    )
+    check(
+        all(abs(a - b) < 0.5 for a, b in zip(turned_end, (1100.0, 2300.0))),
+        f"поворот 90°: конец ожидался (1100, 2300), получено {turned_end}",
+    )
+    check(
+        turned_start != flat_start,
+        "поворот не влияет на концы — доворот не применяется",
+    )
+
+    # Поворот на 360° эквивалентен отсутствию поворота.
+    full_start, full_end = line_endpoints(probe(360))
+    check(
+        all(abs(a - b) < 0.5 for a, b in zip(full_start, flat_start))
+        and all(abs(a - b) < 0.5 for a, b in zip(full_end, flat_end)),
+        "поворот 360° изменил концы",
+    )
+
+    # Стрелка на начале по-прежнему разворачивает пару и после доворота.
+    rev_start, rev_end = line_endpoints(probe(90, head=True, tail=False))
+    check(
+        rev_start == turned_end and rev_end == turned_start,
+        "headEnd не разворачивает концы повёрнутой линии",
     )
 
     print(f"САМОПРОВЕРКА ПРОЙДЕНА: {checks} проверок")
