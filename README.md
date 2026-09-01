@@ -314,7 +314,7 @@ http://host/process-map/     ->  http://host/process-map/assets/index-CTQNOulP.j
   zod-схемой `src/data/schema.ts`, контрактом карты `tests/mapContract.test.ts` (схема,
   целостность рёбер, конвейер доведён до конца — проверяется для каждой карты в
   `src/data/*/`) и `tests/snp/content.test.ts` (полнота списка шагов именно этой карты).
-- Содержание переносится из презентации «SNP Е2Е процесс.pptx» скриптом
+- Содержание переносится из презентации скриптом
   `scripts/import-pptx.py` (python-pptx). Скрипт детерминирован, id стабильны — на них
   завязаны deep-link и ключи `localStorage`.
 - Координаты узлов пересчитывает `scripts/layout.ts` (`npm run layout`, dagre).

@@ -151,6 +151,19 @@ MAP_TITLE = "E2E-процесс планирования поставок"
 # документа, а не строка интерфейса (process-map-3wh.4).
 MAP_MODULE_LABEL = "Модуль SNP"
 
+# --- карта MRP (process-map-3wh.9) -------------------------------------------
+# Собирается с ОДНОГО слайда 8 «MRP процесс» (решение владельца: остальные 37
+# слайдов вебинара не трогать). Имена констант плоские с суффиксом, а не
+# словарь: tests/snp/updatedAt.test.ts читает их регуляркой ^ИМЯ = "значение".
+MAP_ID_MRP = "mrp"
+
+# Решение владельца от 01.09.2026: та же расшифровка, что у кода MRP в словаре
+# систем (src/i18n/ru.ts) — карта и бейдж называют модуль одинаково.
+MAP_TITLE_MRP = "Процесс планирования потребности в материалах"
+MAP_MODULE_LABEL_MRP = "Модуль MRP"
+MAP_UPDATED_AT_MRP = "2026-09-01"
+MAP_DATA_FINGERPRINT_MRP = "e31d47374e95384045f03f2aef416d15c3d4258a243a4234ec453baca433f28e"
+
 
 @dataclass(frozen=True)
 class MapSpec:
@@ -177,6 +190,10 @@ class MapSpec:
     # (устройство презентации SNP). Профиль 'single-slide' вводит process-map-3wh.9.
     profile: str
     slides: int
+    # Индекс рабочего слайда для профиля 'single-slide' (0-based). У профиля
+    # 'overview+details' слайды заданы устройством презентации: обзор — второй,
+    # детализация — с третьего по шестой.
+    slide_index: int | None
     map_id: str
     title: str
     module_label: str
@@ -192,11 +209,26 @@ MAPS: dict[str, MapSpec] = {
         required_nodes=ROOT / "tests" / "fixtures" / "snp" / "required-nodes.json",
         profile="overview+details",
         slides=6,
+        slide_index=None,
         map_id=MAP_ID,
         title=MAP_TITLE,
         module_label=MAP_MODULE_LABEL,
         updated_at=MAP_UPDATED_AT,
         fingerprint=MAP_DATA_FINGERPRINT,
+    ),
+    "mrp": MapSpec(
+        key="mrp",
+        pptx=ROOT / "In.Plan MRP 17-08-2026.pptx",
+        json=ROOT / "src" / "data" / "mrp" / "process.json",
+        required_nodes=ROOT / "tests" / "fixtures" / "mrp" / "required-nodes.json",
+        profile="single-slide",
+        slides=38,
+        slide_index=7,  # слайд 8 «MRP процесс»
+        map_id=MAP_ID_MRP,
+        title=MAP_TITLE_MRP,
+        module_label=MAP_MODULE_LABEL_MRP,
+        updated_at=MAP_UPDATED_AT_MRP,
+        fingerprint=MAP_DATA_FINGERPRINT_MRP,
     ),
 }
 
@@ -227,6 +259,12 @@ KEY_OUTPUT_BOTTOM_OFFSET = 700_000
 DECOR_ARROW_MAX_WIDTH = 400_000      # мелкие стрелки-коннекторы между боксами обзора
 
 MAX_KEY_OUTPUTS = 4                  # ограничение zod-схемы
+STAGE_COUNT = 4                      # ограничение zod-схемы: number ∈ {1,2,3,4}
+
+# Заливка плашек-артефактов (входы и выход процесса) в профиле «одиночный слайд».
+# В презентации SNP входы нарисованы надписями, здесь — автофигурами, и без
+# отдельного признака они стали бы обычными шагами.
+ARTIFACT_FILL = "scheme:accent2"
 MAX_ID_LENGTH = 72                   # длиннее, чтобы различающая часть текста не срезалась
 
 SYSTEM_CODES = ("DP", "PS", "IO", "ERP", "MRP", "INPLAN", "BI", "EPM")
@@ -1681,6 +1719,337 @@ def count_warnings(stage: dict) -> int:
     return max(len(distinct), node_warnings)
 
 
+def is_artifact_box(shape: Shape) -> bool:
+    """
+    Плашка-артефакт: вход или выход процесса, нарисованный автофигурой.
+
+    ЗАЧЕМ ОТДЕЛЬНЫЙ ПРЕДИКАТ. На слайдах детализации SNP колонка входов — это
+    надписи (textbox), и разбор ищет их по признаку «текстбокс в левом поле».
+    На слайде 8 презентации MRP те же входы и выход нарисованы АВТОФИГУРАМИ с
+    заливкой scheme:accent2. Без этого предиката они стали бы обычными шагами:
+    прогон существующего build_stage давал 17 узлов и НОЛЬ data-узлов.
+    """
+    return shape.kind == "auto" and shape.has_text and shape.fill == ARTIFACT_FILL
+
+
+def build_single_slide_map(
+    collisions: dict[str, int] | None,
+    spec: MapSpec,
+) -> tuple[dict, list[SlideReport], list[str], Counter[str]]:
+    """
+    Профиль «одиночный слайд»: вся карта собирается с ОДНОГО слайда.
+
+    ЧЕМ ОТЛИЧАЕТСЯ ОТ build_process_map. Там два уровня слайдов: обзор со
+    стадиями и четыре слайда детализации. Здесь уровня «обзор» нет вовсе, и
+    четыре КОНТЕЙНЕРА слайда становятся четырьмя этапами карты (решение
+    владельца). Группы внутри этапа не заводятся: группа СТАЛА этапом, и
+    рисовать внутри него рамку с тем же заголовком значило бы дублировать.
+
+    Общего с build_stage — почти вся геометрия: is_container, поиск заголовка,
+    innermost_container, классификация узлов, разбор подписей, двухпроходное
+    сопоставление концов линий. Своё — только «где брать этапы» и «где брать
+    входы и выходы».
+    """
+    if not spec.pptx.exists():
+        raise SystemExit(f"Не найдена презентация: {spec.pptx}")
+    presentation = Presentation(str(spec.pptx))
+    if int(presentation.slide_width) != SLIDE_WIDTH_EMU:
+        raise SystemExit(
+            f"Неожиданная ширина слайда {presentation.slide_width} EMU (ожидалось {SLIDE_WIDTH_EMU})"
+        )
+    slides = list(presentation.slides)
+    if len(slides) != spec.slides:
+        raise SystemExit(f"Ожидалось {spec.slides} слайдов, найдено {len(slides)}")
+    if spec.slide_index is None:
+        raise SystemExit(f"У карты «{spec.key}» профиль single-slide, но slide_index не задан")
+
+    slide_no = spec.slide_index + 1
+    shapes = read_slide(slides[spec.slide_index])
+    report = SlideReport(slide_no=slide_no)
+    questions: list[str] = []
+
+    textboxes = [s for s in shapes if s.kind == "textbox" and s.has_text]
+    lines = [s for s in shapes if s.kind == "line"]
+    arrows = [s for s in shapes if is_decor_arrow(s)]
+    for s in shapes:
+        if s.kind == "placeholder":
+            s.consumed_by = "заголовок слайда"
+
+    # 1. Контейнеры -> этапы. Порядок «верхний ряд, затем нижний слева направо» —
+    #    тот же, которым build_overview упорядочивает стадии обзора.
+    containers = sorted(
+        [s for s in shapes if is_container(s)],
+        key=lambda s: (round(s.box.top / 1_000_000), s.box.left),
+    )
+    if len(containers) != STAGE_COUNT:
+        raise SystemExit(
+            f"слайд {slide_no}: ожидалось {STAGE_COUNT} контейнеров-этапов, "
+            f"найдено {len(containers)}"
+        )
+
+    stage_containers: list[tuple[Shape, str]] = []
+    stage_meta: list[dict] = []
+    for index, container in enumerate(containers):
+        title_tb = find_title_for_container(container, textboxes)
+        if title_tb is None:
+            # Не вопрос в отчёт, а остановка: в этом профиле контейнер ЭТО этап,
+            # и безымянный этап собирать нельзя.
+            raise SystemExit(
+                f"слайд {slide_no}: контейнер [{container.sid}] без заголовка — "
+                f"этап собрать нельзя"
+            )
+        title_tb.consumed_by = "заголовок этапа"
+        title = title_tb.text
+        short_title = re.split(r"\s/|/\s|\s\+\s", title)[0].strip()
+        number = index + 1
+        stage_id = slugify(f"stage-{number}-{short_title}")
+        stage_containers.append((container, stage_id))
+        stage_meta.append(
+            {"id": stage_id, "number": number, "title": title, "shortTitle": short_title}
+        )
+    report.groups = len(stage_meta)
+
+    # 2. Узлы-шаги. Плашки-артефакты исключены: они станут data-узлами шагом 3.
+    ids = IdFactory(collisions)
+    drafts: list[NodeDraft] = []
+    stage_of_node: dict[str, str] = {}
+    sid_of_node: dict[int, str] = {}
+    node_shapes = [
+        s
+        for s in shapes
+        if s.kind == "auto"
+        and s.has_text
+        and not is_container(s)
+        and not is_decor_arrow(s)
+        and not is_artifact_box(s)
+    ]
+    for shape in node_shapes:
+        stage_id = innermost_container(stage_containers, shape.box)
+        if stage_id is None:
+            raise SystemExit(
+                f"слайд {slide_no}: узел «{shape.text[:60]}» не попал ни в один контейнер-этап"
+            )
+        draft = NodeDraft(
+            node_id=ids.make(shape.text, slide_no, shape.sid),
+            node_type=node_type_for(shape),
+            label=shape.text,
+            box=shape.box,
+        )
+        drafts.append(draft)
+        stage_of_node[draft.node_id] = stage_id
+        sid_of_node[shape.sid] = draft.node_id
+    report.nodes = len(drafts)
+
+    # 3. Плашки-артефакты -> data-узлы.
+    #    НАПРАВЛЕНИЕ ПО ПРОИСХОЖДЕНИЮ, а не по координате (process-map-24p):
+    #    левое поле слайда — это колонка входов. Для плашки вне левого поля
+    #    правило «значит выход» было бы геометрией, поэтому шагом 6 оно
+    #    подкрепляется вторым независимым признаком: такая плашка обязана быть
+    #    целью хотя бы одной связи.
+    artifacts: list[tuple[Shape, NodeDraft]] = []
+    for shape in [s for s in shapes if is_artifact_box(s)]:
+        direction = "in" if shape.box.left <= LEFT_MARGIN_LIMIT else "out"
+        draft = NodeDraft(
+            node_id=ids.make(shape.text, slide_no, shape.sid),
+            node_type="data",
+            label=shape.text,
+            box=shape.box,
+            direction=direction,
+        )
+        drafts.append(draft)
+        artifacts.append((shape, draft))
+        sid_of_node[shape.sid] = draft.node_id
+        report.data_nodes += 1
+    if not artifacts:
+        raise SystemExit(
+            f"слайд {slide_no}: не найдено ни одной плашки-артефакта (заливка {ARTIFACT_FILL})"
+        )
+
+    # 4. Подписи под шагами -> inputs узла (решение владельца, process-map-3wh.1).
+    #    На слайде 8 это перечни ИСХОДНЫХ ДАННЫХ («Спецификации (BOM) с уровнями
+    #    и нормами расхода», «Остатки и страховые запасы»). Правило SNP отправило
+    #    бы два из трёх в outputs, где перечень входов был бы враньём.
+    proxies: list[tuple[Box, str]] = []
+    step_drafts = [d for d in drafts if d.node_type != "data"]
+    for tb in sorted([t for t in textboxes if t.consumed_by is None], key=Shape.sort_key):
+        best: tuple[float, NodeDraft] | None = None
+        for draft in step_drafts:
+            if draft.box.height < CAPTION_MIN_NODE_HEIGHT:
+                continue
+            gap = tb.box.top - draft.box.bottom
+            if not (CAPTION_MIN_GAP <= gap <= CAPTION_MAX_GAP):
+                continue
+            overlap = min(tb.box.right, draft.box.right) - max(tb.box.left, draft.box.left)
+            if overlap <= 0:
+                continue
+            covers_node = tb.box.left <= draft.box.left and tb.box.right >= draft.box.right
+            coverage = overlap / draft.box.width if covers_node else overlap / tb.box.width
+            if coverage < CAPTION_MIN_OVERLAP:
+                continue
+            score = (gap, abs(tb.box.left - draft.box.left))
+            if best is None or score < (best[0], abs(tb.box.left - best[1].box.left)):
+                best = (gap, draft)
+        if best is None:
+            continue
+        draft = best[1]
+        tb.consumed_by = f"входы узла {draft.node_id}"
+        proxies.append((tb.box, draft.node_id))
+        draft.inputs.extend(tb.paragraphs)
+
+    # 5. Рёбра — три источника в жёстком порядке.
+    node_boxes: list[tuple[Box, str]] = [(d.box, d.node_id) for d in drafts]
+    node_boxes.extend(proxies)
+    step_boxes = [(d.box, d.node_id) for d in step_drafts]
+    members_of: dict[int, list[tuple[Box, str]]] = {}
+    for container, stage_id in stage_containers:
+        members_of[container.sid] = [
+            (d.box, d.node_id) for d in step_drafts if stage_of_node.get(d.node_id) == stage_id
+        ]
+
+    raw_edges: list[tuple[str, str]] = []
+    seen_pairs: set[tuple[str, str]] = set()
+
+    def remember(source: str | None, target: str | None, sid: int) -> None:
+        if source is None or target is None or source == target:
+            reason = "петля" if source is not None and source == target else "конец не определён"
+            report.lines_skipped.append(f"слайд {slide_no}: линия [{sid}] — {reason}")
+            return
+        if (source, target) in seen_pairs:
+            return
+        seen_pairs.add((source, target))
+        raw_edges.append((source, target))
+
+    # 5a. Декоративные стрелки -> связи «шаг -> шаг». Линиями они на слайде НЕ
+    #     нарисованы вовсе: порядок шагов внутри этапа держится только на них.
+    #     Восстанавливать его по абсциссе значило бы догадываться.
+    for source, target in arrow_edges(arrows, step_boxes, EDGE_SNAP_DETAIL):
+        if (source, target) not in seen_pairs:
+            seen_pairs.add((source, target))
+            raw_edges.append((source, target))
+    report.lines_total = len(lines) + len(arrows)
+
+    def by_binding(sid: int | None, point: tuple[float, float]) -> str | None:
+        """Привязка коннектора -> узел. Привязка к КОНТЕЙНЕРУ — ближайший шаг в нём."""
+        if sid is None:
+            return None
+        if sid in sid_of_node:
+            return sid_of_node[sid]
+        return nearest_target(members_of.get(sid, []), point, EDGE_SNAP_DETAIL)
+
+    for line in lines:
+        start, end = line_endpoints(line)
+        # 5b. Привязки читаются ПЕРВЫМИ: у линии обратной связи слайда 8 bbox
+        #     уходит ниже кромки слайда (растянутый коннектор), и геометрия её
+        #     теряет, а привязка — нет.
+        source = by_binding(line.start_sid, start)
+        target = by_binding(line.end_sid, end)
+        # 5c. Чего привязки не дали — добирается геометрией, двумя проходами.
+        ranked_start = rank_candidates(node_boxes, start)
+        ranked_end = rank_candidates(node_boxes, end)
+        if source is None and ranked_start and ranked_start[0][0] <= EDGE_SNAP_DETAIL:
+            source = ranked_start[0][1]
+        if target is None and ranked_end and ranked_end[0][0] <= EDGE_SNAP_DETAIL:
+            target = ranked_end[0][1]
+        if source is not None and target is None:
+            target = resolve_second_pass(ranked_end, source)
+        elif target is not None and source is None:
+            source = resolve_second_pass(ranked_start, target)
+        remember(source, target, line.sid)
+
+    # 6. Этап data-узла — этап шага, с которым он связан.
+    by_id = {d.node_id: d for d in drafts}
+    for shape, draft in artifacts:
+        partners = [t for s, t in raw_edges if s == draft.node_id]
+        partners += [s for s, t in raw_edges if t == draft.node_id]
+        steps = [p for p in partners if by_id[p].node_type != "data"]
+        if not steps:
+            raise SystemExit(
+                f"слайд {slide_no}: плашка-артефакт [{shape.sid}] «{draft.label[:50]}» "
+                f"не связана ни с одним шагом — направление «{draft.direction}» недоказуемо"
+            )
+        if draft.direction == "out" and not any(t == draft.node_id for _, t in raw_edges):
+            raise SystemExit(
+                f"слайд {slide_no}: плашка [{shape.sid}] «{draft.label[:50]}» признана выходом "
+                f"по положению, но не является целью ни одной связи"
+            )
+        stage_of_node[draft.node_id] = stage_of_node[steps[0]]
+
+    # 7. Рёбра внутри этапа -> stage.edges, между этапами -> overviewEdges.
+    stage_edges: dict[str, list[dict]] = {meta["id"]: [] for meta in stage_meta}
+    overview_edges: list[dict] = []
+    seen_overview: set[tuple[str, str]] = set()
+    for source, target in raw_edges:
+        source_stage = stage_of_node[source]
+        target_stage = stage_of_node[target]
+        kind = (
+            "integration"
+            if "integration" in {by_id[source].node_type, by_id[target].node_type}
+            else "process"
+        )
+        if source_stage == target_stage:
+            stage_edges[source_stage].append(
+                {"id": f"e-{source}--{target}", "source": source, "target": target, "kind": kind}
+            )
+            continue
+        pair = (source_stage, target_stage)
+        if pair in seen_overview:
+            continue
+        seen_overview.add(pair)
+        overview_edges.append(
+            {
+                "id": f"ov-{source_stage}--{target_stage}",
+                "source": source_stage,
+                "target": target_stage,
+                "kind": "process",
+            }
+        )
+    report.edges = sum(len(items) for items in stage_edges.values())
+
+    # 8. Сборка этапов.
+    stages: list[dict] = []
+    for meta in stage_meta:
+        stage_id = meta["id"]
+        members = [d for d in drafts if stage_of_node.get(d.node_id) == stage_id]
+        key_outputs = [d.label for d in members if d.direction == "out"][:MAX_KEY_OUTPUTS]
+        stages.append(
+            {
+                "id": stage_id,
+                "number": meta["number"],
+                "title": meta["title"],
+                "shortTitle": meta["shortTitle"],
+                "keyOutputs": key_outputs,
+                # warningsCount НЕ ПРОСТАВЛЯЕТСЯ. У SNP счётчик означает «сколько
+                # типов предупреждений формирует этап»; переносить эту семантику
+                # на шаг «Анализ предупреждений», который планировщик выполняет
+                # сам, значило бы соврать. Поле необязательное (SPEC §3).
+                "groups": [],
+                "nodes": [
+                    serialize_node(d)
+                    for d in sorted(members, key=lambda d: (d.box.top, d.box.left, d.node_id))
+                ],
+                "edges": stage_edges[stage_id],
+                # ExternalIO этой карты — предмет process-map-3wh.10.
+                "inputs": [],
+                "outputs": [],
+            }
+        )
+
+    for tb in textboxes:
+        if tb.consumed_by is None:
+            report.text_skipped.append(f"слайд {slide_no}: [{tb.sid}] «{tb.text[:80]}»")
+
+    process_map = {
+        "version": MAP_VERSION,
+        "id": spec.map_id,
+        "updatedAt": spec.updated_at,
+        "title": spec.title,
+        "moduleLabel": spec.module_label,
+        "stages": stages,
+        "overviewEdges": overview_edges,
+    }
+    return process_map, [report], questions, ids.counts
+
+
 def build_process_map(
     collisions: dict[str, int] | None,
     spec: MapSpec,
@@ -1707,7 +2076,7 @@ def build_process_map(
     ids = IdFactory(collisions)
     seen_signatures: set[tuple] = set()
     stages: list[dict] = []
-    for index in range(4):
+    for index in range(STAGE_COUNT):
         slide_no = index + 3
         report = SlideReport(slide_no=slide_no)
         stage = build_stage(
@@ -2182,7 +2551,7 @@ def print_report(
             f"  этап {stage['number']} «{stage['shortTitle']}»: "
             f"{len(stage['nodes'])} узлов, {len(stage['edges'])} рёбер, "
             f"{len(stage['groups'])} групп, {len(stage['inputs'])} входов, "
-            f"{len(stage['outputs'])} выходов, warningsCount={stage['warningsCount']}"
+            f"{len(stage['outputs'])} выходов, warningsCount={stage.get('warningsCount', '—')}"
         )
     # Направление data-узлов (SPEC §3, задача process-map-24p). Печатается
     # отдельным блоком, потому что это ответ на вопрос «почему на экране этапа
@@ -3001,9 +3370,12 @@ def main(argv: Iterable[str]) -> int:
     # раньше, чем после разбора презентации.
     previous = load_previous_map(spec.json)
 
+    # Профиль разбора: устройство презентации у карт разное (MapSpec.profile).
+    build = build_single_slide_map if spec.profile == "single-slide" else build_process_map
+
     # Фаза 1 — подсчёт коллизий базовых slug'ов, фаза 2 — стабильные id.
-    _, _, _, collisions = build_process_map(None, spec)
-    process_map, reports, questions, _ = build_process_map(dict(collisions), spec)
+    _, _, _, collisions = build(None, spec)
+    process_map, reports, questions, _ = build(dict(collisions), spec)
 
     carry_over = carry_over_manual_fields(process_map, previous)
 

@@ -1,5 +1,5 @@
 // scripts/layout.ts
-// Пересчитывает стартовые координаты узлов src/data/snp/process.json через @dagrejs/dagre.
+// Пересчитывает стартовые координаты узлов src/data/<карта>/process.json через @dagrejs/dagre.
 //
 // Запуск (из корня репозитория):
 //
@@ -457,7 +457,7 @@ function serialize(map: ProcessMap): string {
 }
 
 /**
- * Полный прогон раскладки: читает src/data/snp/process.json, пересчитывает
+ * Полный прогон раскладки: читает src/data/<карта>/process.json, пересчитывает
  * координаты, печатает отчёт и записывает файл. Экспортируется ради
  * scripts/data.ts (конвейер `npm run data`), который вызывает её в том же
  * процессе после импорта.
@@ -540,7 +540,9 @@ export function runLayout(mapId: MapId = DEFAULT_MAP): number {
 
   lines.push('');
   lines.push('='.repeat(78));
-  lines.push(`  ${changed ? 'записано' : 'без изменений'}: src/data/snp/process.json`);
+  // Путь печатается настоящий: сообщение с литералом «snp» врало бы при
+  // раскладке второй карты (process-map-3wh.9).
+  lines.push(`  ${changed ? 'записано' : 'без изменений'}: src/data/${mapId}/process.json`);
   lines.push('='.repeat(78));
 
   console.log(lines.join('\n'));

@@ -1,0 +1,416 @@
+{
+  "version": "1.0.0",
+  "id": "mrp",
+  "updatedAt": "2026-09-01",
+  "title": "Процесс планирования потребности в материалах",
+  "moduleLabel": "Модуль MRP",
+  "stages": [
+    {
+      "id": "stage-1-raschet-potrebnosti",
+      "number": 1,
+      "title": "Расчёт потребности",
+      "shortTitle": "Расчёт потребности",
+      "keyOutputs": [],
+      "groups": [],
+      "nodes": [
+        {
+          "id": "planovye-zakazy-iz-snp-ps",
+          "type": "data",
+          "label": "Плановые заказы из SNP, PS",
+          "direction": "in",
+          "position": {
+            "x": 0,
+            "y": 0
+          },
+          "slidePosition": {
+            "x": 11,
+            "y": 110
+          }
+        },
+        {
+          "id": "razuzlovanie-bom",
+          "type": "step",
+          "label": "Разузлование BOM",
+          "inputs": [
+            "Спецификации (BOM) с уровнями и нормами расхода",
+            "Маршруты/рецепты (если от них зависит структура потребления)"
+          ],
+          "position": {
+            "x": 296,
+            "y": 110
+          },
+          "slidePosition": {
+            "x": 211,
+            "y": 145
+          }
+        },
+        {
+          "id": "raschet-brutto-i-netto-potrebnostey",
+          "type": "step",
+          "label": "Расчёт брутто- и нетто-потребностей",
+          "inputs": [
+            "Остатки и страховые запасы",
+            "Существующие заказы на поставку и заявки на закупку",
+            "Перемещения (входящие/исходящие)",
+            "Параметры партии (min/max/кратность, периодичность) и календари"
+          ],
+          "position": {
+            "x": 646,
+            "y": 110
+          },
+          "slidePosition": {
+            "x": 388,
+            "y": 145
+          }
+        },
+        {
+          "id": "formirovanie-zayavok-na-zakupku",
+          "type": "step",
+          "label": "Формирование заявок на закупку",
+          "inputs": [
+            "Параметры закупки:",
+            "Lead time, MOQ, min/max партия, кратность, периодичность",
+            "Источник поставки, квоты, цены",
+            "Данные по поставщикам и логистическим ограничениям",
+            "Календарь поставщика, окна отгрузки",
+            "Ограничения по объёмам/мощностям",
+            "Транспортные ограничения"
+          ],
+          "position": {
+            "x": 996,
+            "y": 110
+          },
+          "slidePosition": {
+            "x": 565,
+            "y": 145
+          }
+        },
+        {
+          "id": "osnovnye-i-tranzakcionnye-dannye-iz-erp",
+          "type": "data",
+          "label": "Основные и транзакционные данные из ERP",
+          "direction": "in",
+          "position": {
+            "x": 0,
+            "y": 72
+          },
+          "slidePosition": {
+            "x": 11,
+            "y": 169
+          }
+        },
+        {
+          "id": "rekomendovannye-urovni-zapasov-iz-meio",
+          "type": "data",
+          "label": "Рекомендованные уровни запасов из MEIO",
+          "direction": "in",
+          "position": {
+            "x": 0,
+            "y": 144
+          },
+          "slidePosition": {
+            "x": 11,
+            "y": 228
+          }
+        },
+        {
+          "id": "planovye-pervichnye-potrebnosti-i-drugie-vidy-potrebnostey",
+          "type": "data",
+          "label": "Плановые первичные потребности и другие виды потребностей",
+          "direction": "in",
+          "position": {
+            "x": 0,
+            "y": 216
+          },
+          "slidePosition": {
+            "x": 11,
+            "y": 287
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "e-razuzlovanie-bom--raschet-brutto-i-netto-potrebnostey",
+          "source": "razuzlovanie-bom",
+          "target": "raschet-brutto-i-netto-potrebnostey",
+          "kind": "process"
+        },
+        {
+          "id": "e-raschet-brutto-i-netto-potrebnostey--formirovanie-zayavok-na-zakupku",
+          "source": "raschet-brutto-i-netto-potrebnostey",
+          "target": "formirovanie-zayavok-na-zakupku",
+          "kind": "process"
+        },
+        {
+          "id": "e-planovye-zakazy-iz-snp-ps--razuzlovanie-bom",
+          "source": "planovye-zakazy-iz-snp-ps",
+          "target": "razuzlovanie-bom",
+          "kind": "process"
+        },
+        {
+          "id": "e-osnovnye-i-tranzakcionnye-dannye-iz-erp--razuzlovanie-bom",
+          "source": "osnovnye-i-tranzakcionnye-dannye-iz-erp",
+          "target": "razuzlovanie-bom",
+          "kind": "process"
+        },
+        {
+          "id": "e-planovye-pervichnye-potrebnosti-i-drugie-vidy-potrebnostey--razuzlovanie-bom",
+          "source": "planovye-pervichnye-potrebnosti-i-drugie-vidy-potrebnostey",
+          "target": "razuzlovanie-bom",
+          "kind": "process"
+        },
+        {
+          "id": "e-rekomendovannye-urovni-zapasov-iz-meio--razuzlovanie-bom",
+          "source": "rekomendovannye-urovni-zapasov-iz-meio",
+          "target": "razuzlovanie-bom",
+          "kind": "process"
+        }
+      ],
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "id": "stage-2-obrabotka-oshibok-i-preduprezhdeniy",
+      "number": 2,
+      "title": "Обработка ошибок и предупреждений",
+      "shortTitle": "Обработка ошибок и предупреждений",
+      "keyOutputs": [],
+      "groups": [],
+      "nodes": [
+        {
+          "id": "analiz-preduprezhdeniy",
+          "type": "warning",
+          "label": "Анализ предупреждений",
+          "position": {
+            "x": 0,
+            "y": 0
+          },
+          "slidePosition": {
+            "x": 763,
+            "y": 145
+          }
+        },
+        {
+          "id": "ispravlenie-dannyh",
+          "type": "step",
+          "label": "Исправление данных",
+          "position": {
+            "x": 350,
+            "y": 0
+          },
+          "slidePosition": {
+            "x": 942,
+            "y": 145
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "e-analiz-preduprezhdeniy--ispravlenie-dannyh",
+          "source": "analiz-preduprezhdeniy",
+          "target": "ispravlenie-dannyh",
+          "kind": "process"
+        }
+      ],
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "id": "stage-3-analiz-i-korrektirovka-rezultatov",
+      "number": 3,
+      "title": "Анализ и корректировка результатов",
+      "shortTitle": "Анализ и корректировка результатов",
+      "keyOutputs": [
+        "Передача плана в виде заявок на закупку в систему исполнения закупок"
+      ],
+      "groups": [],
+      "nodes": [
+        {
+          "id": "proverka-obespechennosti-bom",
+          "type": "step",
+          "label": "Проверка обеспеченности BOM",
+          "position": {
+            "x": 0,
+            "y": 2
+          },
+          "slidePosition": {
+            "x": 37,
+            "y": 442
+          }
+        },
+        {
+          "id": "korrektirovka-zayavok",
+          "type": "step",
+          "label": "Корректировка заявок",
+          "position": {
+            "x": 350,
+            "y": 2
+          },
+          "slidePosition": {
+            "x": 208,
+            "y": 442
+          }
+        },
+        {
+          "id": "soglasovanie-izmeneniy",
+          "type": "step",
+          "label": "Согласование изменений",
+          "position": {
+            "x": 700,
+            "y": 2
+          },
+          "slidePosition": {
+            "x": 379,
+            "y": 442
+          }
+        },
+        {
+          "id": "soglasovanie-plana-zakupok",
+          "type": "step",
+          "label": "Согласование плана закупок",
+          "position": {
+            "x": 1050,
+            "y": 2
+          },
+          "slidePosition": {
+            "x": 550,
+            "y": 442
+          }
+        },
+        {
+          "id": "peredacha-plana-v-vide-zayavok-na-zakupku-v-sistemu-ispolneniya-zakupok",
+          "type": "data",
+          "label": "Передача плана в виде заявок на закупку в систему исполнения закупок",
+          "direction": "out",
+          "position": {
+            "x": 1464,
+            "y": 0
+          },
+          "slidePosition": {
+            "x": 619,
+            "y": 539
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "e-proverka-obespechennosti-bom--korrektirovka-zayavok",
+          "source": "proverka-obespechennosti-bom",
+          "target": "korrektirovka-zayavok",
+          "kind": "process"
+        },
+        {
+          "id": "e-korrektirovka-zayavok--soglasovanie-izmeneniy",
+          "source": "korrektirovka-zayavok",
+          "target": "soglasovanie-izmeneniy",
+          "kind": "process"
+        },
+        {
+          "id": "e-soglasovanie-izmeneniy--soglasovanie-plana-zakupok",
+          "source": "soglasovanie-izmeneniy",
+          "target": "soglasovanie-plana-zakupok",
+          "kind": "process"
+        },
+        {
+          "id": "e-soglasovanie-plana-zakupok--peredacha-plana-v-vide-zayavok-na-zakupku-v-sistemu-ispolneniya-zakupok",
+          "source": "soglasovanie-plana-zakupok",
+          "target": "peredacha-plana-v-vide-zayavok-na-zakupku-v-sistemu-ispolneniya-zakupok",
+          "kind": "process"
+        }
+      ],
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "id": "stage-4-scenarnoe-planirovanie",
+      "number": 4,
+      "title": "Сценарное планирование",
+      "shortTitle": "Сценарное планирование",
+      "keyOutputs": [],
+      "groups": [],
+      "nodes": [
+        {
+          "id": "sozdanie-alternativnyh-scenariev",
+          "type": "step",
+          "label": "Создание альтернативных сценариев",
+          "position": {
+            "x": 0,
+            "y": 0
+          },
+          "slidePosition": {
+            "x": 738,
+            "y": 442
+          }
+        },
+        {
+          "id": "utverzhdenie-finalnogo-scenariya",
+          "type": "step",
+          "label": "Утверждение финального сценария",
+          "position": {
+            "x": 700,
+            "y": 0
+          },
+          "slidePosition": {
+            "x": 1083,
+            "y": 442
+          }
+        },
+        {
+          "id": "sravnenie-po-kpi-stoimost-riski-zapasy",
+          "type": "step",
+          "label": "Сравнение по KPI (стоимость, риски, запасы)",
+          "position": {
+            "x": 350,
+            "y": 0
+          },
+          "slidePosition": {
+            "x": 911,
+            "y": 442
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "e-sravnenie-po-kpi-stoimost-riski-zapasy--utverzhdenie-finalnogo-scenariya",
+          "source": "sravnenie-po-kpi-stoimost-riski-zapasy",
+          "target": "utverzhdenie-finalnogo-scenariya",
+          "kind": "process"
+        },
+        {
+          "id": "e-sozdanie-alternativnyh-scenariev--sravnenie-po-kpi-stoimost-riski-zapasy",
+          "source": "sozdanie-alternativnyh-scenariev",
+          "target": "sravnenie-po-kpi-stoimost-riski-zapasy",
+          "kind": "process"
+        }
+      ],
+      "inputs": [],
+      "outputs": []
+    }
+  ],
+  "overviewEdges": [
+    {
+      "id": "ov-stage-4-scenarnoe-planirovanie--stage-3-analiz-i-korrektirovka-rezultatov",
+      "source": "stage-4-scenarnoe-planirovanie",
+      "target": "stage-3-analiz-i-korrektirovka-rezultatov",
+      "kind": "process"
+    },
+    {
+      "id": "ov-stage-1-raschet-potrebnosti--stage-2-obrabotka-oshibok-i-preduprezhdeniy",
+      "source": "stage-1-raschet-potrebnosti",
+      "target": "stage-2-obrabotka-oshibok-i-preduprezhdeniy",
+      "kind": "process"
+    },
+    {
+      "id": "ov-stage-2-obrabotka-oshibok-i-preduprezhdeniy--stage-3-analiz-i-korrektirovka-rezultatov",
+      "source": "stage-2-obrabotka-oshibok-i-preduprezhdeniy",
+      "target": "stage-3-analiz-i-korrektirovka-rezultatov",
+      "kind": "process"
+    },
+    {
+      "id": "ov-stage-3-analiz-i-korrektirovka-rezultatov--stage-4-scenarnoe-planirovanie",
+      "source": "stage-3-analiz-i-korrektirovka-rezultatov",
+      "target": "stage-4-scenarnoe-planirovanie",
+      "kind": "process"
+    }
+  ]
+}
