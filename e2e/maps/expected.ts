@@ -12,10 +12,15 @@
 export interface MapExpectations {
   /** Подпись рамки вокруг потока этапов (.react-flow__node-flowLane). */
   moduleLabel: string;
+  /** Заголовок вкладки: его подставляет плагин сборки из данных карты. */
+  pageTitle: string;
 }
 
 export const MAP_EXPECTATIONS: Record<string, MapExpectations> = {
-  snp: { moduleLabel: 'Модуль SNP' },
+  snp: {
+    moduleLabel: 'Модуль SNP',
+    pageTitle: 'E2E-процесс планирования поставок',
+  },
 };
 
 /**

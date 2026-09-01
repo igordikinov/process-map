@@ -11,7 +11,7 @@
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_MAP, MAP_IDS } from '../scripts/layout.ts';
+import { DEFAULT_MAP, MAP_IDS } from '../scripts/mapTarget.ts';
 
 const IMPORTER_SOURCE = readFileSync(resolve(process.cwd(), 'scripts', 'import-pptx.py'), 'utf8');
 const DATA_ROOT = resolve(process.cwd(), 'src', 'data');

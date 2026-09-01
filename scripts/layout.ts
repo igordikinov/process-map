@@ -54,6 +54,7 @@ import {
   type NodeSize,
 } from '../src/theme/sizes.ts';
 import { splitStageDataNodes as splitDataNodes } from '../src/utils/stageNodes.ts';
+import { DEFAULT_MAP, mapIdFromArgv, mapJsonPath, type MapId } from './mapTarget.ts';
 
 // @dagrejs/dagre — CommonJS-пакет: `module.exports = { graphlib, layout, ... }`.
 // Через ESM-импорт Node видит только `graphlib` (cjs-module-lexer не распознаёт
@@ -67,37 +68,8 @@ const dagreLayout = dagre.layout;
 // Константы раскладки
 // --------------------------------------------------------------------------------------
 
-/** Карты, которые умеет раскладывать конвейер. Реестр — в scripts/import-pptx.py::MAPS. */
-export const MAP_IDS = ['snp'] as const;
-export type MapId = (typeof MAP_IDS)[number];
-export const DEFAULT_MAP: MapId = 'snp';
-
-// Путь считается лениво: модуль импортируется ещё и тестом (tests/layout.test.ts)
-// ради общих констант и метрики, а там import.meta.url — не file:-URL.
-function jsonPath(mapId: MapId): string {
-  return fileURLToPath(new URL(`../src/data/${mapId}/process.json`, import.meta.url));
-}
-
-/**
- * Какую карту раскладываем: `--map <id>`, по умолчанию snp.
- *
- * Неизвестный ключ — остановка, а не тихий откат на карту по умолчанию:
- * молчаливая раскладка не той карты переписала бы чужой файл координатами.
- */
-export function resolveMapId(argv: readonly string[]): MapId {
-  const index = argv.indexOf('--map');
-  if (index === -1) {
-    return DEFAULT_MAP;
-  }
-  const value = argv[index + 1];
-  if (value === undefined) {
-    throw new Error('--map требует значение, например: --map snp');
-  }
-  if (!(MAP_IDS as readonly string[]).includes(value)) {
-    throw new Error(`Неизвестная карта «${value}». Известны: ${MAP_IDS.join(', ')}`);
-  }
-  return value as MapId;
-}
+// Реестр карт и разбор `--map` — в scripts/mapTarget.ts: тот же список нужен
+// конфигам сборки, а второй экземпляр разошёлся бы с первым.
 
 export type Size = NodeSize;
 
@@ -491,7 +463,7 @@ function serialize(map: ProcessMap): string {
  * процессе после импорта.
  */
 export function runLayout(mapId: MapId = DEFAULT_MAP): number {
-  const path = jsonPath(mapId);
+  const path = mapJsonPath(mapId);
   const original = readFileSync(path, 'utf8');
   const raw = JSON.parse(original) as ProcessMap;
   ProcessMapSchema.parse(raw);
@@ -591,5 +563,5 @@ function isDirectRun(): boolean {
 }
 
 if (isDirectRun()) {
-  process.exitCode = runLayout(resolveMapId(process.argv.slice(2)));
+  process.exitCode = runLayout(mapIdFromArgv(process.argv.slice(2)));
 }

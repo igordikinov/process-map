@@ -14,7 +14,10 @@
 //   - переполнение квоты при записи (QuotaExceededError) → writeStoredOverrides
 //     возвращает false, состояние в памяти остаётся корректным, вызывающий UI
 //     решает, что показать пользователю.
-import rawProcessJson from './snp/process.json';
+// Данные собираемой карты. Какой именно — решает алиас @map в конфигах
+// сборки (scripts/mapTarget.ts): в src/ нет ни process.env, ни import.meta.env,
+// ни ветвлений, и в бандл попадает ровно один JSON.
+import rawProcessJson from '@map/process.json';
 import {
   LEGACY_OVERRIDES_MAP_ID,
   LEGACY_OVERRIDES_STORAGE_KEY,

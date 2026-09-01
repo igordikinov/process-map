@@ -318,6 +318,10 @@ http://host/process-map/     ->  http://host/process-map/assets/index-CTQNOulP.j
   `scripts/import-pptx.py` (python-pptx). Скрипт детерминирован, id стабильны — на них
   завязаны deep-link и ключи `localStorage`.
 - Координаты узлов пересчитывает `scripts/layout.ts` (`npm run layout`, dagre).
+- **Какая карта собирается** — переменная `MAP` (по умолчанию `snp`), см. SPEC §3
+  «Выбор карты на сборке». Единственная точка выбора — `scripts/mapTarget.ts`;
+  `src/data/loader.ts` импортирует данные через алиас `@map` и не знает, какая
+  это карта. Тот же набор карт разбирают команды данных: `npm run data -- --map snp`.
 
 ### `npm run data` — единственный правильный способ пересобрать данные
 

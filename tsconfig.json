@@ -21,7 +21,15 @@
     "noUncheckedIndexedAccess": true,
     "forceConsistentCasingInFileNames": true,
 
-    "types": ["node", "vitest/globals", "@testing-library/jest-dom"]
+    "types": ["node", "vitest/globals", "@testing-library/jest-dom"],
+
+    // Алиас данных карты. Статически указывает на карту по умолчанию:
+    // tsc проверяет ТИПЫ, а они у всех карт одни (schema.ts), и
+    // parseProcessMap всё равно принимает unknown и валидирует зодом в
+    // рантайме. Реальный путь на сборке подставляет resolve.alias из
+    // scripts/mapTarget.ts (process-map-3wh.6).
+    "baseUrl": ".",
+    "paths": { "@map/*": ["src/data/snp/*"] }
   },
   "include": [
     "src",

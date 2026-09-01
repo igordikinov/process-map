@@ -29,6 +29,13 @@ test('обзор: шапка, четыре карточки этапов, дат
   await expect(page.locator('.react-flow__node-stage')).toHaveCount(4);
 });
 
+test('заголовок вкладки — заголовок этой карты', async ({ page }, testInfo) => {
+  // Подставляется плагином сборки (vite.config.ts) из данных карты. Без этой
+  // проверки промах подстановки был бы невидим: сборка осталась бы зелёной, а
+  // на странице второй карты стоял бы заголовок первой.
+  await expect(page).toHaveTitle(expectationsFor(testInfo.project.name).pageTitle);
+});
+
 test('поток этапов обведён рамкой с подписью своего модуля', async ({ page }, testInfo) => {
   const frame = page.locator('.react-flow__node-flowLane');
   await expect(frame).toHaveCount(1);
