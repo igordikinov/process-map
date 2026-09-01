@@ -17,6 +17,7 @@ import {
 } from '../src/components/Overview/overviewGraph';
 import { StageCard } from '../src/components/nodes/StageNode/StageCard';
 import { loadBaseProcessMap } from '../src/data/loader';
+import { buildSampleProcessMap } from './fixtures/sample-process';
 import { formatIsoDate } from '../src/utils/format';
 import type { Stage } from '../src/data/schema';
 import { ru } from '../src/i18n/ru';
@@ -264,6 +265,31 @@ describe('buildOverviewGraph', () => {
 
     expect(nodes.filter((node) => node.type === 'flowLane')).toHaveLength(0);
     expect(nodes.some((node) => node.id === FLOW_LANE_ID)).toBe(false);
+  });
+
+  it('обратное ребро между этапами ведётся снизу, а не справа', () => {
+    // process-map-3wh.17. С правого хэндла путь обратной связи разворачивался
+    // бы на всю ширину полотна на той же высоте, что и прямые рёбра: линия
+    // пряталась бы за карточками и торчала обрубком справа от последнего
+    // этапа — стрелка в пустоту. У карты SNP обратных рёбер нет, поэтому
+    // проверка идёт на фикстуре.
+    const withBackEdge = buildSampleProcessMap();
+    withBackEdge.overviewEdges.push({
+      id: 'overview-edge-back',
+      source: 'stage-4',
+      target: 'stage-3',
+      kind: 'process',
+    });
+
+    const { edges } = buildOverviewGraph(withBackEdge, true);
+    const back = edges.find((edge) => edge.id === 'overview-edge-back');
+    const forward = edges.find((edge) => edge.id === 'overview-edge-3');
+
+    expect(back?.sourceHandle, 'обратное ребро обязано выходить снизу').toBe('bottom');
+    expect(back?.targetHandle).toBe('left');
+    // Прямые рёбра не задеты.
+    expect(forward?.sourceHandle).toBe('right');
+    expect(forward?.targetHandle).toBe('left');
   });
 
   it('рамка потока подписана строкой из ДАННЫХ карты, а не из ru.ts', () => {

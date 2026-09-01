@@ -397,17 +397,29 @@ export function buildOverviewGraph(
   const stageIds = new Set(map.stages.map((stage) => stage.id));
   const edges: FlowEdge[] = [];
 
+  // Номер этапа нужен, чтобы отличить обратную связь от прямого перехода:
+  // этапы стоят слева направо по номеру (process-map-3wh.17).
+  const stageNumber = new Map(map.stages.map((stage) => [stage.id, stage.number]));
+
   for (const edge of map.overviewEdges) {
     if (edge.kind === 'process') {
       if (!stageIds.has(edge.source) || !stageIds.has(edge.target)) {
         continue;
       }
+      // ОБРАТНАЯ СВЯЗЬ ведётся СНИЗУ, а не справа. С правого хэндла путь
+      // разворачивался бы на всю ширину полотна на той же высоте, что и прямые
+      // рёбра: линия пряталась бы за карточками и торчала обрубком справа от
+      // последнего этапа — читатель видел бы стрелку в пустоту и решил, что
+      // карта обрезана. У карты SNP обратных рёбер нет, поэтому случай всплыл
+      // только на карте MRP («Утверждение финального сценария» → «Согласование
+      // изменений», линия [112] слайда 8).
+      const backward = (stageNumber.get(edge.source) ?? 0) > (stageNumber.get(edge.target) ?? 0);
       edges.push({
         id: edge.id,
         type: 'process',
         source: edge.source,
         target: edge.target,
-        sourceHandle: STAGE_HANDLE.right,
+        sourceHandle: backward ? STAGE_HANDLE.bottom : STAGE_HANDLE.right,
         targetHandle: STAGE_HANDLE.left,
         ...(edge.label === undefined ? {} : { label: edge.label }),
       });
