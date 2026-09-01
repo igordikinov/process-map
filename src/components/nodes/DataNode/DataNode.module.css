@@ -37,15 +37,26 @@
   border-left-color: var(--pm-integration);
 }
 
+/* Три стороны по отдельности, а НЕ border-color шорткатом (process-map-rni).
+   Левая сторона несёт цвет ПРОИСХОЖДЕНИЯ данных — нейтральный у платформы,
+   синий у внешней системы (см. .neutral и .system выше), — и шорткат её затирал:
+   при наведении обе становились сиреневыми, при выборе фиолетовыми, то есть
+   различие пропадало ровно в момент взаимодействия и легенда в этот момент
+   врала. У карточки этапа (StageCard) обратный случай — там верхняя полоса
+   кодирует СОСТОЯНИЕ, и её перекраска намеренна. */
 .card:hover,
 .card:focus-visible {
-  border-color: var(--scp-color-brand-300);
+  border-top-color: var(--scp-color-brand-300);
+  border-right-color: var(--scp-color-brand-300);
+  border-bottom-color: var(--scp-color-brand-300);
   box-shadow: var(--pm-shadow-stage-active);
   outline: none;
 }
 
 .selected {
-  border-color: var(--scp-accent-primary);
+  border-top-color: var(--scp-accent-primary);
+  border-right-color: var(--scp-accent-primary);
+  border-bottom-color: var(--scp-accent-primary);
   box-shadow: 0 0 0 var(--scp-paddings-xs) var(--pm-node-focus-ring);
 }
 
