@@ -19,7 +19,10 @@
   box-sizing: border-box;
   align-items: center;
   padding: 0 var(--scp-paddings-m);
-  border: 1px solid var(--scp-border-neutral-tertiary);
+  /* Рамка темнее макетной — решение владельца от 01.09.2026, довод в токене.
+     ШИРИНУ НЕ ТРОГАТЬ: 2px отклонены в process-map-30v (затирают полоску типа)
+     и ломают квадрат свёрнутой легенды в компактном режиме. */
+  border: 1px solid var(--pm-node-border);
   border-left: var(--pm-node-accent-bar) solid var(--pm-node-accent-neutral);
   border-radius: var(--scp-border-radius-md);
   margin: 0;
