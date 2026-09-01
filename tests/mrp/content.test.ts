@@ -127,7 +127,16 @@ describe('карта MRP: содержание слайда 8', () => {
         'Формирование заявок на закупку',
       ].sort(),
     );
-    expect(withInputs.flatMap((node) => node.inputs ?? [])).toHaveLength(13);
+    expect(withInputs.flatMap((node) => node.inputs ?? [])).toHaveLength(12);
+    // Заголовок перечня «Параметры закупки:» входом НЕ является и отрезается
+    // (block_items_start, тот же дефект, что в process-map-t9j). Ни один вход
+    // не оканчивается двоеточием.
+    expect(
+      withInputs.flatMap((node) => node.inputs ?? []).filter((line) => line.endsWith(':')),
+    ).toEqual([]);
+    expect(nodes.find((node) => node.id === 'formirovanie-zayavok-na-zakupku')?.inputs?.[0]).toBe(
+      'Lead time, MOQ, min/max партия, кратность, периодичность',
+    );
   });
 
   it('warningsCount не проставлен, группы пусты', () => {

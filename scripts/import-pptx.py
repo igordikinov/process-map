@@ -162,7 +162,7 @@ MAP_ID_MRP = "mrp"
 MAP_TITLE_MRP = "Процесс планирования потребности в материалах"
 MAP_MODULE_LABEL_MRP = "Модуль MRP"
 MAP_UPDATED_AT_MRP = "2026-09-01"
-MAP_DATA_FINGERPRINT_MRP = "e31d47374e95384045f03f2aef416d15c3d4258a243a4234ec453baca433f28e"
+MAP_DATA_FINGERPRINT_MRP = "f816150c035c26e7571c2839646cc649e01b70f891a01fdec289dc857c721493"
 
 
 @dataclass(frozen=True)
@@ -1894,7 +1894,13 @@ def build_single_slide_map(
         draft = best[1]
         tb.consumed_by = f"входы узла {draft.node_id}"
         proxies.append((tb.box, draft.node_id))
-        draft.inputs.extend(tb.paragraphs)
+        # Заголовок перечня («Параметры закупки:») — не исходные данные, а
+        # подпись над ними. Та же функция и тот же дефект, что в process-map-t9j:
+        # там заголовок уезжал в данные отдельной карточкой, здесь — отдельным
+        # входом. Срез не применяется, если после него ничего не осталось:
+        # подпись из одного заголовка лучше сохранить целиком, чем потерять.
+        items = tb.paragraphs[block_items_start(tb.paragraphs) :]
+        draft.inputs.extend(items or tb.paragraphs)
 
     # 5. Рёбра — три источника в жёстком порядке.
     node_boxes: list[tuple[Box, str]] = [(d.box, d.node_id) for d in drafts]
