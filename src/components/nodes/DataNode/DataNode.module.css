@@ -12,11 +12,15 @@
   flex-direction: column;
   justify-content: center;
   padding: 0 var(--scp-paddings-m);
-  border: 1px solid var(--scp-border-neutral-tertiary);
+  /* НЕ --scp-border-neutral-tertiary: он равен #eaeaea, то есть в точности
+     серой заливке внешнего, и рамка исчезала совсем (process-map-c5s). */
+  border: 1px solid var(--pm-node-border);
   border-left: var(--pm-node-accent-bar) solid var(--pm-node-accent-neutral);
   border-radius: var(--scp-border-radius-md);
   margin: 0;
-  background: var(--scp-background-primary);
+  /* Внешнее: колонки входов и выходов — артефакты, а не шаги процесса
+     (process-map-c5s). */
+  background: var(--pm-node-bg-external);
   box-shadow: var(--pm-shadow-node-data);
   cursor: pointer;
   font-family: inherit;

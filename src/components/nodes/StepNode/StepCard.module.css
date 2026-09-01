@@ -26,7 +26,9 @@
   border-left: var(--pm-node-accent-bar) solid var(--pm-node-accent-neutral);
   border-radius: var(--scp-border-radius-md);
   margin: 0;
-  background: var(--scp-background-primary);
+  /* Фокусная заливка по умолчанию; .integration гасит её в серую, .warning —
+     в кремовую (process-map-c5s). */
+  background: var(--pm-node-bg-focus);
   box-shadow: var(--pm-shadow-node);
   cursor: pointer;
   font-family: inherit;
@@ -43,6 +45,7 @@
 
 .integration {
   border-left-color: var(--pm-integration);
+  background: var(--pm-node-bg-external);
 }
 
 /* SPEC §4.2: фон --pm-warning-bg, полоска --pm-warning-stroke.

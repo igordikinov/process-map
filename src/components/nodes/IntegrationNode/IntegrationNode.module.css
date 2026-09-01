@@ -10,10 +10,13 @@
   height: var(--pm-io-node-height);
   align-items: center;
   padding: 0 var(--scp-paddings-m);
-  border: 1px solid var(--scp-border-neutral-tertiary);
+  /* НЕ --scp-border-neutral-tertiary: он равен #eaeaea, то есть в точности
+     серой заливке внешнего, и рамка исчезала совсем (process-map-c5s). */
+  border: 1px solid var(--pm-node-border);
   border-left: var(--pm-stage-accent-bar) solid var(--pm-integration);
   border-radius: var(--scp-border-radius-md);
-  background: var(--scp-background-primary);
+  /* Внешнее: карточка смежной системы (process-map-c5s). */
+  background: var(--pm-node-bg-external);
   gap: var(--pm-space-9);
 }
 

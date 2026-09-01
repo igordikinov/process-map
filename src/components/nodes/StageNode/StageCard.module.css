@@ -12,11 +12,17 @@
   height: var(--pm-stage-node-height);
   flex-direction: column;
   padding: var(--scp-paddings-l);
-  border: 1px solid var(--scp-border-neutral-tertiary);
-  border-top: var(--pm-stage-accent-bar) solid var(--scp-color-neutral-200);
+  /* НЕ --scp-border-neutral-tertiary (#eaeaea): на сиреневой заливке такая
+     рамка почти пропадает (process-map-c5s). */
+  border: 1px solid var(--pm-node-border);
+  /* Полоса состояния этапа: в покое — тем же нейтральным, что и остальная
+     рамка, иначе толстая полоса читается СЛАБЕЕ волосяных боков и выглядит
+     пропавшей (process-map-c5s). Активный этап перекрашивает её ниже. */
+  border-top: var(--pm-stage-accent-bar) solid var(--pm-node-border);
   border-radius: var(--scp-border-radius-md);
   margin: 0;
-  background: var(--scp-background-primary);
+  /* Фокусное: этап процесса (process-map-c5s). */
+  background: var(--pm-node-bg-focus);
   box-shadow: var(--pm-shadow-stage);
   cursor: pointer;
   font-family: inherit;
