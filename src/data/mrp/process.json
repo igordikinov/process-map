@@ -18,6 +18,7 @@
           "type": "data",
           "label": "Плановые заказы из SNP, PS",
           "direction": "in",
+          "system": "INPLAN",
           "position": {
             "x": 0,
             "y": 0
@@ -89,6 +90,7 @@
           "type": "data",
           "label": "Основные и транзакционные данные из ERP",
           "direction": "in",
+          "system": "ERP",
           "position": {
             "x": 0,
             "y": 72
@@ -103,6 +105,7 @@
           "type": "data",
           "label": "Рекомендованные уровни запасов из MEIO",
           "direction": "in",
+          "system": "IO",
           "position": {
             "x": 0,
             "y": 144
@@ -165,7 +168,32 @@
           "kind": "process"
         }
       ],
-      "inputs": [],
+      "inputs": [
+        {
+          "system": "INPLAN",
+          "label": "Плановые заказы из SNP, PS",
+          "stage": 1,
+          "direction": "in"
+        },
+        {
+          "system": "PS",
+          "label": "Плановые заказы из SNP, PS",
+          "stage": 1,
+          "direction": "in"
+        },
+        {
+          "system": "ERP",
+          "label": "Основные и транзакционные данные из ERP",
+          "stage": 1,
+          "direction": "in"
+        },
+        {
+          "system": "IO",
+          "label": "Рекомендованные уровни запасов из MEIO",
+          "stage": 1,
+          "direction": "in"
+        }
+      ],
       "outputs": []
     },
     {
@@ -410,6 +438,30 @@
       "source": "stage-3-analiz-i-korrektirovka-rezultatov",
       "target": "stage-4-scenarnoe-planirovanie",
       "kind": "process"
+    },
+    {
+      "id": "ov-INPLAN--stage-1-raschet-potrebnosti",
+      "source": "INPLAN",
+      "target": "stage-1-raschet-potrebnosti",
+      "kind": "integration"
+    },
+    {
+      "id": "ov-PS--stage-1-raschet-potrebnosti",
+      "source": "PS",
+      "target": "stage-1-raschet-potrebnosti",
+      "kind": "integration"
+    },
+    {
+      "id": "ov-ERP--stage-1-raschet-potrebnosti",
+      "source": "ERP",
+      "target": "stage-1-raschet-potrebnosti",
+      "kind": "integration"
+    },
+    {
+      "id": "ov-IO--stage-1-raschet-potrebnosti",
+      "source": "IO",
+      "target": "stage-1-raschet-potrebnosti",
+      "kind": "integration"
     }
   ]
 }

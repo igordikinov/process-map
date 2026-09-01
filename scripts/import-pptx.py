@@ -162,7 +162,7 @@ MAP_ID_MRP = "mrp"
 MAP_TITLE_MRP = "Процесс планирования потребности в материалах"
 MAP_MODULE_LABEL_MRP = "Модуль MRP"
 MAP_UPDATED_AT_MRP = "2026-09-01"
-MAP_DATA_FINGERPRINT_MRP = "f816150c035c26e7571c2839646cc649e01b70f891a01fdec289dc857c721493"
+MAP_DATA_FINGERPRINT_MRP = "394e6ee9b381b0fd01eda89ffc7391993810474ae7c0cdee669023bf429fc9cd"
 
 
 @dataclass(frozen=True)
@@ -830,7 +830,23 @@ INTEGRATION_FILL = "srgb:A6A6A6"
 INTEGRATION_TEXT_RE = re.compile(r"^Передача\b.*\b(из|в)\s+модул", re.IGNORECASE)
 WARNING_TEXT_RE = re.compile(r"предупрежден", re.IGNORECASE)
 WARNING_ITEM_RE = re.compile(r"^Предупреждени", re.IGNORECASE)
-SYSTEM_RE = re.compile(r"(?<![A-Za-zА-Яа-я])(" + "|".join(SYSTEM_CODES) + r")(?![A-Za-zА-Яа-я])")
+# Как система названа в тексте презентации -> её код в схеме.
+#
+# ПОЧЕМУ АЛИАСЫ, А НЕ НОВЫЕ КОДЫ. Владелец уже зафиксировал в src/i18n/ru.ts,
+# что IO расшифровывается как MEIO (Multi Echelon Inventory Optimization), а
+# INPLAN — это SNP (Supply Network Planning). Завести MEIO и SNP отдельными
+# кодами значило бы получить два кода на один модуль — против process-map-b67.
+# На слайде 8 презентации MRP модули названы полными именами, поэтому без
+# алиасов автоматика молчит: у карты не было бы ни одной внешней системы.
+#
+# Для карты SNP это безопасно и проверено: в её текстах слова «SNP» и «MEIO»
+# как отдельные токены не встречаются ни разу, а сторож — побайтовое совпадение
+# пересобранного файла (process-map-3wh.10).
+SYSTEM_ALIASES = {"MEIO": "IO", "SNP": "INPLAN"}
+
+# Длинные токены раньше коротких: альтернация в регулярке жадна по порядку.
+SYSTEM_TOKENS = tuple(sorted(set(SYSTEM_CODES) | set(SYSTEM_ALIASES), key=len, reverse=True))
+SYSTEM_RE = re.compile(r"(?<![A-Za-zА-Яа-я])(" + "|".join(SYSTEM_TOKENS) + r")(?![A-Za-zА-Яа-я])")
 DIRECTION_IN_RE = re.compile(r"\bиз\s+модул", re.IGNORECASE)
 DIRECTION_OUT_RE = re.compile(r"(\bв\s+модул|Выгрузка\s+в\b)", re.IGNORECASE)
 
@@ -864,7 +880,27 @@ def node_type_for(shape: Shape) -> str:
 
 def detect_system(text: str) -> str | None:
     match = SYSTEM_RE.search(text)
-    return match.group(1) if match else None
+    if match is None:
+        return None
+    return SYSTEM_ALIASES.get(match.group(1), match.group(1))
+
+
+def detect_systems(text: str) -> list[str]:
+    """
+    ВСЕ системы, названные в тексте, в порядке появления и без повторов.
+
+    Нужна там, где одна подпись называет несколько модулей сразу: «Плановые
+    заказы из SNP, PS» на слайде 8 — это два входа, а не один. detect_system
+    отдаёт только первый и для такого случая не годится.
+    """
+    seen: set[str] = set()
+    codes: list[str] = []
+    for match in SYSTEM_RE.finditer(text):
+        code = SYSTEM_ALIASES.get(match.group(1), match.group(1))
+        if code not in seen:
+            seen.add(code)
+            codes.append(code)
+    return codes
 
 
 def detect_direction(text: str) -> str | None:
@@ -1980,6 +2016,43 @@ def build_single_slide_map(
             )
         stage_of_node[draft.node_id] = stage_of_node[steps[0]]
 
+    # 6b. Внешние системы этапа. Направление берётся ИЗ ПРОИСХОЖДЕНИЯ ФИГУРЫ
+    #     (draft.direction), а не из слова в тексте: detect_direction ищет
+    #     «из модул…»/«в модул…», а на слайде 8 написано «…из SNP, PS» — то есть
+    #     без правила «плашка левой колонки это вход» у карты не было бы ни одной
+    #     внешней системы, ни одного свимлейна и ни одной записи в stage.inputs.
+    #
+    #     Система выходной плашки в тексте не названа («…в систему исполнения
+    #     закупок»), и угадывать её запрещено (CLAUDE.md). Такая плашка остаётся
+    #     обычным data-узлом без ExternalIO — это отказ выдумывать, а не заглушка.
+    stage_io: dict[str, tuple[list[dict], list[dict]]] = {
+        meta["id"]: ([], []) for meta in stage_meta
+    }
+    number_of = {meta["id"]: meta["number"] for meta in stage_meta}
+    for shape, draft in artifacts:
+        stage_id = stage_of_node[draft.node_id]
+        codes = detect_systems(draft.label)
+        if not codes:
+            questions.append(
+                f"слайд {slide_no}: артефакт «{draft.label[:60]}» — система в тексте не названа, "
+                f"внешняя система для него не заведена"
+            )
+            continue
+        inputs_bucket, outputs_bucket = stage_io[stage_id]
+        bucket = inputs_bucket if draft.direction == "in" else outputs_bucket
+        for code in codes:
+            add_external_io(
+                bucket,
+                {
+                    "system": code,
+                    "label": draft.label,
+                    "stage": number_of[stage_id],
+                    "direction": draft.direction,
+                },
+            )
+        if draft.system is None:
+            draft.system = codes[0]
+
     # 7. Рёбра внутри этапа -> stage.edges, между этапами -> overviewEdges.
     stage_edges: dict[str, list[dict]] = {meta["id"]: [] for meta in stage_meta}
     overview_edges: list[dict] = []
@@ -2009,6 +2082,32 @@ def build_single_slide_map(
                 "kind": "process",
             }
         )
+    # 7b. Связи «система -> этап» на обзоре. Выводятся прямо из ExternalIO, а не
+    #     из линий: на слайде нет уровня обзора, но принадлежность известна точно
+    #     — артефакт лежит в своём этапе и называет свою систему. Формат концов
+    #     тот же, что у карты SNP: код системы как идентификатор.
+    for meta in stage_meta:
+        stage_id = meta["id"]
+        inputs_bucket, outputs_bucket = stage_io[stage_id]
+        for entry in inputs_bucket:
+            overview_edges.append(
+                {
+                    "id": f"ov-{entry['system']}--{stage_id}",
+                    "source": entry["system"],
+                    "target": stage_id,
+                    "kind": "integration",
+                }
+            )
+        for entry in outputs_bucket:
+            overview_edges.append(
+                {
+                    "id": f"ov-{stage_id}--{entry['system']}",
+                    "source": stage_id,
+                    "target": entry["system"],
+                    "kind": "integration",
+                }
+            )
+
     report.edges = sum(len(items) for items in stage_edges.values())
 
     # 8. Сборка этапов.
@@ -2034,9 +2133,8 @@ def build_single_slide_map(
                     for d in sorted(members, key=lambda d: (d.box.top, d.box.left, d.node_id))
                 ],
                 "edges": stage_edges[stage_id],
-                # ExternalIO этой карты — предмет process-map-3wh.10.
-                "inputs": [],
-                "outputs": [],
+                "inputs": stage_io[stage_id][0],
+                "outputs": stage_io[stage_id][1],
             }
         )
 

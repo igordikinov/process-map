@@ -97,15 +97,46 @@ describe('карта MRP: содержание слайда 8', () => {
     // ниже кромки слайда. Находят её только привязки stCxn/endCxn, поэтому
     // проверка стоит отдельно — она сторожит именно этот механизм.
     const ids = map.stages.map((stage) => stage.id);
-    const pairs = map.overviewEdges.map((edge) => [
-      ids.indexOf(edge.source) + 1,
-      ids.indexOf(edge.target) + 1,
-    ]);
+    const pairs = map.overviewEdges
+      .filter((edge) => edge.kind === 'process')
+      .map((edge) => [ids.indexOf(edge.source) + 1, ids.indexOf(edge.target) + 1]);
     expect(pairs).toHaveLength(4);
     expect(pairs).toContainEqual([1, 2]);
     expect(pairs).toContainEqual([2, 3]);
     expect(pairs).toContainEqual([3, 4]);
     expect(pairs, 'обратная связь этап 4 → этап 3 потеряна').toContainEqual([4, 3]);
+  });
+
+  it('внешние системы: четыре входа у этапа 1, ни одного выхода', () => {
+    // Коды выведены через алиасы: на слайде модули названы полными именами
+    // (SNP → INPLAN, MEIO → IO), потому что владелец уже закрепил эти коды в
+    // словаре систем. Система выходной плашки в тексте не названа, и угадывать
+    // её запрещено — ExternalIO для неё нет, и это отказ выдумывать.
+    expect(
+      map.stages
+        .flatMap((stage) => stage.inputs)
+        .map((io) => io.system)
+        .sort(),
+    ).toEqual(['ERP', 'INPLAN', 'IO', 'PS']);
+    expect(map.stages.flatMap((stage) => stage.outputs)).toEqual([]);
+    expect(map.stages[0]?.inputs).toHaveLength(4);
+
+    // «Плановые заказы из SNP, PS» называет ДВА модуля сразу — одна подпись,
+    // два входа. detect_system отдал бы только первый.
+    const fromOneLabel = map.stages
+      .flatMap((stage) => stage.inputs)
+      .filter((io) => io.label === 'Плановые заказы из SNP, PS')
+      .map((io) => io.system)
+      .sort();
+    expect(fromOneLabel).toEqual(['INPLAN', 'PS']);
+  });
+
+  it('каждая внешняя система связана с этапом на обзоре', () => {
+    const integrations = map.overviewEdges.filter((edge) => edge.kind === 'integration');
+    expect(integrations).toHaveLength(4);
+    for (const edge of integrations) {
+      expect(edge.target, 'вход обязан вести В этап').toBe(map.stages[0]?.id);
+    }
   });
 
   it('ключевые выходы есть только у этапа 3', () => {
