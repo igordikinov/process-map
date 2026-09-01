@@ -6,12 +6,12 @@
 // мышью по координатам, а перекрытие проверяется document.elementFromPoint.
 import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures';
-import { firstStepWithoutLink } from './helpers';
+import { firstStepWithoutLink, overridesKey } from './helpers';
 
 const VIEWPORT = { width: 1280, height: 720 };
 
 /** Ключ и формат overrides — SPEC §3, src/data/schema.ts. */
-const OVERRIDES_KEY = 'inplan-process-map:overrides:v1';
+const OVERRIDES_KEY = overridesKey('snp');
 
 /** Ширина панели — SPEC §4.3 и токен --pm-drawer-width. */
 const DRAWER_WIDTH = 360;

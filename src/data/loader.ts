@@ -16,8 +16,10 @@
 //     решает, что показать пользователю.
 import rawProcessJson from './snp/process.json';
 import {
-  OVERRIDES_STORAGE_KEY,
+  LEGACY_OVERRIDES_MAP_ID,
+  LEGACY_OVERRIDES_STORAGE_KEY,
   OverridesSchema,
+  overridesStorageKey,
   ProcessMapSchema,
   type Overrides,
   type ProcessMap,
@@ -25,6 +27,20 @@ import {
   type ScreenLink,
   type Stage,
 } from './schema';
+
+/**
+ * Идентификатор карты и её ключ overrides.
+ *
+ * Берётся ИЗ ДАННЫХ, а не из переменной сборки: тогда ключ выведен из того
+ * самого файла, который реально попал в бандл. Забытый MAP=mrp даёт карту SNP
+ * с ключом SNP — то есть просто вторую копию SNP, — а не данные MRP под чужим
+ * ключом (process-map-3wh.5).
+ */
+const MAP_ID = rawProcessJson.id;
+
+/** Ключ overrides ЗАГРУЖЕННОЙ карты. Экспортируется, чтобы тесты и отладка
+ *  брали ровно то значение, которым пользуется код, а не повторяли формулу. */
+export const OVERRIDES_KEY = overridesStorageKey(MAP_ID);
 
 // ───────────────────────────── чистые функции ─────────────────────────────
 
@@ -95,7 +111,7 @@ function getStorage(): Storage | null {
     const storage = globalThis.localStorage;
     // Наличие объекта ещё не гарантирует работоспособность (Safari private mode
     // отдаёт localStorage, но бросает на setItem), поэтому проверяем записью.
-    const probe = `${OVERRIDES_STORAGE_KEY}:probe`;
+    const probe = `${OVERRIDES_KEY}:probe`;
     storage.setItem(probe, '1');
     storage.removeItem(probe);
     return storage;
@@ -109,10 +125,46 @@ export function isStorageAvailable(): boolean {
   return getStorage() !== null;
 }
 
+/**
+ * Переносит правки со старого общего ключа на ключ карты SNP и возвращает их
+ * СЫРУЮ строку. Ничего не найдено — null.
+ *
+ * Три вещи здесь сделаны намеренно и каждая проверена тестом:
+ *   1) переносится сырая строка, а НЕ результат safeParseOverrides. Иначе
+ *      битое легаси-значение превратилось бы в {} и записалось поверх — то
+ *      есть молчаливая потеря, ровно та, которую этот файл обещает не делать;
+ *   2) легаси-ключ НЕ удаляется. Удаление необратимо, а решение о сбросе
+ *      принимает пользователь кнопкой (SPEC §4.4);
+ *   3) миграция работает только для карты, которой ключ принадлежал. Для
+ *      второй карты чужой черновик — не её данные.
+ *
+ * Провал записи по квоте не ошибка: значение всё равно возвращается, а
+ * миграция идемпотентно повторится при следующей загрузке.
+ */
+function migrateLegacyOverrides(): string | null {
+  if (MAP_ID !== LEGACY_OVERRIDES_MAP_ID) {
+    return null;
+  }
+  try {
+    const legacy = globalThis.localStorage?.getItem(LEGACY_OVERRIDES_STORAGE_KEY);
+    if (legacy === null || legacy === undefined || legacy === '') {
+      return null;
+    }
+    try {
+      globalThis.localStorage?.setItem(OVERRIDES_KEY, legacy);
+    } catch {
+      // Квота: перенос не «прилипнет», но правки пользователь всё равно увидит.
+    }
+    return legacy;
+  } catch {
+    return null;
+  }
+}
+
 /** Читает overrides из localStorage. Любая проблема → {}. */
 export function readStoredOverrides(): Overrides {
   try {
-    const raw = globalThis.localStorage?.getItem(OVERRIDES_STORAGE_KEY);
+    const raw = globalThis.localStorage?.getItem(OVERRIDES_KEY) ?? migrateLegacyOverrides();
     if (raw === null || raw === undefined) {
       return {};
     }
@@ -129,7 +181,7 @@ export function writeStoredOverrides(overrides: Overrides): boolean {
     return false;
   }
   try {
-    storage.setItem(OVERRIDES_STORAGE_KEY, JSON.stringify(overrides));
+    storage.setItem(OVERRIDES_KEY, JSON.stringify(overrides));
     return true;
   } catch {
     return false;
@@ -159,7 +211,7 @@ export function removeNodeOverride(nodeId: string): Overrides {
 /** Полный сброс правок («Сбросить правки», SPEC §4.4). */
 export function resetOverrides(): void {
   try {
-    globalThis.localStorage?.removeItem(OVERRIDES_STORAGE_KEY);
+    globalThis.localStorage?.removeItem(OVERRIDES_KEY);
   } catch {
     // Хранилище недоступно — сбрасывать нечего.
   }

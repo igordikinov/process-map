@@ -68,3 +68,15 @@ export async function firstStepWithoutLink(page: Page): Promise<string> {
 export async function openCalls(page: Page): Promise<OpenCall[]> {
   return page.evaluate(() => window.__openCalls ?? []);
 }
+
+/**
+ * Ключ overrides карты в localStorage (process-map-3wh.5).
+ *
+ * Формула ПОВТОРЕНА, а не импортирована из src/: e2e намеренно не зависят от
+ * кода приложения — проверка «что видит пользователь» не должна брать
+ * ожидаемое значение оттуда же, откуда его берёт приложение. Чтобы дубль не
+ * разъехался молча, обе строки пинует якорный тест в tests/loader-merge.test.ts.
+ */
+export function overridesKey(mapId: string): string {
+  return `inplan-process-map:${mapId}:overrides:v1`;
+}

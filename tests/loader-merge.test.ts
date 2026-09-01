@@ -2,6 +2,7 @@
 // Работают на фикстуре buildSampleProcessMap(), а не на реальном process.json.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  OVERRIDES_KEY,
   mergeOverrides,
   parseOverrides,
   readStoredOverrides,
@@ -12,7 +13,7 @@ import {
   writeStoredOverrides,
 } from '../src/data/loader';
 import {
-  OVERRIDES_STORAGE_KEY,
+  LEGACY_OVERRIDES_STORAGE_KEY,
   type Overrides,
   type ProcessMap,
   type ScreenLink,
@@ -186,7 +187,7 @@ describe('устойчивость localStorage', () => {
   });
 
   it('битый JSON под ключом → {} и merge продолжает работать', () => {
-    localStorage.setItem(OVERRIDES_STORAGE_KEY, '{не json');
+    localStorage.setItem(OVERRIDES_KEY, '{не json');
     const map = mapWithJsonScreen();
 
     expect(readStoredOverrides()).toEqual({});
@@ -196,7 +197,7 @@ describe('устойчивость localStorage', () => {
   });
 
   it('чужая структура под ключом → {}', () => {
-    localStorage.setItem(OVERRIDES_STORAGE_KEY, JSON.stringify({ foo: 'bar' }));
+    localStorage.setItem(OVERRIDES_KEY, JSON.stringify({ foo: 'bar' }));
     expect(readStoredOverrides()).toEqual({});
   });
 
@@ -219,7 +220,7 @@ describe('устойчивость localStorage', () => {
     vi.spyOn(Storage.prototype, 'setItem').mockImplementation((key: string) => {
       calls += 1;
       // Первый вызов — проба доступности хранилища, она должна проходить.
-      if (calls > 1 || key === OVERRIDES_STORAGE_KEY) {
+      if (calls > 1 || key === OVERRIDES_KEY) {
         throw new DOMException('quota', 'QuotaExceededError');
       }
     });
@@ -244,11 +245,75 @@ describe('устойчивость localStorage', () => {
     expect(readStoredOverrides()).toEqual({ 'node-b': { screen: null } });
   });
 
+  // --- миграция со старого общего ключа (process-map-3wh.5) -----------------
+
+  it('ключ карты отличается от легаси-ключа', () => {
+    // Якорь формулы. Её повторяет e2e/helpers.ts (e2e намеренно не импортируют
+    // src/), и без этого теста два места разъехались бы молча.
+    expect(OVERRIDES_KEY).toBe('inplan-process-map:snp:overrides:v1');
+    expect(LEGACY_OVERRIDES_STORAGE_KEY).toBe('inplan-process-map:overrides:v1');
+  });
+
+  it('правки со старого ключа читаются и копируются на ключ карты', () => {
+    const legacy: Overrides = { 'node-a': { screen: OVERRIDE_SCREEN } };
+    localStorage.setItem(LEGACY_OVERRIDES_STORAGE_KEY, JSON.stringify(legacy));
+
+    expect(readStoredOverrides()).toEqual(legacy);
+    expect(localStorage.getItem(OVERRIDES_KEY)).toBe(JSON.stringify(legacy));
+    // Легаси-ключ остаётся: удаление необратимо, а сброс — решение пользователя.
+    expect(localStorage.getItem(LEGACY_OVERRIDES_STORAGE_KEY)).not.toBeNull();
+  });
+
+  it('мигрирует СЫРУЮ строку, а не разобранное значение', () => {
+    // Если бы миграция переносила результат safeParseOverrides, битое значение
+    // превратилось бы в {} и записалось поверх — молчаливая потеря черновика.
+    localStorage.setItem(LEGACY_OVERRIDES_STORAGE_KEY, '{не json');
+
+    expect(readStoredOverrides()).toEqual({});
+    expect(localStorage.getItem(OVERRIDES_KEY)).toBe('{не json');
+  });
+
+  it('легаси-значение чужой структуры копируется как есть, а не как пустой объект', () => {
+    // Валидный JSON, но не Overrides. Шапка loader.ts обещает НЕ удалять
+    // повреждённое значение молча — миграция обязана соблюдать то же обещание.
+    // Мутация «писать разобранное значение» на битом JSON падает сразу (там
+    // JSON.parse бросает), а здесь прошла бы незамеченной: под новым ключом
+    // оказался бы {}, и черновик исчез бы безвозвратно.
+    localStorage.setItem(LEGACY_OVERRIDES_STORAGE_KEY, '{"foo":"bar"}');
+
+    expect(readStoredOverrides()).toEqual({});
+    expect(localStorage.getItem(OVERRIDES_KEY)).toBe('{"foo":"bar"}');
+  });
+
+  it('ключ карты имеет приоритет: миграция не затирает уже перенесённое', () => {
+    localStorage.setItem(OVERRIDES_KEY, JSON.stringify({ 'node-b': { screen: null } }));
+    localStorage.setItem(
+      LEGACY_OVERRIDES_STORAGE_KEY,
+      JSON.stringify({ 'node-a': { screen: null } }),
+    );
+
+    expect(readStoredOverrides()).toEqual({ 'node-b': { screen: null } });
+  });
+
+  it('провал записи по квоте не мешает прочитать легаси-правки', () => {
+    localStorage.setItem(
+      LEGACY_OVERRIDES_STORAGE_KEY,
+      JSON.stringify({ 'node-a': { screen: null } }),
+    );
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new DOMException('quota', 'QuotaExceededError');
+    });
+
+    // Перенос не «прилипнет», но пользователь свои правки видит; миграция
+    // идемпотентно повторится при следующей загрузке.
+    expect(readStoredOverrides()).toEqual({ 'node-a': { screen: null } });
+  });
+
   it('resetOverrides удаляет ключ целиком', () => {
     setNodeOverride('node-a', OVERRIDE_SCREEN);
     resetOverrides();
 
-    expect(localStorage.getItem(OVERRIDES_STORAGE_KEY)).toBeNull();
+    expect(localStorage.getItem(OVERRIDES_KEY)).toBeNull();
     expect(readStoredOverrides()).toEqual({});
   });
 });

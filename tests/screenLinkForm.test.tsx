@@ -8,12 +8,15 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { NodeDrawer, ScreenLinkSection, TITLE_MAX_LENGTH } from '../src/components/NodeDrawer';
 import { loadBaseProcessMap, readStoredOverrides, setNodeOverride } from '../src/data/loader';
-import { OVERRIDES_STORAGE_KEY, type ProcessNode } from '../src/data/schema';
+import { overridesStorageKey, type ProcessNode } from '../src/data/schema';
 import { refreshProcessMap, useProcessMap } from '../src/hooks/useProcessMap';
 import { ru } from '../src/i18n/ru';
 import { createInitialState, useProcessStore } from '../src/store/useProcessStore';
 
 const map = loadBaseProcessMap();
+// Ключ берётся из id загруженной карты, а не из литерала: у каждой карты свой
+// (process-map-3wh.5).
+const storageKey = overridesStorageKey(map.id);
 
 /**
  * Узел из реальных данных: тесты не выдумывают содержание процесса.
@@ -39,7 +42,7 @@ function nodeById(id: string): ProcessNode {
 
 /** Сырое содержимое ключа overrides — важно РАЗЛИЧАТЬ «нет записи» и «screen: null». */
 function rawOverrides(): unknown {
-  const raw = localStorage.getItem(OVERRIDES_STORAGE_KEY);
+  const raw = localStorage.getItem(storageKey);
   return raw === null ? null : JSON.parse(raw);
 }
 

@@ -14,11 +14,12 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures';
+import { overridesKey } from './helpers';
 
 const VIEWPORT = { width: 1280, height: 720 };
 
 /** Ключ overrides — SPEC §3, src/data/schema.ts. */
-const OVERRIDES_KEY = 'inplan-process-map:overrides:v1';
+const OVERRIDES_KEY = overridesKey('snp');
 
 /** Файл-источник истины: playwright запускается из корня репозитория. */
 const PROCESS_JSON = 'src/data/snp/process.json';

@@ -167,7 +167,7 @@ interface ProcessMap {
 
 ### Overrides (localStorage)
 
-Ключ `inplan-process-map:overrides:v1`, значение `Record<nodeId, { screen?: ScreenLink | null }>`. `loader.ts` накладывает overrides поверх JSON при старте. Экспорт отдаёт полный слитый `process.json`; импорт валидирует zod'ом и заменяет overrides.
+Ключ **свой у каждой карты**: `inplan-process-map:<id>:overrides:v1`, то есть `inplan-process-map:snp:overrides:v1` (process-map-3wh.5). Выводится в `loader.ts` из поля `id` той карты, которая попала в бандл, — тогда содержание и ключ не могут разъехаться. Карты раздаются с одного origin, а `localStorage` общий на origin: с единым ключом «Сбросить правки» на одной карте стирал бы черновик другой. Правки, сохранённые под прежним общим ключом `inplan-process-map:overrides:v1`, при первом чтении копируются на ключ SNP; старый ключ не удаляется. Значение `Record<nodeId, { screen?: ScreenLink | null }>`. `loader.ts` накладывает overrides поверх JSON при старте. Экспорт отдаёт полный слитый `process.json`; импорт валидирует zod'ом и заменяет overrides.
 
 Из отредактированного файла импорт переносит **только `screen` у узлов** — это всё, что физически содержат overrides. Молча игнорируются `version`, `updatedAt`, `title`, координаты узлов, рёбра, `stage.screen` и новые узлы: пользователь может отредактировать выгруженный файл и не понять, почему часть правок не приехала (`process-map-m8w`). Решение владельца от 31.08.2026 — оставить как есть, модель overrides не расширять: расширение сломало бы контракт этого же раздела и round-trip, описанный в шапке `src/utils/processTransfer.ts`. Вопрос о предупреждении пользователя вынесен отдельно, вместе с прочими неутверждёнными строками UI (`process-map-ajo`).
 

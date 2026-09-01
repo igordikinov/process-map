@@ -164,7 +164,32 @@ export type OverrideEntry = z.infer<typeof OverrideEntrySchema>;
 export const OverridesSchema = z.record(z.string(), OverrideEntrySchema);
 export type Overrides = z.infer<typeof OverridesSchema>;
 
-export const OVERRIDES_STORAGE_KEY = 'inplan-process-map:overrides:v1';
+/**
+ * Ключ overrides в localStorage — СВОЙ У КАЖДОЙ КАРТЫ (process-map-3wh.5).
+ *
+ * ЗАЧЕМ. Карты раздаются с одного origin (корень и подкаталог /mrp/), а
+ * localStorage общий на origin. С единым ключом обе карты писали бы правки в
+ * одно пространство имён по nodeId. Визуально это не ломается: mergeOverrides
+ * молча игнорирует неизвестные id, поэтому чужие правки просто «не работают».
+ * Но «Сбросить правки» на одной карте стирал бы черновик другой, а «Экспорт
+ * JSON» отдавал бы чистый файл сразу после правки. Такое ловится жалобой, а не
+ * тестом.
+ */
+export function overridesStorageKey(mapId: string): string {
+  return `inplan-process-map:${mapId}:overrides:v1`;
+}
+
+/**
+ * Ключ до разделения карт. Оставлен ТОЛЬКО для миграции: под ним лежат правки,
+ * сделанные владельцем до этой задачи (docs/ссылки-на-экраны.md — черновик,
+ * который переносят в репозиторий руками). Новых записей под ним не бывает,
+ * и loader его НЕ УДАЛЯЕТ: удаление необратимо, а решение о сбросе принимает
+ * пользователь кнопкой (SPEC §4.4).
+ */
+export const LEGACY_OVERRIDES_STORAGE_KEY = 'inplan-process-map:overrides:v1';
+
+/** Карта, которой принадлежал легаси-ключ: мигрируем правки только в неё. */
+export const LEGACY_OVERRIDES_MAP_ID = 'snp';
 
 /**
  * Проверка ссылочной целостности ProcessMap:

@@ -11,12 +11,12 @@
 // document.elementFromPoint, а не fireEvent.
 import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures';
-import { firstStepWithoutLink } from './helpers';
+import { firstStepWithoutLink, overridesKey } from './helpers';
 
 const VIEWPORT = { width: 1280, height: 720 };
 
 /** Ключ и формат overrides — SPEC §3, src/data/schema.ts. */
-const OVERRIDES_KEY = 'inplan-process-map:overrides:v1';
+const OVERRIDES_KEY = overridesKey('snp');
 
 /**
  * Карточка ШАГА. До process-map-73m этот класс носили и интеграции, а сценарий

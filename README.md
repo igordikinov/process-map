@@ -397,7 +397,7 @@ http://host/process-map/     ->  http://host/process-map/assets/index-CTQNOulP.j
 Режим не запоминается: после перезагрузки всегда «Просмотр» (SPEC §4.4).
 
 **Правки живут только в браузере конкретного пользователя.** Они хранятся в `localStorage`
-под ключом `inplan-process-map:overrides:v1` и накладываются поверх JSON при старте
+под ключом карты `inplan-process-map:snp:overrides:v1` и накладываются поверх JSON при старте
 (`src/data/loader.ts`). Из этого следует:
 
 - ссылки, проставленные методологом, **не видны другим пользователям** и **не попадают
@@ -539,7 +539,7 @@ http://host/process-map/     ->  http://host/process-map/assets/index-CTQNOulP.j
       с `sandbox` без `allow-same-origin` (тогда `localStorage` недоступен и запись
       молча не происходит); браузер в приватном режиме; политика вики, чистящая
       хранилище стороннего фрейма. Проверить в Console:
-      `localStorage.getItem('inplan-process-map:overrides:v1')` — если бросает ошибку
+      `localStorage.getItem('inplan-process-map:snp:overrides:v1')` — если бросает ошибку
       или возвращает `null` сразу после сохранения, дело в доступе к хранилищу.
 - [ ] **Сделать:** нажать «Экспорт JSON», убедиться, что файл `process.json` скачался
       и внутри у нужного шага есть заполненный `screen`.

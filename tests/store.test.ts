@@ -1,5 +1,6 @@
 // Тесты состояния UI (SPEC.md §4.1, §4.4, §4.6).
 import { beforeEach, describe, expect, it } from 'vitest';
+import { OVERRIDES_KEY } from '../src/data/loader';
 import { createInitialState, useProcessStore } from '../src/store/useProcessStore';
 
 const get = () => useProcessStore.getState();
@@ -22,7 +23,7 @@ describe('useProcessStore', () => {
     useProcessStore.setState(createInitialState());
 
     expect(get().mode).toBe('view');
-    expect(localStorage.getItem('inplan-process-map:overrides:v1')).toBeNull();
+    expect(localStorage.getItem(OVERRIDES_KEY)).toBeNull();
   });
 
   it('navigateToStage переводит на уровень 2', () => {
