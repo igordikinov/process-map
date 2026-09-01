@@ -97,7 +97,7 @@ from pptx.enum.shapes import MSO_SHAPE_TYPE
 ROOT = Path(__file__).resolve().parent.parent
 PPTX_PATH = ROOT / "SNP Е2Е процесс.pptx"
 JSON_PATH = ROOT / "src" / "data" / "snp" / "process.json"
-REQUIRED_NODES_PATH = ROOT / "tests" / "fixtures" / "required-nodes.json"
+REQUIRED_NODES_PATH = ROOT / "tests" / "fixtures" / "snp" / "required-nodes.json"
 
 MAP_VERSION = "1.0.0"
 

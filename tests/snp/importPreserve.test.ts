@@ -6,9 +6,9 @@ import {
   ProcessMapSchema,
   StageSchema,
   SystemCodeSchema,
-} from '../src/data/schema.ts';
-import { ru } from '../src/i18n/ru.ts';
-import processJson from '../src/data/snp/process.json';
+} from '../../src/data/schema.ts';
+import { ru } from '../../src/i18n/ru.ts';
+import processJson from '../../src/data/snp/process.json';
 
 // Контракт между scripts/import-pptx.py и src/data/schema.ts (задача process-map-2dj).
 //

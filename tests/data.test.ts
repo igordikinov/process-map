@@ -6,47 +6,15 @@ import {
   type ProcessNode,
 } from '../src/data/schema.ts';
 import { buildSampleProcessMap } from './fixtures/sample-process.ts';
-import processJson from '../src/data/snp/process.json';
-import requiredNodeIds from './fixtures/required-nodes.json';
 
-// Источник данных для позитивных тестов схемы/целостности — реальный
-// src/data/snp/process.json, сгенерированный scripts/import-pptx.py из презентации
-// (задача process-map-np4). Фикстура buildSampleProcessMap остаётся для
-// негативных кейсов, где документ намеренно портится.
-function loadProcessMap(): unknown {
-  return processJson;
-}
+// Механика схемы на синтетической фикстуре: что zod принимает, что отвергает и
+// что сохраняет при разборе. Реальную карту этот файл НЕ читает намеренно
+// (process-map-3wh.3) — проверки на настоящих данных живут в
+// tests/mapContract.test.ts (общие для всех карт) и tests/snp/content.test.ts
+// (только про SNP). Так тест схемы не падает от правки презентации, а правка
+// презентации не диагностируется как поломка схемы.
 
 describe('ProcessMapSchema', () => {
-  it('парсит валидные данные без ошибок', () => {
-    expect(() => ProcessMapSchema.parse(loadProcessMap())).not.toThrow();
-  });
-
-  it('содержит не менее 40 узлов суммарно по всем этапам', () => {
-    const map = ProcessMapSchema.parse(loadProcessMap());
-    const totalNodes = map.stages.reduce((sum, stage) => sum + stage.nodes.length, 0);
-    expect(totalNodes).toBeGreaterThanOrEqual(40);
-  });
-
-  it('не содержит проблем ссылочной целостности', () => {
-    const map = ProcessMapSchema.parse(loadProcessMap());
-    expect(validateIntegrity(map)).toEqual([]);
-  });
-
-  it('id узлов уникальны глобально по всему документу', () => {
-    const map = ProcessMapSchema.parse(loadProcessMap());
-    const ids = map.stages.flatMap((stage) => stage.nodes.map((node) => node.id));
-    expect(new Set(ids).size).toBe(ids.length);
-  });
-
-  it('содержит все обязательные id узлов из tests/fixtures/required-nodes.json', () => {
-    const map = ProcessMapSchema.parse(loadProcessMap());
-    const present = new Set(map.stages.flatMap((stage) => stage.nodes.map((node) => node.id)));
-    expect(requiredNodeIds.length).toBeGreaterThanOrEqual(40);
-    const missing = requiredNodeIds.filter((id) => !present.has(id));
-    expect(missing).toEqual([]);
-  });
-
   it('отвергает узел без обязательного position', () => {
     const map = buildSampleProcessMap();
     const stage = map.stages[0];
@@ -88,40 +56,6 @@ describe('ProcessMapSchema', () => {
   });
 
   // --- direction у data-узлов (SPEC §3, задача process-map-24p) ----------------
-
-  it('у каждого data-узла проставлено direction, и только у data-узлов', () => {
-    // Импортёр знает направление точно (по происхождению фигуры), поэтому
-    // «поле опционально» относится к чужим документам, а не к нашему файлу:
-    // здесь оно обязано стоять у всех 100% data-узлов. Если проставлять его
-    // перестанут, splitStageDataNodes молча откатится на геометрию и вернёт
-    // ноль выходов у этапов 1 и 2 — ровно тот дефект, который чинил 24p.
-    const map = ProcessMapSchema.parse(loadProcessMap());
-    const nodes = map.stages.flatMap((stage) => stage.nodes);
-    const data = nodes.filter((node) => node.type === 'data');
-
-    expect(data.length).toBeGreaterThan(0);
-    expect(data.filter((node) => node.direction === undefined).map((node) => node.id)).toEqual([]);
-    expect(
-      nodes.filter((node) => node.type !== 'data' && node.direction !== undefined).map((n) => n.id),
-    ).toEqual([]);
-  });
-
-  it('у каждого этапа есть и входы, и выходы', () => {
-    // Регрессия 24p: у этапов 1 и 2 геометрическое правило давало ноль выходов
-    // при 2–3 ключевых выходах на карточке обзора — экран противоречил сам себе.
-    const map = ProcessMapSchema.parse(loadProcessMap());
-    for (const stage of map.stages) {
-      const data = stage.nodes.filter((node) => node.type === 'data');
-      expect(
-        data.filter((node) => node.direction === 'in').length,
-        `этап ${stage.number}: входы`,
-      ).toBeGreaterThan(0);
-      expect(
-        data.filter((node) => node.direction === 'out').length,
-        `этап ${stage.number}: выходы`,
-      ).toBeGreaterThan(0);
-    }
-  });
 
   it('принимает узел без direction: поле необязательное', () => {
     const map = buildSampleProcessMap();

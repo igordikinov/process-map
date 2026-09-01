@@ -1,10 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  ProcessMapSchema,
-  validateIntegrity,
-  type ProcessNode,
-  type Stage,
-} from '../src/data/schema.ts';
+import { ProcessMapSchema, type ProcessNode, type Stage } from '../src/data/schema.ts';
 import {
   NODE_SIZE,
   countOverlappingPairs,
@@ -17,6 +12,12 @@ import {
 import { splitStageDataNodes } from '../src/utils/stageNodes.ts';
 import processJson from '../src/data/snp/process.json';
 
+// Инвариант «координаты файла совпадают с пересчётом» уехал в
+// tests/mapContract.test.ts: он про карту, а не про раскладку, и обязан
+// сторожить каждую карту, а не только SNP (process-map-3wh.3). Здесь остаётся
+// механика самой раскладки, проверенная на SNP как на представительном
+// документе.
+//
 // Координаты в src/data/snp/process.json расставляет `npm run layout`
 // (scripts/layout.ts, задача process-map-350). Тест проверяет результат
 // на реальных данных: раскладка не должна давать наложенных карточек и
@@ -106,31 +107,6 @@ describe('раскладка process.json', () => {
         expect(intruders, `этап ${stage.number}, группа ${group.id}`).toHaveLength(0);
       }
     }
-  });
-
-  it('координаты в файле совпадают с пересчётом (конвейер доведён до конца)', () => {
-    for (const stage of map.stages) {
-      const first = layoutStage(stage);
-      const second = layoutStage(stage);
-      for (const node of stage.nodes) {
-        const placement = first.get(node.id);
-        expect(placement, `${node.id} не получил координат`).toBeDefined();
-        expect(second.get(node.id)).toEqual(placement);
-        expect(
-          placement,
-          `${node.id}: координаты файла не совпадают с раскладкой по исходной геометрии слайда. ` +
-            'Похоже, прогнан только импорт (scripts/import-pptx.py) — в файле сырая ' +
-            'геометрия презентации, на которой карточки накладываются. ' +
-            'Конвейер целиком: npm run data',
-        ).toEqual(node.position);
-      }
-    }
-  });
-
-  it('содержание документа не изменилось: схема и ссылочная целостность в порядке', () => {
-    expect(validateIntegrity(map)).toEqual([]);
-    const totalNodes = map.stages.reduce((sum, stage) => sum + stage.nodes.length, 0);
-    expect(totalNodes).toBeGreaterThanOrEqual(40);
   });
 });
 
