@@ -23,16 +23,37 @@ export default defineConfig({
   reporter: isCI ? [['list'], ['html', { open: 'never' }]] : 'list',
 
   use: {
-    baseURL: 'http://localhost:5173',
     trace: 'on-first-retry',
   },
+
+  // Проект на карту (process-map-3wh.13). Имя проекта — id карты: по нему
+  // e2e/maps/expected.ts выбирает, что ожидать на экране.
+  //
+  // ПОЧЕМУ У MRP ТОЛЬКО СМОУК. Остальные десять спеков — про механику
+  // интерфейса и содержат подписи и id узлов SNP дословно. Второй прогон для
+  // другой карты не добавил бы сигнала, зато добавил бы времени и новый класс
+  // падений. Требования, которые эти спеки молча предъявляют к данным, подняты
+  // в tests/mapContract.test.ts и проверяются там для КАЖДОЙ карты.
+  projects: [
+    { name: 'snp', use: { baseURL: 'http://localhost:5173' } },
+    { name: 'mrp', testDir: './e2e/maps', use: { baseURL: 'http://localhost:5174' } },
+  ],
 
   // Сервер поднимает сам Playwright, отдельного шага в CI быть НЕ должно:
   // reuseExistingServer в CI равен false, и на занятом порту прогон упадёт
   // с «is already used».
-  webServer: {
-    command: 'npm run dev',
-    url: 'http://localhost:5173',
-    reuseExistingServer: !isCI,
-  },
+  // Порт второй карты закреплён только здесь и в скрипте dev:mrp: в CI
+  // reuseExistingServer=false, и занятый порт уронит прогон.
+  webServer: [
+    {
+      command: 'npm run dev',
+      url: 'http://localhost:5173',
+      reuseExistingServer: !isCI,
+    },
+    {
+      command: 'npm run dev:mrp',
+      url: 'http://localhost:5174',
+      reuseExistingServer: !isCI,
+    },
+  ],
 });

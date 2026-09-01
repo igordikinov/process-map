@@ -1,6 +1,6 @@
 import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
-import { DEFAULT_MAP, mapAlias, mapIdFromEnv, mapOutDir, mapTitle } from './scripts/mapTarget.ts';
+import { mapAlias, mapIdFromEnv, mapOutDir, mapTitle } from './scripts/mapTarget.ts';
 
 // Какую карту собираем — из переменной MAP (scripts/mapTarget.ts).
 // ЭТОТ ЖЕ АЛИАС ОБЯЗАН СТОЯТЬ В vitest.config.ts: Vitest при наличии своего
@@ -47,9 +47,12 @@ export default defineConfig({
   resolve: { alias: mapAlias(mapId) },
   build: {
     // Карта по умолчанию — в корень dist, остальные — в подкаталог по id.
-    // ПОРЯДОК СБОРОК ВАЖЕН: сборка карты по умолчанию вычищает dist целиком,
-    // включая подкаталоги. Поэтому она идёт ПЕРВОЙ (см. скрипт build).
+    //
+    // ПОРЯДОК СБОРОК В СКРИПТЕ build ОБЯЗАТЕЛЕН И НЕ КОСМЕТИЧЕСКИЙ: сборка
+    // карты по умолчанию вычищает dist ЦЕЛИКОМ, включая подкаталоги остальных
+    // карт. Поэтому она идёт первой, а не последней. Сборка любой другой карты
+    // чистит только свой подкаталог, поэтому карте по умолчанию не вредит.
     outDir: mapOutDir(mapId),
-    emptyOutDir: mapId === DEFAULT_MAP,
+    emptyOutDir: true,
   },
 });

@@ -21,7 +21,7 @@ import {
 } from '../src/data/loader';
 import type { ProcessMap, ScreenLink } from '../src/data/schema';
 import {
-  EXPORT_FILE_NAME,
+  exportFileName,
   deriveOverrides,
   parseImportedOverrides,
   serializeProcessMap,
@@ -149,8 +149,11 @@ describe('экспорт: формат файла', () => {
     expect(Object.keys(node ?? {}).slice(-3)).toEqual(['screen', 'position', 'slidePosition']);
   });
 
-  it('имя файла — process.json (SPEC §4.4)', () => {
-    expect(EXPORT_FILE_NAME).toBe('process.json');
+  it('имя файла называет карту: process.<id>.json (SPEC §4.4)', () => {
+    // С одинаковым именем у двух карт файл из вкладки MRP, положенный по пути
+    // SNP, затёр бы SNP целиком (process-map-3wh.13).
+    expect(exportFileName(loadBaseProcessMap())).toBe('process.snp.json');
+    expect(exportFileName({ ...loadBaseProcessMap(), id: 'mrp' })).toBe('process.mrp.json');
   });
 });
 

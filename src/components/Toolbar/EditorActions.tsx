@@ -49,7 +49,7 @@ import {
 import { commitOverrides } from '../../hooks/useProcessMap';
 import { ru } from '../../i18n/ru';
 import {
-  EXPORT_FILE_NAME,
+  exportFileName,
   parseImportedOverrides,
   serializeProcessMap,
 } from '../../utils/processTransfer';
@@ -123,7 +123,10 @@ export function EditorActions() {
 
   const handleExport = (): void => {
     startAction();
-    downloadTextFile(EXPORT_FILE_NAME, serializeProcessMap(getMergedProcessMap()));
+    // Имя файла берётся из той же карты, которую сериализуем: иначе имя и
+    // содержимое могли бы разойтись (process-map-3wh.13).
+    const merged = getMergedProcessMap();
+    downloadTextFile(exportFileName(merged), serializeProcessMap(merged));
   };
 
   const handleImportClick = (): void => {

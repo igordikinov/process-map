@@ -33,8 +33,22 @@
 import { parseOverrides, parseProcessMap } from '../data/loader';
 import { ProcessMapSchema, type Overrides, type ProcessMap, type ScreenLink } from '../data/schema';
 
-/** Имя скачиваемого файла (SPEC §4.4: «Экспорт JSON» скачивает `process.json`). */
-export const EXPORT_FILE_NAME = 'process.json';
+/**
+ * Имя скачиваемого файла: `process.<id карты>.json` (SPEC §4.4).
+ *
+ * ЗАЧЕМ ИМЯ КАРТЫ В ФАЙЛЕ (решение владельца, process-map-3wh.13). Карт две, а
+ * инструкция владельцу говорит «положи скачанный файл в src/data/<карта>/».
+ * С одинаковым именем `process.json` файл, выгруженный из вкладки MRP и
+ * положенный по пути SNP, затёр бы карту SNP целиком. Побайтовый тест такое
+ * поймал бы, но только если больше ничего не менялось. Имя, которое само
+ * говорит, откуда файл, делает ошибку невозможной, а не маловероятной.
+ *
+ * Берётся из ТОЙ САМОЙ карты, которую сериализуем, а не из константы сборки:
+ * имя и содержимое тогда не могут разойтись.
+ */
+export function exportFileName(map: ProcessMap): string {
+  return `process.${map.id}.json`;
+}
 
 /**
  * Текст файла экспорта — байт в байт в формате репозитория, чтобы выгруженный

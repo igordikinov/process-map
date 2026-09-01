@@ -300,7 +300,7 @@ test.describe('Тулбар редактора: три кнопки SPEC §4.4',
 });
 
 test.describe('Экспорт JSON', () => {
-  test('скачивает process.json, побайтово равный файлу репозитория (правок нет)', async ({
+  test('скачивает process.snp.json, побайтово равный файлу репозитория (правок нет)', async ({
     page,
   }) => {
     await page.goto('/');
@@ -309,7 +309,7 @@ test.describe('Экспорт JSON', () => {
 
     const { fileName, text } = await exportJson(page);
 
-    expect(fileName).toBe('process.json');
+    expect(fileName).toBe('process.snp.json');
     // Тот же формат, что у scripts/import-pptx.py и scripts/layout.ts:
     // отступ 2, кириллица без экранирования, завершающий LF.
     expect(text).toBe(readProcessJson().text);

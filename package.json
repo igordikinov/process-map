@@ -5,7 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "dev:mrp": "cross-env MAP=mrp vite --port 5174 --strictPort",
+    "build": "npm run build:snp && npm run build:mrp",
+    "build:snp": "vite build",
+    "build:mrp": "cross-env MAP=mrp vite build",
     "preview": "vite preview",
     "check": "tsc --noEmit && eslint . && vitest run && prettier --check .",
     "test": "vitest run",

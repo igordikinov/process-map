@@ -1,8 +1,11 @@
 name: Проверки и деплой
 
-# Карта раздаётся статикой с GitHub Pages по адресу
-# https://igordikinov.github.io/process-map/ и встраивается оттуда в iframe.
-# Публикуется только собранный dist/ — исходники, презентация и макет
+# Карты раздаются статикой с GitHub Pages: SNP по адресу
+# https://igordikinov.github.io/process-map/, MRP — из подкаталога
+# https://igordikinov.github.io/process-map/mrp/. Обе собираются одной командой
+# npm run build в один dist/ и уезжают ОДНОЙ публикацией: промежуточного
+# состояния «новая карта уже есть, старая ещё старая» не бывает.
+# Публикуется только собранный dist/ — исходники, презентации и макет
 # остаются в репозитории, но сайтом не раздаются.
 #
 # ВЕРСИИ ACTIONS (process-map-vjz.9). Раннеры перешли на Node 24, а 23.09.2026
@@ -86,9 +89,9 @@ jobs:
 
       - run: npm ci
 
-      # Только chromium: в playwright.config.ts нет projects, то есть работает
-      # единственный неявный проект. Установка без имени браузера тянула бы
-      # ещё firefox и webkit впустую.
+      # Только chromium: в playwright.config.ts два проекта (snp и mrp), но оба
+      # на chromium — проекты там разделяют карты, а не браузеры. Установка без
+      # имени браузера тянула бы ещё firefox и webkit впустую.
       - run: npx playwright install --with-deps chromium
 
       # Dev-сервер поднимает сам Playwright (webServer в конфиге) — отдельного

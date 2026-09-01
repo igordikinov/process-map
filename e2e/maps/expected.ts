@@ -21,14 +21,18 @@ export const MAP_EXPECTATIONS: Record<string, MapExpectations> = {
     moduleLabel: 'Модуль SNP',
     pageTitle: 'E2E-процесс планирования поставок',
   },
+  mrp: {
+    moduleLabel: 'Модуль MRP',
+    pageTitle: 'Процесс планирования потребности в материалах',
+  },
 };
 
 /**
  * Ожидания для текущего проекта Playwright.
  *
- * Проекты snp/mrp появляются в playwright.config.ts вместе со второй сборкой
- * (задача process-map-3wh.13). До этого конфиг однопроектный, и Playwright
- * даёт проекту пустое имя — тогда смоук гоняется против карты по умолчанию.
+ * Проект Playwright назван по id карты (playwright.config.ts). Пустое имя —
+ * запуск вне проектов (например, `npx playwright test` со старым конфигом);
+ * тогда смоук гоняется против карты по умолчанию.
  */
 export function expectationsFor(projectName: string): MapExpectations {
   const id = projectName === '' ? 'snp' : projectName;
