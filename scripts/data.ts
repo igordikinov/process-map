@@ -25,7 +25,7 @@
 
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { runLayout } from './layout.ts';
+import { resolveMapId, runLayout, type MapId } from './layout.ts';
 
 /** Код возврата импортёра «ссылки на экраны потеряны» — scripts/import-pptx.py::EXIT_LINKS_LOST. */
 const EXIT_LINKS_LOST = 2;
@@ -40,13 +40,15 @@ function pythonCandidates(): string[] {
   return explicit !== undefined && explicit !== '' ? [explicit] : ['python', 'py'];
 }
 
-function runImport(): number {
+function runImport(mapId: MapId): number {
   const script = fileURLToPath(new URL('./import-pptx.py', import.meta.url));
   const candidates = pythonCandidates();
   for (const [index, exe] of candidates.entries()) {
     // --in-pipeline: импортёр знает, что раскладка запустится следом, и не
     // требует её отдельной строкой (scripts/import-pptx.py::print_layout_required).
-    const result = spawnSync(exe, [script, '--in-pipeline'], { stdio: 'inherit' });
+    const result = spawnSync(exe, [script, '--in-pipeline', '--map', mapId], {
+      stdio: 'inherit',
+    });
     // @types/node типизирует result.error как обычный Error, без code: код
     // ошибки живёт в NodeJS.ErrnoException, куда Error присваивается напрямую
     // (все поля там необязательные). Приведение не нужно — только аннотация.
@@ -72,18 +74,21 @@ function runImport(): number {
 }
 
 function main(): number {
-  const importCode = runImport();
+  // Карта разбирается ОДИН раз и передаётся обоим шагам: разные ключи у импорта
+  // и раскладки означали бы, что вторая переписывает координатами чужой файл.
+  const mapId = resolveMapId(process.argv.slice(2));
+  const importCode = runImport(mapId);
   // 0 — всё перенесено, 2 — часть ручных ссылок потеряна (файл записан).
   // Любой другой код означает, что импорт не состоялся: раскладывать нечего.
   if (importCode !== 0 && importCode !== EXIT_LINKS_LOST) {
     console.error(
       `\nимпорт завершился с кодом ${importCode} — раскладка НЕ запускалась, ` +
-        'src/data/snp/process.json остался в прежнем состоянии',
+        `src/data/${mapId}/process.json остался в прежнем состоянии`,
     );
     return importCode;
   }
 
-  const layoutCode = runLayout();
+  const layoutCode = runLayout(mapId);
   if (layoutCode !== 0) {
     return layoutCode;
   }

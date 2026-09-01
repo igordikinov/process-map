@@ -51,6 +51,7 @@ npm run preview      # локальный просмотр собранного 
 
 npm run layout       # пересчитать стартовые координаты узлов (dagre) → process.json
 npm run data         # весь конвейер данных: импорт из pptx → раскладка → process.json
+#   обе команды принимают карту:  npm run data -- --map snp
 ```
 
 `npm run layout` и `npm run data` запускаются как

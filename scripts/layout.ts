@@ -67,10 +67,36 @@ const dagreLayout = dagre.layout;
 // Константы раскладки
 // --------------------------------------------------------------------------------------
 
+/** Карты, которые умеет раскладывать конвейер. Реестр — в scripts/import-pptx.py::MAPS. */
+export const MAP_IDS = ['snp'] as const;
+export type MapId = (typeof MAP_IDS)[number];
+export const DEFAULT_MAP: MapId = 'snp';
+
 // Путь считается лениво: модуль импортируется ещё и тестом (tests/layout.test.ts)
 // ради общих констант и метрики, а там import.meta.url — не file:-URL.
-function jsonPath(): string {
-  return fileURLToPath(new URL('../src/data/snp/process.json', import.meta.url));
+function jsonPath(mapId: MapId): string {
+  return fileURLToPath(new URL(`../src/data/${mapId}/process.json`, import.meta.url));
+}
+
+/**
+ * Какую карту раскладываем: `--map <id>`, по умолчанию snp.
+ *
+ * Неизвестный ключ — остановка, а не тихий откат на карту по умолчанию:
+ * молчаливая раскладка не той карты переписала бы чужой файл координатами.
+ */
+export function resolveMapId(argv: readonly string[]): MapId {
+  const index = argv.indexOf('--map');
+  if (index === -1) {
+    return DEFAULT_MAP;
+  }
+  const value = argv[index + 1];
+  if (value === undefined) {
+    throw new Error('--map требует значение, например: --map snp');
+  }
+  if (!(MAP_IDS as readonly string[]).includes(value)) {
+    throw new Error(`Неизвестная карта «${value}». Известны: ${MAP_IDS.join(', ')}`);
+  }
+  return value as MapId;
 }
 
 export type Size = NodeSize;
@@ -464,8 +490,8 @@ function serialize(map: ProcessMap): string {
  * scripts/data.ts (конвейер `npm run data`), который вызывает её в том же
  * процессе после импорта.
  */
-export function runLayout(): number {
-  const path = jsonPath();
+export function runLayout(mapId: MapId = DEFAULT_MAP): number {
+  const path = jsonPath(mapId);
   const original = readFileSync(path, 'utf8');
   const raw = JSON.parse(original) as ProcessMap;
   ProcessMapSchema.parse(raw);
@@ -565,5 +591,5 @@ function isDirectRun(): boolean {
 }
 
 if (isDirectRun()) {
-  process.exitCode = runLayout();
+  process.exitCode = runLayout(resolveMapId(process.argv.slice(2)));
 }

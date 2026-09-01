@@ -26,7 +26,7 @@ dagre). Порядок обязателен и обратного не имее�
 Исходная геометрия слайда при этом не теряется: она пишется ещё и в
 `node.slidePosition` (SPEC §3), и раскладка сидируется именно ею, а не своим
 прошлым результатом. Если прогнать только импорт и закоммитить, `npm run check`
-покраснеет: tests/layout.test.ts сверяет координаты файла с пересчётом.
+покраснеет: tests/mapContract.test.ts сверяет координаты файла с пересчётом.
 
 Структура презентации (проверено на файле «SNP Е2Е процесс.pptx»):
   слайд 1 — титул, данных нет;
@@ -95,9 +95,6 @@ from pptx.enum.shapes import MSO_SHAPE_TYPE
 # --------------------------------------------------------------------------------------
 
 ROOT = Path(__file__).resolve().parent.parent
-PPTX_PATH = ROOT / "SNP Е2Е процесс.pptx"
-JSON_PATH = ROOT / "src" / "data" / "snp" / "process.json"
-REQUIRED_NODES_PATH = ROOT / "tests" / "fixtures" / "snp" / "required-nodes.json"
 
 MAP_VERSION = "1.0.0"
 
@@ -153,6 +150,57 @@ MAP_TITLE = "E2E-процесс планирования поставок"
 # (ru.overview.laneFlow), но меняется от карты к карте — значит это свойство
 # документа, а не строка интерфейса (process-map-3wh.4).
 MAP_MODULE_LABEL = "Модуль SNP"
+
+
+@dataclass(frozen=True)
+class MapSpec:
+    """
+    Всё, чем одна карта отличается от другой (process-map-3wh.7).
+
+    ПОЧЕМУ РЕЕСТР В КОДЕ, А НЕ КОНФИГ-ФАЙЛ НА ДИСКЕ. Тесты проекта уже разбирают
+    ИСХОДНИК этого файла регулярками (tests/snp/importPreserve.test.ts,
+    tests/snp/updatedAt.test.ts) — Python в CI не запускается вовсе. Внешний
+    конфиг потребовал бы третьего механизма сверки и ещё одного артефакта,
+    который надо держать в синхроне.
+
+    ПОЧЕМУ КОНСТАНТЫ MAP_* ОСТАЛИСЬ ПЛОСКИМИ, а не переехали сюда значениями.
+    tests/snp/updatedAt.test.ts читает их регуляркой вида ^ИМЯ = "значение".
+    Словарь эту регулярку ломает и заставляет переписывать сторож даты; плоские
+    имена с суффиксом карты позволяют его параметризовать.
+    """
+
+    key: str
+    pptx: Path
+    json: Path
+    required_nodes: Path
+    # 'overview+details' — обзор на слайде 2 плюс четыре слайда детализации
+    # (устройство презентации SNP). Профиль 'single-slide' вводит process-map-3wh.9.
+    profile: str
+    slides: int
+    map_id: str
+    title: str
+    module_label: str
+    updated_at: str
+    fingerprint: str
+
+
+MAPS: dict[str, MapSpec] = {
+    "snp": MapSpec(
+        key="snp",
+        pptx=ROOT / "SNP Е2Е процесс.pptx",
+        json=ROOT / "src" / "data" / "snp" / "process.json",
+        required_nodes=ROOT / "tests" / "fixtures" / "snp" / "required-nodes.json",
+        profile="overview+details",
+        slides=6,
+        map_id=MAP_ID,
+        title=MAP_TITLE,
+        module_label=MAP_MODULE_LABEL,
+        updated_at=MAP_UPDATED_AT,
+        fingerprint=MAP_DATA_FINGERPRINT,
+    ),
+}
+
+DEFAULT_MAP = "snp"
 
 # 1 px = 9525 EMU (96 dpi). Слайд 12192000 EMU = 1280 px по ширине.
 EMU_PER_PX = 9525
@@ -1557,18 +1605,19 @@ def count_warnings(stage: dict) -> int:
 
 def build_process_map(
     collisions: dict[str, int] | None,
+    spec: MapSpec,
 ) -> tuple[dict, list[SlideReport], list[str], Counter[str]]:
-    if not PPTX_PATH.exists():
-        raise SystemExit(f"Не найдена презентация: {PPTX_PATH}")
+    if not spec.pptx.exists():
+        raise SystemExit(f"Не найдена презентация: {spec.pptx}")
 
-    presentation = Presentation(str(PPTX_PATH))
+    presentation = Presentation(str(spec.pptx))
     if int(presentation.slide_width) != SLIDE_WIDTH_EMU:
         raise SystemExit(
             f"Неожиданная ширина слайда {presentation.slide_width} EMU (ожидалось {SLIDE_WIDTH_EMU})"
         )
     slides = list(presentation.slides)
-    if len(slides) != 6:
-        raise SystemExit(f"Ожидалось 6 слайдов, найдено {len(slides)}")
+    if len(slides) != spec.slides:
+        raise SystemExit(f"Ожидалось {spec.slides} слайдов, найдено {len(slides)}")
 
     reports: list[SlideReport] = []
     questions: list[str] = []
@@ -1778,10 +1827,10 @@ def build_process_map(
 
     process_map = {
         "version": MAP_VERSION,
-        "id": MAP_ID,
-        "updatedAt": MAP_UPDATED_AT,
-        "title": MAP_TITLE,
-        "moduleLabel": MAP_MODULE_LABEL,
+        "id": spec.map_id,
+        "updatedAt": spec.updated_at,
+        "title": spec.title,
+        "moduleLabel": spec.module_label,
         "stages": stages,
         "overviewEdges": overview_edges,
     }
@@ -1999,10 +2048,12 @@ def isolated_nodes(stage: dict) -> list[dict]:
     return [n for n in stage["nodes"] if n["type"] != "data" and n["id"] not in connected]
 
 
-def print_report(process_map: dict, reports: Sequence[SlideReport], questions: Sequence[str]) -> None:
+def print_report(
+    process_map: dict, reports: Sequence[SlideReport], questions: Sequence[str], spec: MapSpec
+) -> None:
     print("=" * 78)
     print("ОТЧЁТ-СВЕРКА  scripts/import-pptx.py")
-    print(f"источник: {PPTX_PATH.name}")
+    print(f"источник: {spec.pptx.name}")
     print("=" * 78)
 
     for report in reports:
@@ -2365,12 +2416,12 @@ def carry_over_manual_fields(fresh: dict, previous: dict | None) -> CarryOverRep
     return report
 
 
-def print_carry_over(report: CarryOverReport) -> None:
+def print_carry_over(report: CarryOverReport, spec: MapSpec) -> None:
     print("\n" + "=" * 78)
     print("РУЧНЫЕ ПОЛЯ (ссылки на экраны, ответственные) — ПЕРЕНОС ИЗ ПРЕДЫДУЩЕГО JSON")
     print("=" * 78)
     if not report.had_previous:
-        print(f"  предыдущего {JSON_PATH.name} нет — первый запуск, переносить нечего")
+        print(f"  предыдущего {spec.json.name} нет — первый запуск, переносить нечего")
         return
     print(f"  узлов в предыдущем файле: {report.previous_nodes}")
     print(f"  перенесено ссылок (screen): {report.screens_transferred}")
@@ -2427,7 +2478,7 @@ def print_layout_required(process_map: dict, in_pipeline: bool) -> None:
         print(f"  ВНИМАНИЕ: узлов без slidePosition: {without_slide} — это ошибка импортёра")
     if not in_pipeline:
         print("\n  одной командой:   npm run data     (import-pptx.py → layout.ts)")
-        print("  сторож в тестах:  tests/layout.test.ts сверяет координаты с пересчётом,")
+        print("  сторож в тестах:  tests/mapContract.test.ts сверяет координаты,")
         print("                    так что незавершённый конвейер делает npm run check красным")
 
 
@@ -2831,6 +2882,26 @@ def run_self_test() -> int:
     return 0
 
 
+def resolve_map_spec(args: Sequence[str]) -> MapSpec:
+    """
+    Какую карту собираем: `--map <key>`, по умолчанию snp.
+
+    Неизвестный ключ — остановка со списком известных, а не тихий откат на
+    карту по умолчанию: молчаливая пересборка не той карты затёрла бы чужой
+    файл данных.
+    """
+    key = DEFAULT_MAP
+    if "--map" in args:
+        index = list(args).index("--map")
+        if index + 1 >= len(args):
+            raise SystemExit("--map требует значение, например: --map snp")
+        key = args[index + 1]
+    spec = MAPS.get(key)
+    if spec is None:
+        raise SystemExit(f"Неизвестная карта «{key}». Известны: {', '.join(sorted(MAPS))}")
+    return spec
+
+
 def main(argv: Iterable[str]) -> int:
     args = list(argv)
     # Отчёт содержит кириллицу и стрелки: на консоли с cp866/cp1251 печать иначе
@@ -2842,27 +2913,29 @@ def main(argv: Iterable[str]) -> int:
     if "--self-test" in args:
         return run_self_test()
 
+    spec = resolve_map_spec(args)
+
     # --in-pipeline ставит scripts/data.ts (npm run data): раскладка стартует
     # сразу после импорта, и требовать её отдельно уже не надо. На сам импорт
     # флаг не влияет — только на текст финального блока.
 
     # Ручной слой читаем ДО сборки: если предыдущий файл битый, лучше упасть
     # раньше, чем после разбора презентации.
-    previous = load_previous_map(JSON_PATH)
+    previous = load_previous_map(spec.json)
 
     # Фаза 1 — подсчёт коллизий базовых slug'ов, фаза 2 — стабильные id.
-    _, _, _, collisions = build_process_map(None)
-    process_map, reports, questions, _ = build_process_map(dict(collisions))
+    _, _, _, collisions = build_process_map(None, spec)
+    process_map, reports, questions, _ = build_process_map(dict(collisions), spec)
 
     carry_over = carry_over_manual_fields(process_map, previous)
 
     check_unique_ids(process_map)
-    write_json(JSON_PATH, process_map)
-    write_json(REQUIRED_NODES_PATH, collect_required_node_ids(process_map))
-    print_report(process_map, reports, questions)
-    print_carry_over(carry_over)
-    print(f"\nзаписано: {JSON_PATH.relative_to(ROOT).as_posix()}")
-    print(f"записано: {REQUIRED_NODES_PATH.relative_to(ROOT).as_posix()}")
+    write_json(spec.json, process_map)
+    write_json(spec.required_nodes, collect_required_node_ids(process_map))
+    print_report(process_map, reports, questions, spec)
+    print_carry_over(carry_over, spec)
+    print(f"\nзаписано: {spec.json.relative_to(ROOT).as_posix()}")
+    print(f"записано: {spec.required_nodes.relative_to(ROOT).as_posix()}")
     print_layout_required(process_map, "--in-pipeline" in args)
     if carry_over.lost:
         print(
