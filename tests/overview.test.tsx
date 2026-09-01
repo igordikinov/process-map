@@ -266,11 +266,15 @@ describe('buildOverviewGraph', () => {
     expect(nodes.some((node) => node.id === FLOW_LANE_ID)).toBe(false);
   });
 
-  it('рамка потока подписана строкой из ru.ts', () => {
+  it('рамка потока подписана строкой из ДАННЫХ карты, а не из ru.ts', () => {
+    // Подпись уехала из i18n в поле moduleLabel (process-map-3wh.4): у каждой
+    // карты она своя. Ассерт сверяет с картой, а не с литералом, чтобы тест не
+    // приходилось править при добавлении второй карты.
     const { nodes } = buildOverviewGraph(map, true);
     const frame = nodes.find((node) => node.id === FLOW_LANE_ID);
 
-    expect(frame?.data).toEqual({ title: ru.overview.laneFlow });
+    expect(map.moduleLabel).not.toBe('');
+    expect(frame?.data).toEqual({ title: map.moduleLabel });
   });
 
   it('карточки этапов не накладываются друг на друга', () => {

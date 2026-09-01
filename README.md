@@ -310,8 +310,9 @@ http://host/process-map/     ->  http://host/process-map/assets/index-CTQNOulP.j
 ## Данные
 
 - **`src/data/snp/process.json` — источник истины.** Схема описана в SPEC §3, валидируется
-  zod-схемой `src/data/schema.ts` и тестом `tests/data.test.ts` (схема, целостность рёбер,
-  полнота списка шагов).
+  zod-схемой `src/data/schema.ts`, контрактом карты `tests/mapContract.test.ts` (схема,
+  целостность рёбер, конвейер доведён до конца — проверяется для каждой карты в
+  `src/data/*/`) и `tests/snp/content.test.ts` (полнота списка шагов именно этой карты).
 - Содержание переносится из презентации «SNP Е2Е процесс.pptx» скриптом
   `scripts/import-pptx.py` (python-pptx). Скрипт детерминирован, id стабильны — на них
   завязаны deep-link и ключи `localStorage`.

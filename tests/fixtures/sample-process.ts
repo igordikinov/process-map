@@ -92,8 +92,10 @@ export function buildSampleProcessMap(): ProcessMap {
 
   return {
     version: '1.0.0-fixture',
+    id: 'fixture',
     updatedAt: '2026-08-24',
     title: 'In.Plan E2E процесс (фикстура)',
+    moduleLabel: 'Модуль фикстуры',
     stages,
     overviewEdges,
   };

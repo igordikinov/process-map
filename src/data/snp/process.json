@@ -1,7 +1,9 @@
 {
   "version": "1.0.0",
+  "id": "snp",
   "updatedAt": "2026-08-31",
   "title": "E2E-процесс планирования поставок",
+  "moduleLabel": "Модуль SNP",
   "stages": [
     {
       "id": "stage-1-obogaschenie-prognoza-zakazami",

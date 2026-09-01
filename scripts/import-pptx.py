@@ -101,6 +101,11 @@ REQUIRED_NODES_PATH = ROOT / "tests" / "fixtures" / "snp" / "required-nodes.json
 
 MAP_VERSION = "1.0.0"
 
+# Идентификатор карты: имя каталога src/data/<id>/ и ключ overrides в
+# localStorage (process-map-3wh.4). Проверяется контрактом карты
+# (tests/mapContract.test.ts) на совпадение с именем каталога.
+MAP_ID = "snp"
+
 # Дата в шапке обзора («Обновлено …»). Решение владельца от 30.08.2026: это
 # дата КАРТЫ, а не презентации.
 #
@@ -134,7 +139,7 @@ MAP_UPDATED_AT = "2026-08-31"
 # дата протухнет ровно тем же способом. Python и не смог бы посчитать финальный
 # отпечаток — после него файл переписывает scripts/layout.ts.
 # Значение печатает падающий тест; алгоритм — в tests/updatedAt.test.ts.
-MAP_DATA_FINGERPRINT = "70d78288778d0e9d8dd78e0f395913ddfb9d3e50800e0af5aa6d8bd9b5c22188"
+MAP_DATA_FINGERPRINT = "0547c33cd95d3bd279fac2ff60aa5382ae51d084b93dc06bac5fa5d91e264c91"
 
 # Заголовок шапки обзора. Решение владельца от 31.08.2026 (process-map-4d2):
 # формулировка макета A1, она же в заголовке PRD.md. Прежняя — «E2E процесс
@@ -143,6 +148,11 @@ MAP_DATA_FINGERPRINT = "70d78288778d0e9d8dd78e0f395913ddfb9d3e50800e0af5aa6d8bd9
 # Это КОНСТАНТА, а не текст из презентации: правка одного process.json была бы
 # затёрта первым же `npm run data`. Задача 4d2 предполагала обратное.
 MAP_TITLE = "E2E-процесс планирования поставок"
+
+# Подпись рамки вокруг всего потока этапов на обзоре. Жила в i18n
+# (ru.overview.laneFlow), но меняется от карты к карте — значит это свойство
+# документа, а не строка интерфейса (process-map-3wh.4).
+MAP_MODULE_LABEL = "Модуль SNP"
 
 # 1 px = 9525 EMU (96 dpi). Слайд 12192000 EMU = 1280 px по ширине.
 EMU_PER_PX = 9525
@@ -1768,8 +1778,10 @@ def build_process_map(
 
     process_map = {
         "version": MAP_VERSION,
+        "id": MAP_ID,
         "updatedAt": MAP_UPDATED_AT,
         "title": MAP_TITLE,
+        "moduleLabel": MAP_MODULE_LABEL,
         "stages": stages,
         "overviewEdges": overview_edges,
     }
@@ -2469,8 +2481,10 @@ def _fresh_fixture() -> dict:
     """Свежесобранный документ в том виде, в каком его отдаёт build_process_map."""
     return {
         "version": MAP_VERSION,
+        "id": MAP_ID,
         "updatedAt": MAP_UPDATED_AT,
         "title": MAP_TITLE,
+        "moduleLabel": MAP_MODULE_LABEL,
         "stages": [
             {
                 "id": "stage-1",
@@ -2500,8 +2514,10 @@ def _previous_fixture() -> dict:
     link = {"title": "Экран плана", "url": "https://inplan.example/plan"}
     return {
         "version": MAP_VERSION,
+        "id": MAP_ID,
         "updatedAt": MAP_UPDATED_AT,
         "title": MAP_TITLE,
+        "moduleLabel": MAP_MODULE_LABEL,
         "stages": [
             {
                 "id": "stage-1",

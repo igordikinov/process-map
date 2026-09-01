@@ -366,7 +366,7 @@ export function buildOverviewGraph(
       id: FLOW_LANE_ID,
       type: 'flowLane',
       position: { x: LANE_X, y: FLOW_LANE_Y },
-      data: { title: ru.overview.laneFlow },
+      data: { title: map.moduleLabel },
       style: { width: laneWidth, height: FLOW_LANE_HEIGHT },
       draggable: false,
       selectable: false,
