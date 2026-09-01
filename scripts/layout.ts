@@ -1,5 +1,5 @@
 // scripts/layout.ts
-// Пересчитывает стартовые координаты узлов src/data/process.json через @dagrejs/dagre.
+// Пересчитывает стартовые координаты узлов src/data/snp/process.json через @dagrejs/dagre.
 //
 // Запуск (из корня репозитория):
 //
@@ -70,7 +70,7 @@ const dagreLayout = dagre.layout;
 // Путь считается лениво: модуль импортируется ещё и тестом (tests/layout.test.ts)
 // ради общих констант и метрики, а там import.meta.url — не file:-URL.
 function jsonPath(): string {
-  return fileURLToPath(new URL('../src/data/process.json', import.meta.url));
+  return fileURLToPath(new URL('../src/data/snp/process.json', import.meta.url));
 }
 
 export type Size = NodeSize;
@@ -459,7 +459,7 @@ function serialize(map: ProcessMap): string {
 }
 
 /**
- * Полный прогон раскладки: читает src/data/process.json, пересчитывает
+ * Полный прогон раскладки: читает src/data/snp/process.json, пересчитывает
  * координаты, печатает отчёт и записывает файл. Экспортируется ради
  * scripts/data.ts (конвейер `npm run data`), который вызывает её в том же
  * процессе после импорта.
@@ -542,7 +542,7 @@ export function runLayout(): number {
 
   lines.push('');
   lines.push('='.repeat(78));
-  lines.push(`  ${changed ? 'записано' : 'без изменений'}: src/data/process.json`);
+  lines.push(`  ${changed ? 'записано' : 'без изменений'}: src/data/snp/process.json`);
   lines.push('='.repeat(78));
 
   console.log(lines.join('\n'));

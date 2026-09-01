@@ -8,13 +8,13 @@ import {
   SystemCodeSchema,
 } from '../src/data/schema.ts';
 import { ru } from '../src/i18n/ru.ts';
-import processJson from '../src/data/process.json';
+import processJson from '../src/data/snp/process.json';
 
 // Контракт между scripts/import-pptx.py и src/data/schema.ts (задача process-map-2dj).
 //
 // ЗАЧЕМ ЭТОТ ФАЙЛ
 // ---------------
-// Импортёр пересобирает src/data/process.json из презентации С НУЛЯ. Полей,
+// Импортёр пересобирает src/data/snp/process.json из презентации С НУЛЯ. Полей,
 // которых в презентации нет (ссылка на экран In.Plan `screen`, `owner`),
 // он породить не может — их проставляет человек. Значит перегенерация обязана
 // переносить их из предыдущего файла, иначе она их стирает. Ради ссылок карта

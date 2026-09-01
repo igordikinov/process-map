@@ -6,11 +6,11 @@ import {
   type ProcessNode,
 } from '../src/data/schema.ts';
 import { buildSampleProcessMap } from './fixtures/sample-process.ts';
-import processJson from '../src/data/process.json';
+import processJson from '../src/data/snp/process.json';
 import requiredNodeIds from './fixtures/required-nodes.json';
 
 // Источник данных для позитивных тестов схемы/целостности — реальный
-// src/data/process.json, сгенерированный scripts/import-pptx.py из презентации
+// src/data/snp/process.json, сгенерированный scripts/import-pptx.py из презентации
 // (задача process-map-np4). Фикстура buildSampleProcessMap остаётся для
 // негативных кейсов, где документ намеренно портится.
 function loadProcessMap(): unknown {
@@ -78,7 +78,7 @@ describe('ProcessMapSchema', () => {
 
   it('сохраняет slidePosition при разборе: поле не вычищается схемой', () => {
     // Если бы zod его отбрасывал, экспорт из приложения перестал бы совпадать с
-    // src/data/process.json побайтово (см. tests/loader.test.ts).
+    // src/data/snp/process.json побайтово (см. tests/loader.test.ts).
     const map = buildSampleProcessMap();
     const node = map.stages[0]?.nodes[0];
     expect(node).toBeTruthy();
@@ -141,7 +141,7 @@ describe('ProcessMapSchema', () => {
 
   it('сохраняет direction при разборе: поле не вычищается схемой', () => {
     // Как и slidePosition: если бы zod его отбрасывал, экспорт из приложения
-    // перестал бы совпадать с src/data/process.json побайтово.
+    // перестал бы совпадать с src/data/snp/process.json побайтово.
     const map = buildSampleProcessMap();
     const node = map.stages[0]?.nodes[0];
     expect(node).toBeTruthy();

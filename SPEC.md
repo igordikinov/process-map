@@ -32,7 +32,7 @@ process-map/
                             # не через public/ — см. process-map-o62
     main.tsx  App.tsx
     config.ts               # linkTarget: '_top' | '_blank', compactHeight: 640
-    data/process.json       # ИСТОЧНИК ИСТИНЫ
+    data/snp/process.json   # ИСТОЧНИК ИСТИНЫ
     data/schema.ts          # zod-схема + типы
     data/loader.ts          # merge JSON + localStorage overrides
     store/useProcessStore.ts

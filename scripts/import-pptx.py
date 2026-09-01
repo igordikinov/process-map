@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-import-pptx.py — перенос содержимого «SNP Е2Е процесс.pptx» в src/data/process.json
+import-pptx.py — перенос содержимого «SNP Е2Е процесс.pptx» в src/data/snp/process.json
 (модель данных — SPEC.md §3, zod-схема — src/data/schema.ts).
 
 Запуск (из корня репозитория):
@@ -64,7 +64,7 @@ dagre). Порядок обязателен и обратного не имее�
 ---------------------------------------------------------
 Ссылок на экраны In.Plan в презентации нет: их проставляет человек в редакторе,
 и ради них карта вообще встроена в вики. Скрипт собирает документ из презентации
-с нуля, поэтому перед записью он читает предыдущий src/data/process.json и
+с нуля, поэтому перед записью он читает предыдущий src/data/snp/process.json и
 переносит на новые узлы поля, которых в презентации не существует
 (PRESERVED_NODE_FIELDS / PRESERVED_STAGE_FIELDS). Сопоставление — по `id`;
 id стабильны по построению (см. IdFactory). Всё, что перенести не удалось,
@@ -96,7 +96,7 @@ from pptx.enum.shapes import MSO_SHAPE_TYPE
 
 ROOT = Path(__file__).resolve().parent.parent
 PPTX_PATH = ROOT / "SNP Е2Е процесс.pptx"
-JSON_PATH = ROOT / "src" / "data" / "process.json"
+JSON_PATH = ROOT / "src" / "data" / "snp" / "process.json"
 REQUIRED_NODES_PATH = ROOT / "tests" / "fixtures" / "required-nodes.json"
 
 MAP_VERSION = "1.0.0"
@@ -123,7 +123,7 @@ MAP_VERSION = "1.0.0"
 # TypeScript, а не здесь, потому что Python в CI не запускается вовсе.
 MAP_UPDATED_AT = "2026-08-31"
 
-# sha256 содержания src/data/process.json с НЕЙТРАЛИЗОВАННЫМ updatedAt.
+# sha256 содержания src/data/snp/process.json с НЕЙТРАЛИЗОВАННЫМ updatedAt.
 #
 # Нейтрализация обязательна: иначе обновление даты меняет содержание, значит и
 # хеш, значит нужен новый хеш — цикл не сходится. С плейсхолдером правка даты

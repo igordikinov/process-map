@@ -16,7 +16,7 @@ import { expect, test, type FrameLocator, type Page } from '@playwright/test';
 
 // ─────────────────────────────── фикстуры ───────────────────────────────
 //
-// Источник — src/data/process.json, задача process-map-lqa. Это единственная
+// Источник — src/data/snp/process.json, задача process-map-lqa. Это единственная
 // настоящая ссылка на экран во всей карте, и она же единственная фикстура,
 // работающая во ВСЕХ сценариях ниже: посеять свою через localStorage нельзя —
 // при sandbox без allow-same-origin хранилище недоступно (loader.ts глушит

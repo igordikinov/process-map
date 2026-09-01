@@ -21,7 +21,7 @@ const VIEWPORT = { width: 1280, height: 720 };
 const OVERRIDES_KEY = 'inplan-process-map:overrides:v1';
 
 /** Файл-источник истины: playwright запускается из корня репозитория. */
-const PROCESS_JSON = 'src/data/process.json';
+const PROCESS_JSON = 'src/data/snp/process.json';
 
 /** Карточка шага уровня 2 — см. комментарий в openStage ниже. */
 const STEP_CARD = '.react-flow__node-step button[aria-label^="Шаг: "]';

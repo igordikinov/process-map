@@ -14,7 +14,7 @@
 //   - переполнение квоты при записи (QuotaExceededError) → writeStoredOverrides
 //     возвращает false, состояние в памяти остаётся корректным, вызывающий UI
 //     решает, что показать пользователю.
-import rawProcessJson from './process.json';
+import rawProcessJson from './snp/process.json';
 import {
   OVERRIDES_STORAGE_KEY,
   OverridesSchema,

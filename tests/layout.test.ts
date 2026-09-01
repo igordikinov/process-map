@@ -15,9 +15,9 @@ import {
   slidePositionOf,
 } from '../scripts/layout.ts';
 import { splitStageDataNodes } from '../src/utils/stageNodes.ts';
-import processJson from '../src/data/process.json';
+import processJson from '../src/data/snp/process.json';
 
-// Координаты в src/data/process.json расставляет `npm run layout`
+// Координаты в src/data/snp/process.json расставляет `npm run layout`
 // (scripts/layout.ts, задача process-map-350). Тест проверяет результат
 // на реальных данных: раскладка не должна давать наложенных карточек и
 // не должна менять содержание документа.

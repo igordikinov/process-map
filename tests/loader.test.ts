@@ -29,7 +29,7 @@ import {
 
 // Путь от корня репозитория, а не от import.meta.url: под Vitest он не
 // file:-URL (та же оговорка есть в tests/sizes.test.ts).
-const PROCESS_JSON_PATH = 'src/data/process.json';
+const PROCESS_JSON_PATH = 'src/data/snp/process.json';
 
 const LINK: ScreenLink = {
   title: 'Планирование поставок › Объёмный план',
@@ -95,7 +95,7 @@ beforeEach(() => {
 });
 
 describe('экспорт: формат файла', () => {
-  it('совпадает байт в байт с src/data/process.json, когда правок нет', () => {
+  it('совпадает байт в байт с src/data/snp/process.json, когда правок нет', () => {
     // Единственная надёжная проверка «того же формата, что у
     // scripts/import-pptx.py и scripts/layout.ts»: сравнить с самим файлом.
     // Покрывает разом отступ 2, отсутствие \u-экранирования кириллицы,
@@ -145,7 +145,7 @@ describe('экспорт: формат файла', () => {
     // Порядок ключей схемы (src/data/schema.ts): … screen, position, slidePosition.
     // slidePosition — служебная геометрия слайда, её пишет scripts/import-pptx.py;
     // в экспорте она обязана сохраниться и остаться на своём месте, иначе файл
-    // перестанет совпадать с src/data/process.json побайтово.
+    // перестанет совпадать с src/data/snp/process.json побайтово.
     expect(Object.keys(node ?? {}).slice(-3)).toEqual(['screen', 'position', 'slidePosition']);
   });
 

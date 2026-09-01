@@ -38,7 +38,7 @@ export const EXPORT_FILE_NAME = 'process.json';
 
 /**
  * Текст файла экспорта — байт в байт в формате репозитория, чтобы выгруженный
- * файл можно было положить в src/data/process.json без diff-шума:
+ * файл можно было положить в src/data/snp/process.json без diff-шума:
  * отступ 2 пробела, кириллица без \u-экранирования (JSON.stringify её не
  * экранирует, как и `ensure_ascii=False` в scripts/import-pptx.py), перевод
  * строки в конце, LF. То же самое делает scripts/layout.ts::serialize.

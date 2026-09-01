@@ -21,7 +21,7 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const IMPORTER_PATH = resolve(process.cwd(), 'scripts', 'import-pptx.py');
-const JSON_PATH = resolve(process.cwd(), 'src', 'data', 'process.json');
+const JSON_PATH = resolve(process.cwd(), 'src', 'data', 'snp', 'process.json');
 
 const importerSource = readFileSync(IMPORTER_PATH, 'utf8');
 const jsonSource = readFileSync(JSON_PATH, 'utf8');
@@ -66,7 +66,7 @@ describe('дата «Обновлено» описывает то содержа
     expect(
       actual,
       [
-        'Содержание src/data/process.json изменилось, а дата в шапке — нет.',
+        'Содержание src/data/snp/process.json изменилось, а дата в шапке — нет.',
         'В scripts/import-pptx.py поставьте:',
         `  MAP_UPDATED_AT = "<дата правки, YYYY-MM-DD>"`,
         `  MAP_DATA_FINGERPRINT = "${actual}"`,

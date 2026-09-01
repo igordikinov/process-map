@@ -14,7 +14,7 @@ node_modules
 # передача ссылок на экраны из браузера в репозиторий (docs/ссылки-на-экраны.md,
 # ради неё же заведён .gitattributes). Формат файла задаёт JSON.stringify, а не
 # prettier.
-src/data/process.json
+src/data/*/process.json
 
 # Макет Claude Design — только чтение (CLAUDE.md «Чего не делать»).
 design/

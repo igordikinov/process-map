@@ -1,5 +1,5 @@
 // scripts/data.ts
-// Конвейер данных целиком:  презентация → src/data/process.json
+// Конвейер данных целиком:  презентация → src/data/snp/process.json
 //
 //     npm run data
 //
@@ -78,7 +78,7 @@ function main(): number {
   if (importCode !== 0 && importCode !== EXIT_LINKS_LOST) {
     console.error(
       `\nимпорт завершился с кодом ${importCode} — раскладка НЕ запускалась, ` +
-        'src/data/process.json остался в прежнем состоянии',
+        'src/data/snp/process.json остался в прежнем состоянии',
     );
     return importCode;
   }
