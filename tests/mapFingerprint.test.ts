@@ -11,6 +11,11 @@
 // молча. Автоматически пересчитывать отпечаток в импортёре НЕЛЬЗЯ — тогда он
 // всегда совпадал бы и дата протухла бы тем же способом.
 //
+// ПОЧЕМУ ОДИН ФАЙЛ НА ВСЕ КАРТЫ (process-map-3wh.15). Константы карт объявлены
+// плоскими именами с суффиксом (MAP_UPDATED_AT и MAP_UPDATED_AT_MRP), а не
+// словарём, ИМЕННО ради этого теста: регулярка ^ИМЯ = "значение" тогда работает
+// для любой карты, и добавление третьей стоит одной строки в таблице ниже.
+//
 // ПОЧЕМУ ЗДЕСЬ, А НЕ В PYTHON. Python в CI не запускается вовсе (см.
 // .github/workflows/deploy.yml), поэтому проверка на стороне импортёра никого
 // не остановила бы. Константы читаются из исходника регуляркой — тот же приём,
@@ -21,10 +26,13 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const IMPORTER_PATH = resolve(process.cwd(), 'scripts', 'import-pptx.py');
-const JSON_PATH = resolve(process.cwd(), 'src', 'data', 'snp', 'process.json');
-
 const importerSource = readFileSync(IMPORTER_PATH, 'utf8');
-const jsonSource = readFileSync(JSON_PATH, 'utf8');
+
+/** Карта → суффикс её констант в импортёре. У карты по умолчанию суффикса нет. */
+const MAPS = [
+  { id: 'snp', suffix: '' },
+  { id: 'mrp', suffix: '_MRP' },
+] as const;
 
 /** Читает python-константу-строку верхнего уровня по имени. */
 function readPythonString(name: string): string {
@@ -58,19 +66,24 @@ function fingerprintOf(rawJson: string): string {
     .digest('hex');
 }
 
-describe('дата «Обновлено» описывает то содержание, которое лежит в данных', () => {
+describe.each(MAPS)('дата «Обновлено» описывает содержание карты $id', ({ id, suffix }) => {
+  const jsonSource = readFileSync(
+    resolve(process.cwd(), 'src', 'data', id, 'process.json'),
+    'utf8',
+  );
+
   it('отпечаток содержания совпадает с объявленным в импортёре', () => {
     const actual = fingerprintOf(jsonSource);
-    const declared = readPythonString('MAP_DATA_FINGERPRINT');
+    const declared = readPythonString(`MAP_DATA_FINGERPRINT${suffix}`);
 
     expect(
       actual,
       [
-        'Содержание src/data/snp/process.json изменилось, а дата в шапке — нет.',
+        `Содержание src/data/${id}/process.json изменилось, а дата в шапке — нет.`,
         'В scripts/import-pptx.py поставьте:',
-        `  MAP_UPDATED_AT = "<дата правки, YYYY-MM-DD>"`,
-        `  MAP_DATA_FINGERPRINT = "${actual}"`,
-        'и прогоните npm run data.',
+        `  MAP_UPDATED_AT${suffix} = "<дата правки, YYYY-MM-DD>"`,
+        `  MAP_DATA_FINGERPRINT${suffix} = "${actual}"`,
+        `и прогоните npm run data -- --map ${id}.`,
       ].join('\n'),
     ).toBe(declared);
   });
@@ -79,7 +92,7 @@ describe('дата «Обновлено» описывает то содержа
     // Зеркальный случай к проверке выше и с ДРУГИМ диагнозом: константу
     // поправили, а конвейер не прогнали. Одинаковое сообщение на два инварианта
     // сделало бы красный тест нечитаемым.
-    const declared = readPythonString('MAP_UPDATED_AT');
+    const declared = readPythonString(`MAP_UPDATED_AT${suffix}`);
     const inData = (JSON.parse(jsonSource) as { updatedAt: string }).updatedAt;
 
     expect(declared).toMatch(/^\d{4}-\d{2}-\d{2}$/);
