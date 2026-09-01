@@ -84,7 +84,13 @@ export function StageCard({ stage, compact = false }: StageCardProps) {
       <div className={styles.divider} />
       {/* «Эйбр» блока в компактном режиме снят (A4): в 200 px высоты он занимал
           строку, которую забирает сам список выходов. */}
-      {!compact && <div className={styles.outputsTitle}>{ru.stageNode.keyOutputs}</div>}
+      {/* Заголовок только при непустом списке (process-map-3wh.11). Раньше он
+          рисовался безусловно, потому что у SNP выходы есть у всех четырёх
+          этапов. У карты MRP выход назван только у одного этапа из четырёх —
+          три карточки показали бы подпись и под ней ~90 px пустоты. */}
+      {!compact && outputs.length > 0 && (
+        <div className={styles.outputsTitle}>{ru.stageNode.keyOutputs}</div>
+      )}
 
       <ul className={styles.outputs}>
         {outputs.map((output) => (

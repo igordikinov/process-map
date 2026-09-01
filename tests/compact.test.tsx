@@ -379,6 +379,20 @@ describe('StageCard: компактный режим', () => {
     expect(screen.getAllByRole('listitem')).toHaveLength(stage.keyOutputs.length);
     expect(screen.getByText(ru.stageNode.keyOutputs)).toBeInTheDocument();
   });
+
+  it('пустой список выходов — «эйбр» не рисуется и в обычном режиме', () => {
+    // process-map-3wh.11. У карты SNP выходы есть у всех четырёх этапов,
+    // поэтому дефект тут и не всплывал; у карты MRP выход назван только у
+    // одного этапа, и три карточки показывали бы подпись над пустотой.
+    // Схема пустой список допускает: keyOutputs ограничен только сверху.
+    const stage = { ...stageAt(1), keyOutputs: [] };
+    render(<StageCard stage={stage} />);
+
+    expect(screen.queryByText(ru.stageNode.keyOutputs)).not.toBeInTheDocument();
+    expect(screen.queryAllByRole('listitem')).toHaveLength(0);
+    // Остальное на карточке на месте — снят только заголовок пустого блока.
+    expect(screen.getByText(stage.shortTitle)).toBeInTheDocument();
+  });
 });
 
 describe('OverviewHeader: компактный режим', () => {
