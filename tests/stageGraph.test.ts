@@ -275,17 +275,35 @@ describe('buildStageGraph', () => {
       // из группы «Дефицит ГП» и четыре ребра корректировки → публикация,
       // достроенные решением владельца в process-map-7bz. Рёбер, у которых
       // один конец без группы, в текущих данных нет ни одного.
-      expect(cross, 'межгрупповых переходов').toBe(stage.number === 3 ? 6 : 1);
+      expect(cross, 'межгрупповых переходов').toBe(stage.number === 3 ? 7 : 1);
     },
   );
 
   it('обратное ребро (target левее source) идёт снизу вверх, прямое — справа налево', () => {
-    const stage = map.stages.find((candidate) => candidate.number === 2);
-    expect(stage).toBeDefined();
-    if (stage === undefined) {
-      return;
-    }
+    // НА ФИКСТУРЕ, А НЕ НА ДАННЫХ (process-map-3wh.16). Раньше единственное
+    // обратное ребро уровня 2 было артефактом геометрии: одна и та же линия
+    // слайда 4 разрешалась в обе стороны и давала взаимную пару. Привязки
+    // коннекторов зафиксировали настоящее направление, дубль исчез — и вместе с
+    // ним исчез предмет этой проверки. Механизм выбора хэндлов от этого не стал
+    // менее нужным: обратное ребро появится на любой карте, где процесс
+    // возвращается к предыдущему шагу.
+    const stage = structuredClone(map.stages.find((candidate) => candidate.number === 2)) as Stage;
     const byId = new Map(stage.nodes.map((node) => [node.id, node]));
+    const ordered = [...stage.nodes]
+      .filter((node) => node.type !== 'data')
+      .sort((a, b) => a.position.x - b.position.x);
+    const left = ordered[0];
+    const right = ordered[ordered.length - 1];
+    expect(left).toBeDefined();
+    expect(right).toBeDefined();
+    expect(right!.position.x).toBeGreaterThan(left!.position.x);
+    stage.edges.push({
+      id: 'e-backward-fixture',
+      source: right!.id,
+      target: left!.id,
+      kind: 'process',
+    });
+
     const { edges } = buildStageGraph(stage);
 
     let backward = 0;
@@ -304,9 +322,7 @@ describe('buildStageGraph', () => {
         expect(edge.targetHandle).toBe('top');
       }
     }
-    // В данных этапа 2 такое ребро ровно одно — если их станет больше,
-    // стоит вернуться к выбору хэндлов.
-    expect(backward).toBe(1);
+    expect(backward, 'добавленное обратное ребро не распознано').toBe(1);
   });
 
   // Решение владельца процесса (задача process-map-7bz): все четыре узла

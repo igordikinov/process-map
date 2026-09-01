@@ -123,7 +123,7 @@ MAP_ID = "snp"
 # ЧТО НЕ ДАЁТ ЕЙ ПРОТУХНУТЬ СНОВА — соседняя константа: отпечаток содержания
 # process.json. Расходятся — краснеет tests/updatedAt.test.ts. Проверка на
 # TypeScript, а не здесь, потому что Python в CI не запускается вовсе.
-MAP_UPDATED_AT = "2026-08-31"
+MAP_UPDATED_AT = "2026-09-01"
 
 # sha256 содержания src/data/snp/process.json с НЕЙТРАЛИЗОВАННЫМ updatedAt.
 #
@@ -136,7 +136,7 @@ MAP_UPDATED_AT = "2026-08-31"
 # дата протухнет ровно тем же способом. Python и не смог бы посчитать финальный
 # отпечаток — после него файл переписывает scripts/layout.ts.
 # Значение печатает падающий тест; алгоритм — в tests/updatedAt.test.ts.
-MAP_DATA_FINGERPRINT = "0547c33cd95d3bd279fac2ff60aa5382ae51d084b93dc06bac5fa5d91e264c91"
+MAP_DATA_FINGERPRINT = "415efc85cc982ddf8cd9c6b419cf8e6ea70cb347641e92b400c77bc7315a51c8"
 
 # Заголовок шапки обзора. Решение владельца от 31.08.2026 (process-map-4d2):
 # формулировка макета A1, она же в заголовке PRD.md. Прежняя — «E2E процесс
@@ -614,6 +614,9 @@ class SlideReport:
     # Узлы, перенесённые в отдельную группу по решению владельца
     # (STAGE_GROUP_SPLIT, задача process-map-028).
     owner_groups: list[str] = field(default_factory=list)
+    # Рёбра, у которых хотя бы один конец разрешён явной привязкой коннектора,
+    # а не геометрией (process-map-3wh.16).
+    cxn_edges: list[str] = field(default_factory=list)
 
 
 # --------------------------------------------------------------------------------------
@@ -1261,16 +1264,18 @@ def build_stage(
         if s.kind == "auto" and s.has_text and not is_container(s) and not is_decor_arrow(s)
     ]
     drafts: list[NodeDraft] = []
+    # Фигура -> узел: по этой карте разрешаются привязки коннекторов stCxn/endCxn.
+    node_of_sid: dict[int, str] = {}
     for shape in node_shapes:
-        drafts.append(
-            NodeDraft(
-                node_id=ids.make(shape.text, slide_no, shape.sid),
-                node_type=node_type_for(shape),
-                label=shape.text,
-                box=shape.box,
-                group=innermost_container(containers, shape.box),
-            )
+        draft = NodeDraft(
+            node_id=ids.make(shape.text, slide_no, shape.sid),
+            node_type=node_type_for(shape),
+            label=shape.text,
+            box=shape.box,
+            group=innermost_container(containers, shape.box),
         )
+        drafts.append(draft)
+        node_of_sid[shape.sid] = draft.node_id
 
     # 2.5. Промоушен текстбокса в узел: в презентации часть вершин графа нарисована
     #      не автофигурой, а надписью. Признак — однострочный текст, в bbox которого
@@ -1289,15 +1294,15 @@ def build_stage(
         if hits < PROMOTE_MIN_ENDPOINTS:
             continue
         tb.consumed_by = "узел (промоушен из текстбокса)"
-        drafts.append(
-            NodeDraft(
-                node_id=ids.make(tb.text, slide_no, tb.sid),
-                node_type=node_type_for(tb),
-                label=tb.text,
-                box=tb.box,
-                group=innermost_container(containers, tb.box),
-            )
+        promoted = NodeDraft(
+            node_id=ids.make(tb.text, slide_no, tb.sid),
+            node_type=node_type_for(tb),
+            label=tb.text,
+            box=tb.box,
+            group=innermost_container(containers, tb.box),
         )
+        drafts.append(promoted)
+        node_of_sid[tb.sid] = promoted.node_id
         report.promoted.append(
             f"слайд {slide_no}: [{tb.sid}] «{tb.text[:60]}» — узел (концов линий: {hits})"
         )
@@ -1425,19 +1430,53 @@ def build_stage(
             f"слайд {slide_no}: [{tb.sid}] «{tb.text[:70]}» → description узла «{best_draft.node_id}»"
         )
 
-    # 6. Рёбра: концы линий геометрически «прилипают» к узлам (два прохода).
+    # 6. Рёбра: сначала явные привязки коннектора, затем геометрия (два прохода).
+    #
+    #    ПОЧЕМУ ПРИВЯЗКИ ПЕРВЫМИ (process-map-3wh.16). Считалось, что в этой
+    #    презентации привязок нет и связи приходится выводить геометрически. Это
+    #    неверно: из 66 линий 47 имеют ОБЕ привязки и лишь 10 не имеют ни одной —
+    #    импортёр их просто не читал. Привязка точнее геометрии: она указывает на
+    #    фигуру, а не на точку, и не врёт у растянутых коннекторов.
+    #
+    #    Привязка к КОНТЕЙНЕРУ группы разрешается в ближайший шаг этой группы:
+    #    ребро в модели соединяет узлы, а контейнер узлом не является. Веерную
+    #    связь «в группу целиком» один коннектор выразить не может — для неё
+    #    остаётся OWNER_DECISION_EDGES (проверено: линия [146] слайда 5 даёт одно
+    #    ребро из четырёх, объявленных владельцем).
     by_id = {d.node_id: d for d in drafts}
     node_boxes = [(d.box, d.node_id) for d in drafts if d.node_type != "data"]
     node_boxes.extend(proxies)
+    members_of = {
+        container.sid: [
+            (d.box, d.node_id)
+            for d in drafts
+            if d.group == group_id and d.node_type != "data"
+        ]
+        for container, group_id in containers
+    }
+
+    def by_binding(sid: int | None, point: tuple[float, float]) -> str | None:
+        """Привязка коннектора -> узел; привязка к контейнеру -> ближайший шаг в нём."""
+        if sid is None:
+            return None
+        if sid in node_of_sid:
+            return node_of_sid[sid]
+        return nearest_target(members_of.get(sid, []), point, EDGE_SNAP_DETAIL)
+
     edges: list[dict] = []
     seen_pairs: set[tuple[str, str]] = set()
     report.lines_total = len(lines)
     for line in lines:
         start, end = line_endpoints(line)
+        source = by_binding(line.start_sid, start)
+        target = by_binding(line.end_sid, end)
+        bound = source is not None or target is not None
         ranked_start = rank_candidates(node_boxes, start)
         ranked_end = rank_candidates(node_boxes, end)
-        source = ranked_start[0][1] if ranked_start and ranked_start[0][0] <= EDGE_SNAP_DETAIL else None
-        target = ranked_end[0][1] if ranked_end and ranked_end[0][0] <= EDGE_SNAP_DETAIL else None
+        if source is None and ranked_start and ranked_start[0][0] <= EDGE_SNAP_DETAIL:
+            source = ranked_start[0][1]
+        if target is None and ranked_end and ranked_end[0][0] <= EDGE_SNAP_DETAIL:
+            target = ranked_end[0][1]
         if source is not None and target is None:
             target = resolve_second_pass(ranked_end, source)
         elif target is not None and source is None:
@@ -1449,6 +1488,8 @@ def build_stage(
         if (source, target) in seen_pairs:
             continue
         seen_pairs.add((source, target))
+        if bound:
+            report.cxn_edges.append(f"слайд {slide_no}: [{line.sid}] {source} → {target}")
         endpoint_types = {by_id[source].node_type, by_id[target].node_type}
         edges.append(
             {
@@ -2744,6 +2785,22 @@ def print_report(
             print(f"    · {item}")
     else:
         print("  список STAGE_GROUP_SPLIT пуст — все группы прочитаны со слайдов детализации")
+
+    # Рёбра, разрешённые явной привязкой коннектора (process-map-3wh.16).
+    cxn = [item for report in reports for item in report.cxn_edges]
+    print("\n" + "=" * 78)
+    print("РЁБРА ПО ПРИВЯЗКАМ КОННЕКТОРОВ — НЕ ПО ГЕОМЕТРИИ")
+    print("=" * 78)
+    if cxn:
+        print(f"  {len(cxn)} рёбер, у которых хотя бы один конец взят из stCxn/endCxn.")
+        print("  Привязка точнее геометрии: указывает на фигуру, а не на точку.")
+        print("  Привязка к контейнеру группы разрешается в ближайший шаг этой группы;")
+        print("  веерную связь «в группу целиком» коннектор выразить не может — для неё")
+        print("  остаётся OWNER_DECISION_EDGES.")
+        for item in cxn:
+            print(f"    · {item}")
+    else:
+        print("  привязок в презентации нет — все связи выведены геометрически")
 
     # Узлы, ставшие интеграциями не по заливке, а по коду системы (7v1).
     promoted = [item for report in reports for item in report.promoted_integrations]

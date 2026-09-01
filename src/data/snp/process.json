@@ -1,7 +1,7 @@
 {
   "version": "1.0.0",
   "id": "snp",
-  "updatedAt": "2026-08-31",
+  "updatedAt": "2026-09-01",
   "title": "E2E-процесс планирования поставок",
   "moduleLabel": "Модуль SNP",
   "stages": [
@@ -342,7 +342,7 @@
           ],
           "position": {
             "x": 1538,
-            "y": 134
+            "y": 196
           },
           "slidePosition": {
             "x": 1018,
@@ -387,8 +387,8 @@
           ],
           "system": "IO",
           "position": {
-            "x": 710,
-            "y": 234
+            "x": 1538,
+            "y": 280
           },
           "slidePosition": {
             "x": 775,
@@ -419,7 +419,7 @@
           ],
           "position": {
             "x": 710,
-            "y": 402
+            "y": 364
           },
           "slidePosition": {
             "x": 126,
@@ -436,7 +436,7 @@
           ],
           "position": {
             "x": 1124,
-            "y": 218
+            "y": 364
           },
           "slidePosition": {
             "x": 330,
@@ -453,7 +453,7 @@
           ],
           "position": {
             "x": 1538,
-            "y": 218
+            "y": 364
           },
           "slidePosition": {
             "x": 543,
@@ -469,8 +469,8 @@
             "Неограниченная потребность в перемещении"
           ],
           "position": {
-            "x": 710,
-            "y": 318
+            "x": 1538,
+            "y": 448
           },
           "slidePosition": {
             "x": 780,
@@ -486,8 +486,8 @@
             "Уровни запасов в плановых ЕИ"
           ],
           "position": {
-            "x": 1124,
-            "y": 318
+            "x": 1952,
+            "y": 364
           },
           "slidePosition": {
             "x": 1026,
@@ -500,8 +500,8 @@
           "label": "Передача уровней запасов из модуля IO",
           "system": "IO",
           "position": {
-            "x": 1124,
-            "y": 502
+            "x": 296,
+            "y": 465
           },
           "slidePosition": {
             "x": 9,
@@ -515,7 +515,7 @@
           "system": "PS",
           "position": {
             "x": 296,
-            "y": 402
+            "y": 187
           },
           "slidePosition": {
             "x": 9,
@@ -588,8 +588,8 @@
             "url": "https://front-prod.k8s.demo5.in-plan.ru/snp-process-map"
           },
           "position": {
-            "x": 1538,
-            "y": 518
+            "x": 2366,
+            "y": 364
           },
           "slidePosition": {
             "x": 45,
@@ -605,8 +605,8 @@
             "План производства (драфт)"
           ],
           "position": {
-            "x": 1952,
-            "y": 518
+            "x": 2780,
+            "y": 364
           },
           "slidePosition": {
             "x": 254,
@@ -622,8 +622,8 @@
             "План перемещений (драфт)"
           ],
           "position": {
-            "x": 2366,
-            "y": 518
+            "x": 3194,
+            "y": 364
           },
           "slidePosition": {
             "x": 455,
@@ -639,8 +639,8 @@
             "Потребность в критическом сырье"
           ],
           "position": {
-            "x": 2780,
-            "y": 518
+            "x": 3608,
+            "y": 364
           },
           "slidePosition": {
             "x": 657,
@@ -656,8 +656,8 @@
             "Ограниченный прогноз продаж (драфт)"
           ],
           "position": {
-            "x": 3194,
-            "y": 518
+            "x": 4022,
+            "y": 364
           },
           "slidePosition": {
             "x": 858,
@@ -670,8 +670,8 @@
           "label": "Формирование журнала и результатов",
           "group": "raschet-obemnyh-planov-s-uchetom-ogranicheniy",
           "position": {
-            "x": 3608,
-            "y": 518
+            "x": 4436,
+            "y": 364
           },
           "slidePosition": {
             "x": 1060,
@@ -684,7 +684,7 @@
           "label": "Уровни запасов в плановых ЕИ",
           "direction": "out",
           "position": {
-            "x": 4022,
+            "x": 4850,
             "y": 180
           },
           "slidePosition": {
@@ -698,7 +698,7 @@
           "label": "Ограниченный План продаж (драфт)",
           "direction": "out",
           "position": {
-            "x": 4022,
+            "x": 4850,
             "y": 252
           },
           "slidePosition": {
@@ -712,7 +712,7 @@
           "label": "План производства (драфт)",
           "direction": "out",
           "position": {
-            "x": 4022,
+            "x": 4850,
             "y": 324
           },
           "slidePosition": {
@@ -726,7 +726,7 @@
           "label": "План перемещений (драфт)",
           "direction": "out",
           "position": {
-            "x": 4022,
+            "x": 4850,
             "y": 396
           },
           "slidePosition": {
@@ -740,7 +740,7 @@
           "label": "Потребность в критическом сырье",
           "direction": "out",
           "position": {
-            "x": 4022,
+            "x": 4850,
             "y": 468
           },
           "slidePosition": {
@@ -751,6 +751,12 @@
       ],
       "edges": [
         {
+          "id": "e-raschet-potrebnosti-v-komponentah--raschet-neogranichennoy-potrebnosti-v-popolnenii-s-lokaciy-po-kvotam",
+          "source": "raschet-potrebnosti-v-komponentah",
+          "target": "raschet-neogranichennoy-potrebnosti-v-popolnenii-s-lokaciy-po-kvotam",
+          "kind": "process"
+        },
+        {
           "id": "e-raschet-potrebnosti-v-komponentah--raschet-planovogo-ostatka-0-i-formirovanie-preduprezhdeniya",
           "source": "raschet-potrebnosti-v-komponentah",
           "target": "raschet-planovogo-ostatka-0-i-formirovanie-preduprezhdeniya",
@@ -760,12 +766,6 @@
           "id": "e-optimalnyy-strahovoy-zapas-v-dnyah-pokrytiya-iz-modulya-io--raschet-urovney-zapasov-ot-minimalnyh-maksimalnyh-dney-pokrytiya-i",
           "source": "optimalnyy-strahovoy-zapas-v-dnyah-pokrytiya-iz-modulya-io",
           "target": "raschet-urovney-zapasov-ot-minimalnyh-maksimalnyh-dney-pokrytiya-i",
-          "kind": "integration"
-        },
-        {
-          "id": "e-raschet-potrebnosti-na-kazhdoy-lokacii-netting--peredacha-urovney-zapasov-iz-modulya-io",
-          "source": "raschet-potrebnosti-na-kazhdoy-lokacii-netting",
-          "target": "peredacha-urovney-zapasov-iz-modulya-io",
           "kind": "integration"
         },
         {
@@ -927,7 +927,7 @@
           ],
           "position": {
             "x": 296,
-            "y": 126
+            "y": 118
           },
           "slidePosition": {
             "x": 232,
@@ -998,7 +998,7 @@
           "group": "vnesenie-ruchnyh-korrektirovok",
           "position": {
             "x": 1124,
-            "y": 243
+            "y": 201
           },
           "slidePosition": {
             "x": 259,
@@ -1012,7 +1012,7 @@
           "group": "vnesenie-ruchnyh-korrektirovok",
           "position": {
             "x": 1538,
-            "y": 134
+            "y": 176
           },
           "slidePosition": {
             "x": 788,
@@ -1102,7 +1102,7 @@
           "group": "vnesenie-ruchnyh-korrektirovok",
           "position": {
             "x": 710,
-            "y": 126
+            "y": 118
           },
           "slidePosition": {
             "x": 43,
@@ -1134,7 +1134,7 @@
           "group": "vnesenie-ruchnyh-korrektirovok-po-prichine-deficit-gp-iz-za-nizkogo",
           "position": {
             "x": 710,
-            "y": 895
+            "y": 443
           },
           "slidePosition": {
             "x": 258,
@@ -1148,7 +1148,7 @@
           "group": "vnesenie-ruchnyh-korrektirovok-po-prichine-deficit-gp-iz-za-nizkogo",
           "position": {
             "x": 1124,
-            "y": 878
+            "y": 442
           },
           "slidePosition": {
             "x": 679,
@@ -1162,7 +1162,7 @@
           "group": "vnesenie-ruchnyh-korrektirovok-po-prichine-deficit-gp-iz-za-nizkogo",
           "position": {
             "x": 710,
-            "y": 811
+            "y": 359
           },
           "slidePosition": {
             "x": 258,
@@ -1222,7 +1222,7 @@
           "group": "raschet-scenariev-dlya-s-op",
           "position": {
             "x": 710,
-            "y": 695
+            "y": 895
           },
           "slidePosition": {
             "x": 351,
@@ -1236,7 +1236,7 @@
           "group": "raschet-scenariev-dlya-s-op",
           "position": {
             "x": 1124,
-            "y": 552
+            "y": 794
           },
           "slidePosition": {
             "x": 860,
@@ -1250,7 +1250,7 @@
           "group": "raschet-scenariev-dlya-s-op",
           "position": {
             "x": 710,
-            "y": 611
+            "y": 811
           },
           "slidePosition": {
             "x": 351,
@@ -1282,7 +1282,7 @@
           "group": "raschet-scenariev-dlya-s-op",
           "position": {
             "x": 296,
-            "y": 527
+            "y": 727
           },
           "slidePosition": {
             "x": 236,
@@ -1310,7 +1310,7 @@
           "group": "raschet-scenariev-dlya-s-op",
           "position": {
             "x": 710,
-            "y": 359
+            "y": 559
           },
           "slidePosition": {
             "x": 351,
@@ -1324,7 +1324,7 @@
           "group": "raschet-scenariev-dlya-s-op",
           "position": {
             "x": 710,
-            "y": 443
+            "y": 643
           },
           "slidePosition": {
             "x": 351,
@@ -1352,7 +1352,7 @@
           "group": "raschet-scenariev-dlya-s-op",
           "position": {
             "x": 710,
-            "y": 527
+            "y": 727
           },
           "slidePosition": {
             "x": 351,
@@ -1490,9 +1490,9 @@
           "kind": "process"
         },
         {
-          "id": "e-raschet-ogranichennyh-planov--publikaciya-planovyh-zakazov",
+          "id": "e-raschet-ogranichennyh-planov--publikaciya-zayavok-na-zakupku",
           "source": "raschet-ogranichennyh-planov",
-          "target": "publikaciya-planovyh-zakazov",
+          "target": "publikaciya-zayavok-na-zakupku",
           "kind": "process"
         },
         {
@@ -1511,6 +1511,12 @@
           "id": "e-korrektirovka-plana-proizvodstva-5-82--pereschet-plana-s-uchetom-korrektirovok-5-117",
           "source": "korrektirovka-plana-proizvodstva-5-82",
           "target": "pereschet-plana-s-uchetom-korrektirovok-5-117",
+          "kind": "process"
+        },
+        {
+          "id": "e-pereschet-plana-v-scenarii--raschet-ogranichennyh-planov",
+          "source": "pereschet-plana-v-scenarii",
+          "target": "raschet-ogranichennyh-planov",
           "kind": "process"
         },
         {
@@ -1592,9 +1598,9 @@
           "kind": "process"
         },
         {
-          "id": "e-raschet-ogranichennyh-planov--publikaciya-zayavok-na-zakupku",
+          "id": "e-raschet-ogranichennyh-planov--publikaciya-planovyh-zakazov",
           "source": "raschet-ogranichennyh-planov",
-          "target": "publikaciya-zayavok-na-zakupku",
+          "target": "publikaciya-planovyh-zakazov",
           "kind": "process"
         },
         {
