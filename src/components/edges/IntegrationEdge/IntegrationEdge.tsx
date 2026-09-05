@@ -2,6 +2,7 @@
 // (SPEC §4.1). В макете A1 линия серо-синяя (#8fa4c4), но SPEC требует синий —
 // SPEC главнее (CLAUDE.md), поэтому используется --pm-integration.
 import { BaseEdge, getSmoothStepPath, type Edge, type EdgeProps } from '@xyflow/react';
+import { EdgeLabel } from '../EdgeLabel';
 import { EDGE_BORDER_RADIUS } from '../edgeGeometry';
 import { useEdgeMarkers } from '../edgeMarkerContext';
 import styles from '../edges.module.css';
@@ -15,9 +16,10 @@ export function IntegrationEdge({
   targetX,
   targetY,
   targetPosition,
+  label,
 }: EdgeProps<IntegrationEdgeType>) {
   const markers = useEdgeMarkers();
-  const [path] = getSmoothStepPath({
+  const [path, labelX, labelY] = getSmoothStepPath({
     sourceX,
     sourceY,
     sourcePosition,
@@ -28,10 +30,13 @@ export function IntegrationEdge({
   });
 
   return (
-    <BaseEdge
-      path={path}
-      className={styles.integration}
-      markerEnd={`url(#${markers.integration})`}
-    />
+    <>
+      <BaseEdge
+        path={path}
+        className={styles.integration}
+        markerEnd={`url(#${markers.integration})`}
+      />
+      <EdgeLabel label={label} x={labelX} y={labelY} />
+    </>
   );
 }

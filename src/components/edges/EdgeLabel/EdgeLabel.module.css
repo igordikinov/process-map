@@ -1,0 +1,23 @@
+/*
+ * Подпись на ребре (process-map-70e.6).
+ * Только var(...) из src/theme/tokens.css — CLAUDE.md «Кодовые правила».
+ */
+
+.label {
+  position: absolute;
+  /* Рисуется поверх узлов, поэтому обязана иметь подложку: без неё текст
+     ложится на карточку и не читается. */
+  max-width: var(--pm-edge-label-max-width);
+  padding: 0 var(--pm-edge-label-padding-x);
+  border-radius: var(--pm-edge-label-radius);
+  background: var(--pm-edge-label-bg);
+  color: var(--pm-edge-label-color);
+  font-size: var(--pm-font-size-11);
+  line-height: var(--pm-line-height-15);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  /* Подпись не перехватывает указатель: полотно панорамируется протяжкой, и
+     мышь, попавшая на подпись, иначе роняла бы жест. */
+  pointer-events: none;
+}

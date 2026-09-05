@@ -28,6 +28,19 @@
   stroke-width: var(--pm-edge-integration-width);
 }
 
+/*
+ * Ребро «шаг ↔ артефакт данных» (process-map-70e.6). Точечный пунктир, а не
+ * штриховой: штриховой занят интеграцией, и два пунктира одного рисунка
+ * читатель не различит. Точками ассоциацию с артефактом рисует и сама нотация.
+ */
+.data {
+  fill: none;
+  stroke: var(--pm-edge-data-color);
+  stroke-dasharray: var(--pm-edge-data-dash);
+  stroke-linecap: round;
+  stroke-width: var(--pm-edge-data-width);
+}
+
 /* Маркеры-стрелки живут в скрытом svg вне полотна. */
 .markers {
   position: absolute;
@@ -46,4 +59,8 @@
 
 .arrowIntegration {
   fill: var(--pm-integration);
+}
+
+.arrowData {
+  fill: var(--pm-edge-data-color);
 }

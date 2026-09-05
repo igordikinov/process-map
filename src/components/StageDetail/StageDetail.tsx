@@ -14,7 +14,7 @@ import { useProcessMap } from '../../hooks/useProcessMap';
 import { ru } from '../../i18n/ru';
 import { useProcessStore } from '../../store/useProcessStore';
 import { Breadcrumbs } from '../Breadcrumbs';
-import { EdgeMarkers, IntegrationEdge, ProcessEdge, ProcessInnerEdge } from '../edges';
+import { DataEdge, EdgeMarkers, IntegrationEdge, ProcessEdge, ProcessInnerEdge } from '../edges';
 import { Legend } from '../Legend';
 import { NodeDrawer } from '../NodeDrawer';
 import { DataNode } from '../nodes/DataNode';
@@ -62,6 +62,9 @@ const edgeTypes = {
   // два вида в один счётчик — то же соображение, что у `lane` / `flowLane`.
   processInner: ProcessInnerEdge,
   integration: IntegrationEdge,
+  // Ребро к артефакту данных (process-map-70e.6). Значение kind: 'data' было в
+  // схеме с самого начала, но не отрисовывалось ничем.
+  data: DataEdge,
 } satisfies EdgeTypes;
 
 /** Убирает ссылку-attribution React Flow — обоснование в Overview.tsx (4hv). */
