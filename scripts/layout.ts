@@ -53,7 +53,7 @@ import {
   rectOf,
 } from '../src/layout/stageLayout.ts';
 import { splitStageDataNodes as splitDataNodes } from '../src/utils/stageNodes.ts';
-import { DEFAULT_MAP, mapIdFromArgv, mapJsonPath, type MapId } from './mapTarget.ts';
+import { DEFAULT_MAP, mapIdFromArgv, mapJsonPath, type DataMapId } from './mapTarget.ts';
 
 // Реестр карт и разбор `--map` — в scripts/mapTarget.ts: тот же список нужен
 // конфигам сборки, а второй экземпляр разошёлся бы с первым.
@@ -66,8 +66,14 @@ import { DEFAULT_MAP, mapIdFromArgv, mapJsonPath, type MapId } from './mapTarget
  * Формат записи повторяет scripts/import-pptx.py (json.dumps ensure_ascii=False,
  * indent=2, перевод строки в конце, LF): иначе прогоны импорта и раскладки
  * бесконечно переписывали бы файл друг за другом.
+ *
+ * ЭКСПОРТИРУЕТСЯ РАДИ ГЕНЕРАТОРА КАРТЫ ИЗ BPMN (process-map-0c5.3). Тот не
+ * может взять serializeProcessMap из src/utils/processTransfer.ts: он тянет
+ * loader.ts, а loader.ts — `@map/process.json`, и алиас в голом Node не
+ * резолвится. Сериализатор на конвейере обязан быть один: два формата записи
+ * дали бы файлы, которые побайтовая сверка объявляет разными, а глаз — нет.
  */
-function serialize(map: ProcessMap): string {
+export function serialize(map: ProcessMap): string {
   return `${JSON.stringify(map, null, 2)}\n`;
 }
 
@@ -77,7 +83,7 @@ function serialize(map: ProcessMap): string {
  * scripts/data.ts (конвейер `npm run data`), который вызывает её в том же
  * процессе после импорта.
  */
-export function runLayout(mapId: MapId = DEFAULT_MAP): number {
+export function runLayout(mapId: DataMapId = DEFAULT_MAP): number {
   const path = mapJsonPath(mapId);
   const original = readFileSync(path, 'utf8');
   const raw = JSON.parse(original) as ProcessMap;

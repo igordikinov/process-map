@@ -25,8 +25,9 @@
 
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { runBpmnMap } from './bpmnMap.ts';
 import { runLayout } from './layout.ts';
-import { mapIdFromArgv, type MapId } from './mapTarget.ts';
+import { isBpmnMapId, mapIdFromArgv, type MapId } from './mapTarget.ts';
 
 /** Код возврата импортёра «ссылки на экраны потеряны» — scripts/import-pptx.py::EXIT_LINKS_LOST. */
 const EXIT_LINKS_LOST = 2;
@@ -78,6 +79,18 @@ function main(): number {
   // Карта разбирается ОДИН раз и передаётся обоим шагам: разные ключи у импорта
   // и раскладки означали бы, что вторая переписывает координатами чужой файл.
   const mapId = mapIdFromArgv(process.argv.slice(2));
+
+  /*
+   * РАЗВИЛКА ПО ИСТОЧНИКУ (process-map-0c5.4). У карты из модели нет
+   * презентации, поэтому питоновский импортёр в этой ветке не участвует вовсе.
+   * Раскладка тоже: адаптер уже разложил карту тем же ядром layoutStage,
+   * сидируясь геометрией схемы, — второй проход был бы no-op, а лишний шаг в
+   * конвейере обязательно однажды разошёлся бы с первым.
+   */
+  if (isBpmnMapId(mapId)) {
+    return runBpmnMap();
+  }
+
   const importCode = runImport(mapId);
   // 0 — всё перенесено, 2 — часть ручных ссылок потеряна (файл записан).
   // Любой другой код означает, что импорт не состоялся: раскладывать нечего.
