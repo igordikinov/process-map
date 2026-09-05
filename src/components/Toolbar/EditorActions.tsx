@@ -40,12 +40,17 @@ import {
   type FocusEvent,
   type ReactElement,
 } from 'react';
+import { isImportedActive, setImportReport } from '../../data/activeMap';
+import { bpmnToProcessMap } from '../../data/bpmn/adapter';
+import { MAX_BPMN_BYTES, parseBpmnDocument } from '../../data/bpmn/xml';
 import {
   getMergedProcessMap,
   loadBaseProcessMap,
   replaceOverrides,
   resetOverrides,
 } from '../../data/loader';
+import { applyImportedMap, revertToBuiltinMap } from '../../data/mapSwitch';
+import { useProcessStore } from '../../store/useProcessStore';
 import { commitOverrides } from '../../hooks/useProcessMap';
 import { ru } from '../../i18n/ru';
 import {
@@ -90,6 +95,11 @@ function downloadTextFile(fileName: string, text: string): void {
 
 export function EditorActions() {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const bpmnInputRef = useRef<HTMLInputElement>(null);
+  const setImportReportOpen = useProcessStore((state) => state.setImportReportOpen);
+  // Признак «показана не встроенная карта» перечитывается при каждом рендере:
+  // подмена идёт через refreshProcessMap, который и вызывает рендер.
+  const importedActive = isImportedActive();
   const resetRef = useRef<HTMLButtonElement>(null);
   const confirmRef = useRef<HTMLButtonElement>(null);
   // «Вернуть фокус на „Сбросить правки“ после закрытия подтверждения» —
@@ -167,6 +177,82 @@ export function EditorActions() {
       });
   };
 
+  const handleImportBpmnClick = (): void => {
+    startAction();
+    bpmnInputRef.current?.click();
+  };
+
+  /**
+   * Загрузка схемы BPMN.
+   *
+   * ВЕСЬ ПУТЬ В try/catch НЕ ИЗ ОСТОРОЖНОСТИ, А ПО НЕОБХОДИМОСТИ: error boundary
+   * в приложении нет ни одного — App висит прямо под createRoot, и React 18 при
+   * непойманном исключении размонтирует корень (см. useDeepLink.ts). Ошибка
+   * разбора чужого файла убила бы приложение до белого экрана.
+   */
+  const handleBpmnFileChange = (event: ChangeEvent<HTMLInputElement>): void => {
+    const input = event.currentTarget;
+    const file = input.files?.[0];
+    // Тот же приём, что у импорта JSON: без сброса значения повторный выбор
+    // ТОГО ЖЕ файла не даёт события change, и второй импорт молча не срабатывает.
+    input.value = '';
+    if (file === undefined) {
+      return;
+    }
+    // Размер проверяется ДО чтения: File.size доступен сразу, и файл на
+    // гигабайты отклоняется, не заняв памяти.
+    if (file.size > MAX_BPMN_BYTES) {
+      setMessage({ kind: 'error', text: ru.toolbar.importBpmnTooLarge });
+      return;
+    }
+
+    void file
+      .text()
+      .then((text) => {
+        const parsed = parseBpmnDocument(text);
+        if (parsed.status !== 'ok') {
+          // Пять различимых исходов разбора дают одну строку — по образцу
+          // решения владельца для JSON: «для пользователя это одно событие».
+          // Подробности живут в отчёте, а не в строке тулбара.
+          setMessage({ kind: 'error', text: ru.toolbar.importBpmnBadFile });
+          return;
+        }
+        const result = bpmnToProcessMap(parsed.doc, {
+          fileName: file.name,
+          lastModified: file.lastModified,
+        });
+        if (result.status !== 'ok') {
+          setImportReport(result.report);
+          setImportReportOpen(true);
+          setMessage({
+            kind: 'error',
+            text: ru.toolbar.importBpmnNoMap(result.report.blockers[0] ?? ''),
+          });
+          return;
+        }
+        setImportReport(result.report);
+        applyImportedMap(result.map);
+        setImportReportOpen(true);
+        setMessage({
+          kind: 'success',
+          text: ru.toolbar.importBpmnApplied(
+            result.map.stages.length,
+            result.report.shownFlowNodes.shown,
+            result.report.shownFlowNodes.inFile,
+          ),
+        });
+      })
+      .catch(() => {
+        setMessage({ kind: 'error', text: ru.toolbar.importBpmnBadFile });
+      });
+  };
+
+  const handleReturnToBuiltin = (): void => {
+    startAction();
+    setImportReportOpen(false);
+    revertToBuiltinMap();
+  };
+
   const handleResetArm = (): void => {
     setMessage(null);
     setResetArmed(true);
@@ -226,6 +312,16 @@ export function EditorActions() {
     <>
       {messageRow}
 
+      {/* ДВЕ ГРУППЫ, А НЕ ОДНА — и это не оформление.
+          Сегментированная группа не переносится: у неё фиксированная высота и
+          overflow:hidden. Тулбар переносит по группам (Toolbar.module.css), а
+          группа шире контейнера просто уезжает за край, потому что ряд прижат
+          вправо. С шестью кнопками в одном сегменте на 1024×600 с открытой
+          панелью узла «Экспорт JSON» оказывался целиком за левым краем
+          (x = −112) и не нажимался — ровно тот отказ, ради которого в
+          Toolbar.module.css уже появились left + flex-wrap.
+          Деление вышло по смыслу, а не по счёту: первая группа меняет ПРАВКИ
+          текущей карты, вторая — КАКАЯ карта показана. */}
       <div className={styles.group}>
         <button type="button" className={styles.button} onClick={handleExport}>
           {ru.toolbar.exportJson}
@@ -282,6 +378,43 @@ export function EditorActions() {
           </button>
         </div>
       )}
+
+      {/* Вторая группа: какая карта показана. До первого импорта в ней одна
+          кнопка — остальные две обещали бы действие, которому не к чему
+          применяться. */}
+      <div className={styles.group}>
+        <button type="button" className={styles.button} onClick={handleImportBpmnClick}>
+          {ru.toolbar.importBpmn}
+        </button>
+        {importedActive && (
+          <button
+            type="button"
+            className={styles.button}
+            onClick={() => {
+              startAction();
+              setImportReportOpen(true);
+            }}
+          >
+            {ru.toolbar.openImportReport}
+          </button>
+        )}
+        {importedActive && (
+          <button type="button" className={styles.button} onClick={handleReturnToBuiltin}>
+            {ru.toolbar.returnToBuiltin}
+          </button>
+        )}
+        {/* Отдельный input, а не общий с JSON: accept разный, а общий потребовал
+            бы состояния «какой импорт взведён» ради экономии восьми строк. */}
+        <input
+          ref={bpmnInputRef}
+          type="file"
+          accept=".bpmn,.xml,application/xml,text/xml"
+          className={styles.fileInput}
+          aria-hidden="true"
+          tabIndex={-1}
+          onChange={handleBpmnFileChange}
+        />
+      </div>
     </>
   );
 }

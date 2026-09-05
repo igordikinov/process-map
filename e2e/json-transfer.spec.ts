@@ -215,14 +215,14 @@ test.describe('Тулбар редактора: три кнопки SPEC §4.4',
     await page.goto('/');
     await page.waitForSelector('.react-flow__node-stage');
 
-    for (const name of ['Экспорт JSON', 'Импорт JSON', 'Сбросить правки']) {
+    for (const name of ['Экспорт JSON', 'Импорт JSON', 'Импорт BPMN', 'Сбросить правки']) {
       await expect(page.getByRole('button', { name, exact: true })).toHaveCount(0);
     }
 
     await enterEditMode(page);
 
     // Видимы и не перекрыты полотном (главная ловушка проекта).
-    for (const name of ['Экспорт JSON', 'Импорт JSON', 'Сбросить правки']) {
+    for (const name of ['Экспорт JSON', 'Импорт JSON', 'Импорт BPMN', 'Сбросить правки']) {
       const button = page.getByRole('button', { name, exact: true });
       await expect(button).toBeVisible();
       const box = await button.boundingBox();
@@ -253,7 +253,14 @@ test.describe('Тулбар редактора: три кнопки SPEC §4.4',
     await page.locator(STEP_CARD).first().click();
     await expect(page.getByRole('dialog')).toBeVisible();
 
-    for (const name of ['Просмотр', 'Редактор', 'Экспорт JSON', 'Импорт JSON', 'Сбросить правки']) {
+    for (const name of [
+      'Просмотр',
+      'Редактор',
+      'Экспорт JSON',
+      'Импорт JSON',
+      'Импорт BPMN',
+      'Сбросить правки',
+    ]) {
       const box = await page.getByRole('button', { name, exact: true }).boundingBox();
       expect(box, `кнопка «${name}» без геометрии`).not.toBeNull();
       expect(box?.x ?? -1, `кнопка «${name}» уехала за левый край`).toBeGreaterThanOrEqual(0);
@@ -291,7 +298,14 @@ test.describe('Тулбар редактора: три кнопки SPEC §4.4',
     );
     expect(overflow).toBeLessThanOrEqual(0);
 
-    for (const name of ['Просмотр', 'Редактор', 'Экспорт JSON', 'Импорт JSON', 'Сбросить правки']) {
+    for (const name of [
+      'Просмотр',
+      'Редактор',
+      'Экспорт JSON',
+      'Импорт JSON',
+      'Импорт BPMN',
+      'Сбросить правки',
+    ]) {
       const button = await page.getByRole('button', { name, exact: true }).boundingBox();
       expect(button?.x ?? -1, `кнопка «${name}» уехала за левый край`).toBeGreaterThanOrEqual(0);
       expect((button?.x ?? 0) + (button?.width ?? 0)).toBeLessThanOrEqual(1024);

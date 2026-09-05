@@ -58,3 +58,22 @@
   font-size: var(--scp-font-sizes-12);
   white-space: nowrap;
 }
+
+/* Бейдж «Загруженная схема» (process-map-70e.9). Форма та же, что у бейджа с
+   числом этапов, но заливка инвертирована: два одинаковых светлых чипа рядом
+   читались бы как одна пара «N этапов, схема», а признак подмены обязан
+   выделяться, а не сливаться. Своих токенов не заводит — берёт нейтраль и
+   фон из уже существующих. */
+.importedBadge {
+  display: inline-flex;
+  height: var(--pm-badge-height);
+  align-items: center;
+  padding: var(--scp-badge-padding);
+  border-radius: var(--scp-badge-border-radius);
+  background: var(--scp-color-neutral-700);
+  color: var(--scp-background-primary);
+  font-size: var(--pm-font-size-11);
+  font-weight: var(--scp-font-weight-semi-bold);
+  line-height: var(--scp-line-height-16);
+  white-space: nowrap;
+}

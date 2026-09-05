@@ -21,6 +21,14 @@ export interface ProcessState {
   mode: ViewMode;
   /** Toggle «Показать интеграции» (SPEC §4.6). По макету включён по умолчанию. */
   showIntegrations: boolean;
+  /**
+   * Открыта ли панель отчёта импорта (process-map-70e.9).
+   *
+   * Здесь, а не рядом с самим отчётом: отчёт это данные загруженной карты, а
+   * «открыта ли панель» — состояние интерфейса, ровно то, для чего store и
+   * заведён. В localStorage не сохраняется, как и mode.
+   */
+  importReportOpen: boolean;
 
   /** Переход на уровень 2. Всегда закрывает Drawer — см. комментарий ниже. */
   navigateToStage: (stageId: string) => void;
@@ -34,6 +42,8 @@ export interface ProcessState {
   toggleIntegrations: () => void;
   /** Просмотр ↔ Редактор. */
   setMode: (mode: ViewMode) => void;
+  /** Показать или скрыть панель отчёта импорта. */
+  setImportReportOpen: (open: boolean) => void;
 }
 
 export interface ProcessUiState {
@@ -41,6 +51,7 @@ export interface ProcessUiState {
   selectedNodeId: string | null;
   mode: ViewMode;
   showIntegrations: boolean;
+  importReportOpen: boolean;
 }
 
 /** Начальные значения. Вынесены отдельно, чтобы тесты могли сбрасывать store. */
@@ -50,6 +61,7 @@ export function createInitialState(): ProcessUiState {
     selectedNodeId: null,
     mode: 'view',
     showIntegrations: true,
+    importReportOpen: false,
   };
 }
 
@@ -73,4 +85,5 @@ export const useProcessStore = create<ProcessState>()((set) => ({
   // редактора не должен ронять открытую карточку узла.
   toggleIntegrations: () => set((state) => ({ showIntegrations: !state.showIntegrations })),
   setMode: (mode) => set({ mode }),
+  setImportReportOpen: (importReportOpen) => set({ importReportOpen }),
 }));

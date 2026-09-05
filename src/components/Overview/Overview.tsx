@@ -12,6 +12,7 @@ import '@xyflow/react/dist/style.css';
 import { useFrameSize } from '../../hooks/useFrameSize';
 import { useProcessMap } from '../../hooks/useProcessMap';
 import { ru } from '../../i18n/ru';
+import { isImportedActive } from '../../data/activeMap';
 import { useProcessStore } from '../../store/useProcessStore';
 import { EdgeMarkers, IntegrationEdge, ProcessEdge } from '../edges';
 import { Legend } from '../Legend';
@@ -91,6 +92,7 @@ export function Overview() {
         stagesCount={map.stages.length}
         updatedAt={map.updatedAt}
         compact={compact}
+        imported={isImportedActive()}
       />
       {/* role="region", а не "application": схема статична, а application
           переводит скринридер в режим прямого прохода клавиш и глушит

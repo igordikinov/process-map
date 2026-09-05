@@ -4,6 +4,7 @@
 // разбирается хуком useDeepLink: он подставляет id в store сразу после
 // монтирования и дальше синхронизирует URL (replaceState) при любой
 // навигации — см. src/hooks/useDeepLink.ts.
+import { ImportReport } from './components/ImportReport';
 import { Overview } from './components/Overview';
 import { StageDetail } from './components/StageDetail';
 import { useDeepLink } from './hooks/useDeepLink';
@@ -13,7 +14,15 @@ function App() {
   useDeepLink();
   const currentStageId = useProcessStore((state) => state.currentStageId);
 
-  return currentStageId === null ? <Overview /> : <StageDetail />;
+  return (
+    <>
+      {currentStageId === null ? <Overview /> : <StageDetail />}
+      {/* Панель отчёта монтируется ВЫШЕ обоих экранов: она обязана пережить
+          переход на уровень 2, а панель узла живёт внутри полотна и такого не
+          умеет (process-map-70e.9). */}
+      <ImportReport />
+    </>
+  );
 }
 
 export default App;
