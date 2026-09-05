@@ -196,8 +196,67 @@ export interface OverviewGraph {
   edges: FlowEdge[];
 }
 
+// ───────────────────── сетка этапов (process-map-70e.16) ─────────────────────
+//
+// ЗАЧЕМ СТРОКИ. Раньше этапы всегда стояли в один ряд: x = X0 + index * STEP.
+// Для четырёх этапов это макет, для десяти — полотно 3058 px при вьюпорте 1280:
+// fitView даёт масштаб ≈0.40, карточка 274×232 превращается в 110×93, и на ней
+// не читается ничего. Десять этапов появились не гипотетически — столько
+// модулей в модели BPMN, которую грузит пользователь (эпик M6).
+//
+// ЧЕТЫРЁХ КОЛОНОК ДОСТАТОЧНО и менять их нельзя: при N ≤ 4 columns === N,
+// rows === 1, и вся геометрия ниже вырождается в прежнюю формулу БАЙТ В БАЙТ.
+// Карты snp и mrp четырёхэтапные, их вид меняться не должен — это сторожат
+// tests/overview.test.tsx и e2e/compact.spec.ts.
+const MAX_STAGE_COLUMNS = 4;
+
+/**
+ * Вертикальный шаг между строками карточек.
+ *
+ * В компактном режиме под карточкой этапа стоит его карточка систем (макет A4),
+ * поэтому строка обязана быть выше на её полосу — иначе вторая строка наехала
+ * бы на системы первой. Полоса резервируется ВСЕГДА, даже когда систем нет:
+ * иначе высота строки зависела бы от содержания данных, и одна и та же карта
+ * прыгала бы при переключении тумблера интеграций.
+ */
+const STAGE_ROW_STEP = STAGE_NODE_SIZE.height + STAGE_GAP;
+const STAGE_ROW_STEP_COMPACT =
+  STAGE_NODE_SIZE_COMPACT.height + IO_COMPACT_GAP_Y + IO_NODE_SIZE.height + STAGE_GAP_COMPACT;
+
+interface StageGrid {
+  readonly columns: number;
+  readonly rows: number;
+  readonly rowStep: number;
+  /** Прибавка к высоте всего блока этапов из-за строк со второй и далее. */
+  readonly extraHeight: number;
+  readonly rowOf: (index: number) => number;
+  readonly positionOf: (index: number) => { x: number; y: number };
+}
+
+/** Чистый расчёт сетки. Единственное место, где решается, где стоит этап. */
+function stageGridOf(stageCount: number, compact: boolean): StageGrid {
+  const x0 = compact ? STAGE_X0_COMPACT : STAGE_X0;
+  const y0 = compact ? STAGE_Y_COMPACT : STAGE_Y;
+  const step = compact ? STAGE_STEP_COMPACT : STAGE_STEP;
+  const rowStep = compact ? STAGE_ROW_STEP_COMPACT : STAGE_ROW_STEP;
+  const columns = Math.max(1, Math.min(stageCount, MAX_STAGE_COLUMNS));
+  const rows = stageCount === 0 ? 0 : Math.ceil(stageCount / columns);
+  const rowOf = (index: number): number => Math.floor(index / columns);
+  return {
+    columns,
+    rows,
+    rowStep,
+    extraHeight: Math.max(0, rows - 1) * rowStep,
+    rowOf,
+    positionOf: (index) => ({
+      x: x0 + (index % columns) * step,
+      y: y0 + rowOf(index) * rowStep,
+    }),
+  };
+}
+
 /** Компактные узлы вместо свимлейнов: строка-бейдж + карточка систем этапа. */
-function pushCompactSystems(map: ProcessMap, nodes: OverviewNode[]): Set<string> {
+function pushCompactSystems(map: ProcessMap, nodes: OverviewNode[], grid: StageGrid): Set<string> {
   // Порядок кодов — порядок появления в данных (collectSystems), а не
   // алфавит и не список из SPEC §4.5: состав систем задаёт process.json.
   const all = collectSystems(map.stages.flatMap((stage) => [...stage.inputs, ...stage.outputs]));
@@ -232,7 +291,10 @@ function pushCompactSystems(map: ProcessMap, nodes: OverviewNode[]): Set<string>
     nodes.push({
       id: stageSystemsNodeId(stage.id),
       type: 'system',
-      position: { x: STAGE_X0_COMPACT + index * STAGE_STEP_COMPACT, y: IO_COMPACT_Y },
+      position: {
+        x: STAGE_X0_COMPACT + (index % grid.columns) * STAGE_STEP_COMPACT,
+        y: IO_COMPACT_Y + grid.rowOf(index) * grid.rowStep,
+      },
       data: {
         system: first.system,
         codes: items.map((item) => item.system),
@@ -270,12 +332,13 @@ export function buildOverviewGraph(
   compact = false,
 ): OverviewGraph {
   const stageSize = compact ? STAGE_NODE_SIZE_COMPACT : STAGE_NODE_SIZE;
-  const stageX0 = compact ? STAGE_X0_COMPACT : STAGE_X0;
-  const stageY = compact ? STAGE_Y_COMPACT : STAGE_Y;
-  const stageStep = compact ? STAGE_STEP_COMPACT : STAGE_STEP;
 
   const stageCount = map.stages.length;
-  const contentRight = stageCount > 0 ? STAGE_X0 + (stageCount - 1) * STAGE_STEP + STAGE_WIDTH : 0;
+  const grid = stageGridOf(stageCount, compact);
+  // Ширину задаёт число КОЛОНОК, а не число этапов: с одиннадцатого этапа ряд
+  // переносится, и рамка вслед за ним расти не должна.
+  const contentRight =
+    stageCount > 0 ? STAGE_X0 + (grid.columns - 1) * STAGE_STEP + STAGE_WIDTH : 0;
   const laneWidth = Math.max(contentRight + LANE_RIGHT_GAP - LANE_X, IO_WIDTH + LANE_PADDING_X * 2);
 
   const nodes: OverviewNode[] = [];
@@ -283,7 +346,7 @@ export function buildOverviewGraph(
   let compactSystemStages: Set<string> = new Set();
 
   if (showIntegrations && compact) {
-    compactSystemStages = pushCompactSystems(map, nodes);
+    compactSystemStages = pushCompactSystems(map, nodes, grid);
   }
 
   if (showIntegrations && !compact) {
@@ -302,7 +365,7 @@ export function buildOverviewGraph(
       {
         id: LANE_OUT_ID,
         title: ru.overview.laneOut,
-        y: LANE_OUT_Y,
+        y: LANE_OUT_Y + grid.extraHeight,
         height: LANE_OUT_HEIGHT,
         items: outputs,
         direction: 'out' as const,
@@ -367,7 +430,7 @@ export function buildOverviewGraph(
       type: 'flowLane',
       position: { x: LANE_X, y: FLOW_LANE_Y },
       data: { title: map.moduleLabel },
-      style: { width: laneWidth, height: FLOW_LANE_HEIGHT },
+      style: { width: laneWidth, height: FLOW_LANE_HEIGHT + grid.extraHeight },
       draggable: false,
       selectable: false,
       connectable: false,
@@ -379,7 +442,7 @@ export function buildOverviewGraph(
     nodes.push({
       id: stage.id,
       type: 'stage',
-      position: { x: stageX0 + index * stageStep, y: stageY },
+      position: grid.positionOf(index),
       data: { stage, compact },
       width: stageSize.width,
       height: stageSize.height,
@@ -400,6 +463,7 @@ export function buildOverviewGraph(
   // Номер этапа нужен, чтобы отличить обратную связь от прямого перехода:
   // этапы стоят слева направо по номеру (process-map-3wh.17).
   const stageNumber = new Map(map.stages.map((stage) => [stage.id, stage.number]));
+  const stageIndex = new Map(map.stages.map((stage, index) => [stage.id, index]));
 
   for (const edge of map.overviewEdges) {
     if (edge.kind === 'process') {
@@ -413,13 +477,22 @@ export function buildOverviewGraph(
       // карта обрезана. У карты SNP обратных рёбер нет, поэтому случай всплыл
       // только на карте MRP («Утверждение финального сценария» → «Согласование
       // изменений», линия [112] слайда 8).
+      //
+      // ПЕРЕНОС СТРОКИ — тот же случай. Прямое ребро с конца одной строки на
+      // начало следующей идёт визуально ВЛЕВО, и правый хэндл нарисовал бы
+      // стрелку, возвращающуюся назад через весь ряд. Поэтому справа выходим
+      // только когда цель правее в ТОЙ ЖЕ строке. При N ≤ 4 строка одна, и
+      // условие вырождается в прежнее.
       const backward = (stageNumber.get(edge.source) ?? 0) > (stageNumber.get(edge.target) ?? 0);
+      const sameRow =
+        grid.rowOf(stageIndex.get(edge.source) ?? 0) ===
+        grid.rowOf(stageIndex.get(edge.target) ?? 0);
       edges.push({
         id: edge.id,
         type: 'process',
         source: edge.source,
         target: edge.target,
-        sourceHandle: backward ? STAGE_HANDLE.bottom : STAGE_HANDLE.right,
+        sourceHandle: backward || !sameRow ? STAGE_HANDLE.bottom : STAGE_HANDLE.right,
         targetHandle: STAGE_HANDLE.left,
         ...(edge.label === undefined ? {} : { label: edge.label }),
       });
