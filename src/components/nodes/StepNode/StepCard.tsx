@@ -16,14 +16,36 @@ import { useProcessStore } from '../../../store/useProcessStore';
 import { openScreen } from '../../../utils/url';
 import styles from './StepCard.module.css';
 
-/** Вариант оформления = ProcessNode.type для всех типов, кроме `data`. */
-export type StepCardVariant = 'step' | 'integration' | 'warning';
+/**
+ * Вариант оформления = ProcessNode.type для всех типов, кроме `data`.
+ *
+ * ЧТО КОДИРУЕТ ЧТО (process-map-70e.7). Полоска слева отвечает на вопрос «что
+ * это за сущность»: свой шаг процесса, внешняя интеграция, предупреждение. Вид
+ * элемента BPMN — шлюз, событие, свёрнутый подпроцесс — полоской НЕ кодируется:
+ * все три относятся к потоку процесса и делят с шагом одну полоску, а
+ * различаются иконкой. Иначе на 3 px ширины пришлось бы разводить семь
+ * значений оттенками одного цвета, и они стали бы неразличимы.
+ *
+ * ФОРМА КАРТОЧКИ У ВСЕХ ОДНА — 318×52, ромба и круга нет. Осознанное
+ * отступление от нотации BPMN: подпись шлюза («Достаточно ли запасов?») в ромб
+ * 50×50 не помещается и по стандарту рисуется СНАРУЖИ фигуры, то есть на
+ * полотне наехала бы на соседей. Обоснование продублировано у NODE_SIZE в
+ * src/layout/stageLayout.ts, потому что размер задаётся там.
+ */
+export type StepCardVariant =
+  'step' | 'integration' | 'warning' | 'gateway' | 'event' | 'subprocess';
 
 // Пути считает сборщик, а не строка в рантайме (см. src/assets/icons/index.ts).
 const TYPE_ICON: Record<StepCardVariant, IconName> = {
   step: 'step-in-process',
   integration: 'link',
   warning: 'warning-triangle',
+  // Иконки повторяют фигуры нотации BPMN — ромб, круг, рамка с плюсом. Это не
+  // выдуманная графика, а сам стандарт: раз форму карточки мы дать не можем,
+  // её несёт иконка.
+  gateway: 'gateway',
+  event: 'event',
+  subprocess: 'subprocess',
 };
 
 const LINK_EXTERNAL_ICON = iconUrl('link-external');
@@ -32,6 +54,9 @@ const ARIA_LABEL: Record<StepCardVariant, (label: string) => string> = {
   step: ru.stepNode.ariaLabel,
   integration: ru.stepNode.ariaLabelIntegration,
   warning: ru.stepNode.ariaLabelWarning,
+  gateway: ru.stepNode.ariaLabelGateway,
+  event: ru.stepNode.ariaLabelEvent,
+  subprocess: ru.stepNode.ariaLabelSubprocess,
 };
 
 // Тип значения — string | undefined: CSS-модули типизированы как
@@ -40,6 +65,10 @@ const VARIANT_CLASS: Record<StepCardVariant, string | undefined> = {
   step: styles.step,
   integration: styles.integration,
   warning: styles.warning,
+  // Полоска общая с шагом: все три — поток процесса (см. StepCardVariant).
+  gateway: styles.step,
+  event: styles.step,
+  subprocess: styles.step,
 };
 
 export interface StepCardProps {

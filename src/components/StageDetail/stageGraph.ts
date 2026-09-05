@@ -16,14 +16,24 @@ import type { DataNodeType } from '../nodes/DataNode';
 import type { GroupNodeType } from '../nodes/GroupNode';
 import {
   STEP_HANDLE,
+  type EventNodeType,
+  type GatewayNodeType,
   type IntegrationNodeType,
+  type SubprocessNodeType,
   type StepCardVariant,
   type StepNodeType,
 } from '../nodes/StepNode';
 import type { WarningNodeType } from '../nodes/WarningNode';
 
 export type StageDetailNode =
-  GroupNodeType | StepNodeType | IntegrationNodeType | WarningNodeType | DataNodeType;
+  | GroupNodeType
+  | StepNodeType
+  | IntegrationNodeType
+  | WarningNodeType
+  | DataNodeType
+  | GatewayNodeType
+  | EventNodeType
+  | SubprocessNodeType;
 
 // ───────────────────────────── геометрия ─────────────────────────────
 
@@ -341,22 +351,55 @@ function flowNodeOf(node: ProcessNode, parentId: string | undefined, origin: Box
     ...(parentId === undefined ? {} : { parentId, extent: 'parent' as const }),
   };
 
-  if (node.type === 'data') {
-    return { ...common, type: 'data' as const, data: { node } } satisfies DataNodeType;
+  /*
+   * SWITCH С НЕВОЗМОЖНОЙ ВЕТКОЙ, а не цепочка if (process-map-70e.7).
+   *
+   * Раньше последней строкой стоял безусловный возврат карточки шага, то есть
+   * ЛЮБОЙ новый тип узла молча рисовался бы шагом. Дефект был бы невидим:
+   * инвариант «тип узла React Flow равен ProcessNode.type»
+   * (tests/stageGraph.test.ts) покраснел бы только на карте, где такой узел
+   * есть, — а в snp и mrp их нет. Теперь новый тип роняет tsc здесь.
+   */
+  switch (node.type) {
+    case 'data':
+      return { ...common, type: 'data' as const, data: { node } } satisfies DataNodeType;
+    case 'warning':
+      return { ...common, type: 'warning' as const, data: { node } } satisfies WarningNodeType;
+    case 'integration':
+      return {
+        ...common,
+        type: 'integration' as const,
+        data: { node, variant: 'integration' satisfies StepCardVariant },
+      } satisfies IntegrationNodeType;
+    case 'gateway':
+      return {
+        ...common,
+        type: 'gateway' as const,
+        data: { node, variant: 'gateway' satisfies StepCardVariant },
+      } satisfies GatewayNodeType;
+    case 'event':
+      return {
+        ...common,
+        type: 'event' as const,
+        data: { node, variant: 'event' satisfies StepCardVariant },
+      } satisfies EventNodeType;
+    case 'subprocess':
+      return {
+        ...common,
+        type: 'subprocess' as const,
+        data: { node, variant: 'subprocess' satisfies StepCardVariant },
+      } satisfies SubprocessNodeType;
+    case 'step':
+      return {
+        ...common,
+        type: 'step' as const,
+        data: { node, variant: 'step' satisfies StepCardVariant },
+      } satisfies StepNodeType;
+    default: {
+      const unreachable: never = node.type;
+      throw new Error(`Неизвестный тип узла: ${String(unreachable)}`);
+    }
   }
-  if (node.type === 'warning') {
-    return { ...common, type: 'warning' as const, data: { node } } satisfies WarningNodeType;
-  }
-  if (node.type === 'integration') {
-    const variant: StepCardVariant = 'integration';
-    return {
-      ...common,
-      type: 'integration' as const,
-      data: { node, variant },
-    } satisfies IntegrationNodeType;
-  }
-  const variant: StepCardVariant = 'step';
-  return { ...common, type: 'step' as const, data: { node, variant } } satisfies StepNodeType;
 }
 
 function containerNode(

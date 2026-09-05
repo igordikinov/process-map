@@ -48,6 +48,11 @@ const nodeTypes = {
   integration: StepNode,
   warning: WarningNode,
   data: DataNode,
+  // Типы BPMN (process-map-70e.7): та же карточка, свои типы узлов — см.
+  // GatewayNodeType в StepNode.tsx.
+  gateway: StepNode,
+  event: StepNode,
+  subprocess: StepNode,
 } satisfies NodeTypes;
 
 const edgeTypes = {

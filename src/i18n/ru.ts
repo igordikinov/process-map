@@ -73,6 +73,11 @@ export const ru = {
     ariaLabel: (label: string): string => `Шаг: ${label}`,
     ariaLabelIntegration: (label: string): string => `Интеграция: ${label}`,
     ariaLabelWarning: (label: string): string => `Предупреждение: ${label}`,
+    // Типы, пришедшие из BPMN (process-map-70e.7). «Развилка», а не «шлюз»:
+    // слово «шлюз» — жаргон нотации, читателю вики оно ничего не говорит.
+    ariaLabelGateway: (label: string): string => `Развилка: ${label}`,
+    ariaLabelEvent: (label: string): string => `Событие: ${label}`,
+    ariaLabelSubprocess: (label: string): string => `Подпроцесс: ${label}`,
     /** aria-label и title иконки link-external (показывается только при screen). */
     openScreen: (title: string): string => `Открыть экран в In.Plan: ${title}`,
   },
@@ -308,6 +313,11 @@ export const ru = {
     step: 'Шаг',
     data: 'Данные',
     warning: 'Предупреждение',
+    // Типы, приходящие только из BPMN (process-map-70e.7). Пункт показывается,
+    // лишь когда такой узел на этапе действительно есть.
+    gateway: 'Развилка',
+    event: 'Событие',
+    subprocess: 'Подпроцесс',
 
     /**
      * Компактный режим (SPEC §4.5, артборд A4): легенда сворачивается в

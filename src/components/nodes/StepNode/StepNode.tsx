@@ -29,6 +29,18 @@ export type StepNodeType = Node<StepNodeData, 'step'>;
 export type IntegrationNodeType = Node<StepNodeData, 'integration'>;
 
 /**
+ * Типы, приходящие из BPMN (process-map-70e.7). Тот же компонент и тот же
+ * размер карточки, но отдельные типы React Flow — по той же причине, что у
+ * интеграции: тип попадает в класс `.react-flow__node-<type>`, и без него
+ * проверка «в кадре видно шаг» засчитывала бы шлюз за шаг, а e2e не смог бы
+ * отличить одно от другого. Разница не только в виде: адаптер BPMN считает их
+ * раздельно в отчёте о плотности отображения.
+ */
+export type GatewayNodeType = Node<StepNodeData, 'gateway'>;
+export type EventNodeType = Node<StepNodeData, 'event'>;
+export type SubprocessNodeType = Node<StepNodeData, 'subprocess'>;
+
+/**
  * Идентификаторы хэндлов узлов потока — используются в stageGraph.ts.
  * Раскладка dagre идёт слева направо (rankdir LR), поэтому основная пара —
  * right → left; bottom → top остаётся для редких обратных рёбер.

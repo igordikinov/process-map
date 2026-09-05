@@ -124,6 +124,39 @@
   background: var(--pm-warning-stroke);
 }
 
+/* Образцы типов BPMN (process-map-70e.7) — ФОРМА, а не цвет.
+   Полоска у шлюза, события и подпроцесса общая с шагом (все три — поток
+   процесса), поэтому цветом их не развести: пришлось бы разводить оттенками
+   одного цвета на 3 px ширины. Фигуры повторяют нотацию BPMN — ромб, круг,
+   рамка, — то есть образец легенды и иконка в карточке говорят одно и то же.
+   Прецедент образца-фигуры вместо чёрточки — swatchSystem ниже. */
+.swatchGateway,
+.swatchEvent,
+.swatchSubprocess {
+  box-sizing: border-box;
+  width: var(--pm-legend-system-swatch-size);
+  height: var(--pm-legend-system-swatch-size);
+  border: 1px solid var(--scp-accent-primary);
+  background: var(--pm-node-bg-focus);
+}
+
+/* Квадрат, повёрнутый на 45°, — это и есть ромб шлюза. Размер уменьшен, чтобы
+   после поворота диагональ не вылезла за строку легенды. */
+.swatchGateway {
+  width: var(--pm-legend-gateway-swatch-size);
+  height: var(--pm-legend-gateway-swatch-size);
+  border-radius: var(--pm-legend-bar-radius);
+  transform: rotate(45deg);
+}
+
+.swatchEvent {
+  border-radius: var(--pm-radius-pill);
+}
+
+.swatchSubprocess {
+  border-radius: var(--scp-border-radius-sm);
+}
+
 /* Мини-карточка внешней системы (а не просто чёрточка) — тот же приём
    border-left + белая заливка, что у настоящей карточки системы уровня 1
    (IntegrationNode.module.css), чтобы «Система» визуально не сливалась с

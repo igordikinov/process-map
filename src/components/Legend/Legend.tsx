@@ -31,8 +31,10 @@
 // Раскрытие — состояние самого компонента, а не store: это не состояние
 // карты процесса (уровень, выбранный узел, режим), а положение одного
 // элемента хрома, которое ничего не должно переживать.
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { iconUrl } from '../../assets/icons';
+import type { NodeType } from '../../data/schema';
+import { useProcessMap } from '../../hooks/useProcessMap';
 import { ru } from '../../i18n/ru';
 import { useProcessStore } from '../../store/useProcessStore';
 import styles from './Legend.module.css';
@@ -65,10 +67,54 @@ const STAGE_ITEMS: readonly LegendItem[] = [
   { key: 'warning', label: ru.legend.warning, swatch: styles.swatchWarning },
 ];
 
+/**
+ * Типы, приходящие только из BPMN (process-map-70e.7).
+ *
+ * Показываются УСЛОВНО — лишь когда на текущем этапе такой узел есть. Четыре
+ * базовых пункта остаются безусловными: они описывают модель приложения, и
+ * этап без предупреждений всё равно перечисляет «Предупреждение» (это
+ * зафиксировано tests/legend.test.tsx). А обещать «Развилку» на карте, где
+ * шлюзов нет ни одного, — ровно та ложь легенды, ради которой написана шапка
+ * этого файла.
+ *
+ * Образец у них НЕ цветная полоска, а ФОРМА — ромб, круг, рамка: полоска у
+ * всех трёх общая с шагом, потому что все они поток процесса (см.
+ * StepCardVariant). Прецедент образца-фигуры — swatchSystem уровня 1.
+ */
+const BPMN_ITEMS: readonly (LegendItem & { readonly nodeType: NodeType })[] = [
+  { key: 'gateway', nodeType: 'gateway', label: ru.legend.gateway, swatch: styles.swatchGateway },
+  { key: 'event', nodeType: 'event', label: ru.legend.event, swatch: styles.swatchEvent },
+  {
+    key: 'subprocess',
+    nodeType: 'subprocess',
+    label: ru.legend.subprocess,
+    swatch: styles.swatchSubprocess,
+  },
+];
+
 /** Пункты, которых не остаётся на полотне при выключенных интеграциях
  *  (см. overviewGraph.ts/stageGraph.ts): «система» есть только в OVERVIEW_ITEMS,
  *  фильтр по обоим уровням общий и просто не найдёт лишний ключ. */
 const HIDDEN_WITHOUT_INTEGRATIONS = new Set(['integration', 'system']);
+
+/**
+ * Типы BPMN, реально присутствующие на открытом этапе.
+ *
+ * Читает карту, а не данные React Flow: легенда живёт ВНЕ <ReactFlowProvider>
+ * (см. шапку файла), и до узлов полотна ей не дотянуться. На обзоре считать
+ * нечего — там узлов этих типов нет по построению.
+ */
+function usePresentBpmnTypes(isOverview: boolean): ReadonlySet<NodeType> {
+  const map = useProcessMap();
+  const stageId = useProcessStore((state) => state.currentStageId);
+  return useMemo(() => {
+    if (isOverview || stageId === null) {
+      return new Set<NodeType>();
+    }
+    const stage = map.stages.find((item) => item.id === stageId);
+    return new Set<NodeType>(stage?.nodes.map((node) => node.type) ?? []);
+  }, [isOverview, map, stageId]);
+}
 
 export interface LegendProps {
   /** SPEC §4.5: легенда сворачивается в кнопку-иконку. */
@@ -80,7 +126,13 @@ export function Legend({ compact = false }: LegendProps) {
   const showIntegrations = useProcessStore((state) => state.showIntegrations);
   const [expanded, setExpanded] = useState(false);
 
-  const items = (isOverview ? OVERVIEW_ITEMS : STAGE_ITEMS).filter(
+  // Типы BPMN добавляются только если такой узел на текущем этапе есть.
+  // Для карт, собранных из презентаций, множество всегда пусто, и легенда
+  // выглядит ровно как раньше.
+  const present = usePresentBpmnTypes(isOverview);
+  const base = isOverview ? OVERVIEW_ITEMS : STAGE_ITEMS;
+  const extra = isOverview ? [] : BPMN_ITEMS.filter((item) => present.has(item.nodeType));
+  const items = [...base, ...extra].filter(
     (item) => showIntegrations || !HIDDEN_WITHOUT_INTEGRATIONS.has(item.key),
   );
 

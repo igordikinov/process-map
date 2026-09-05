@@ -22,8 +22,10 @@
 // ICONS. Тип IconName расширится сам.
 import calc from './calc.svg';
 import dataBase from './data-base.svg';
+import event from './event.svg';
 import fit from './fit.svg';
 import forecastData from './forecast-data.svg';
+import gateway from './gateway.svg';
 import link from './link.svg';
 import linkExternal from './link-external.svg';
 import minus from './minus.svg';
@@ -31,6 +33,7 @@ import plus from './plus.svg';
 import recalculation from './recalculation.svg';
 import returnBack from './return-back.svg';
 import stepInProcess from './step-in-process.svg';
+import subprocess from './subprocess.svg';
 import tables from './tables.svg';
 import warningTriangle from './warning-triangle.svg';
 import xClose from './x-close.svg';
@@ -39,8 +42,10 @@ import xClose from './x-close.svg';
 export const ICONS = {
   calc,
   'data-base': dataBase,
+  event,
   fit,
   'forecast-data': forecastData,
+  gateway,
   link,
   'link-external': linkExternal,
   minus,
@@ -48,6 +53,7 @@ export const ICONS = {
   recalculation,
   'return-back': returnBack,
   'step-in-process': stepInProcess,
+  subprocess,
   tables,
   'warning-triangle': warningTriangle,
   'x-close': xClose,
