@@ -6,7 +6,7 @@
 // затронула только одну сторону.
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { NODE_SIZE, STAGE_NODE_SIZE as LAYOUT_STAGE_SIZE } from '../scripts/layout';
+import { NODE_SIZE, STAGE_NODE_SIZE as LAYOUT_STAGE_SIZE } from '../src/layout/stageLayout';
 import { buildOverviewGraph } from '../src/components/Overview/overviewGraph';
 import { loadBaseProcessMap } from '../src/data/loader';
 import {
@@ -51,7 +51,7 @@ describe('размеры: sizes.ts ↔ tokens.css', () => {
 });
 
 describe('размеры: sizes.ts ↔ раскладка', () => {
-  it('scripts/layout.ts берёт размеры узлов из sizes.ts', () => {
+  it('ядро раскладки берёт размеры узлов из sizes.ts', () => {
     expect(NODE_SIZE.step).toEqual(STEP_NODE_SIZE);
     expect(NODE_SIZE.integration).toEqual(STEP_NODE_SIZE);
     expect(NODE_SIZE.warning).toEqual(STEP_NODE_SIZE);
