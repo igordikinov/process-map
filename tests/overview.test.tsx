@@ -124,6 +124,40 @@ describe('StageCard', () => {
     expect(screen.getAllByRole('listitem')).toHaveLength(stage.keyOutputs.length);
   });
 
+  /*
+   * КАРТОЧКА НЕ ИМЕЕТ ПРАВА ЗАВИСЕТЬ ОТ УНИКАЛЬНОСТИ ТЕКСТА (process-map-xsk).
+   *
+   * Схема допускает одинаковые строки в keyOutputs — это `z.string().array()`
+   * без проверки уникальности, — и на карте из BPMN они реально встречались.
+   * Ключ по тексту давал React-предупреждение «two children with the same key»,
+   * а оно говорит буквально: элементы могут дублироваться ИЛИ ПРОПАДАТЬ.
+   *
+   * Проверяется именно ОТСУТСТВИЕ ПРЕДУПРЕЖДЕНИЯ, а не число пунктов: с
+   * повторяющимся ключом React всё равно отрисовал бы оба, и счётчик пунктов
+   * прошёл бы при живом дефекте. Плюс пустая консоль — часть критерия приёмки
+   * проекта, и красная строка здесь ломала бы её на каждой такой карте.
+   */
+  it('одинаковые ключевые выходы рисуются без предупреждения React о ключах', () => {
+    const stage: Stage = {
+      ...stageAt(1),
+      keyOutputs: ['Производственный план', 'Производственный план', 'Сценарии'],
+    };
+    const errors: unknown[][] = [];
+    const original = console.error;
+    console.error = (...args: unknown[]): void => {
+      errors.push(args);
+    };
+    try {
+      render(<StageCard stage={stage} />);
+    } finally {
+      console.error = original;
+    }
+
+    expect(screen.getAllByRole('listitem')).toHaveLength(3);
+    const sameKey = errors.filter((args) => String(args[0]).includes('same key'));
+    expect(sameKey, `React пожаловался на ключи: ${JSON.stringify(sameKey)}`).toEqual([]);
+  });
+
   it('не показывает строку «Открыть в In.Plan», если у этапа нет screen', () => {
     const stage = stageAt(0);
     expect(stage.screen).toBeUndefined();
