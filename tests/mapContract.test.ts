@@ -16,7 +16,7 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { ProcessMapSchema, validateIntegrity } from '../src/data/schema.ts';
-import { layoutStage } from '../scripts/layout.ts';
+import { layoutStage } from '../src/layout/stageLayout.ts';
 
 const DATA_ROOT = resolve(process.cwd(), 'src', 'data');
 

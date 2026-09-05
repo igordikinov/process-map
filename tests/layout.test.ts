@@ -8,7 +8,7 @@ import {
   layoutStage,
   rectOf,
   slidePositionOf,
-} from '../scripts/layout.ts';
+} from '../src/layout/stageLayout.ts';
 import { splitStageDataNodes } from '../src/utils/stageNodes.ts';
 import processJson from '../src/data/snp/process.json';
 
