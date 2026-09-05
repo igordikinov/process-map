@@ -25,6 +25,7 @@ export function EdgeMarkers({ children }: EdgeMarkersProps) {
       process: `${base}-process`,
       processInner: `${base}-process-inner`,
       integration: `${base}-integration`,
+      data: `${base}-data`,
     };
   }, [rawId]);
 
@@ -65,6 +66,19 @@ export function EdgeMarkers({ children }: EdgeMarkersProps) {
             orient="auto"
           >
             <path className={styles.arrowIntegration} d="M0,0.5 L7,4 L0,7.5 Z" />
+          </marker>
+          {/* Стрелка ребра к артефакту данных: та же геометрия, нейтральная
+              заливка — артефакт не система, синий тут врал бы. */}
+          <marker
+            id={ids.data}
+            viewBox="0 0 8 8"
+            refX="7"
+            refY="4"
+            markerWidth="6.5"
+            markerHeight="6.5"
+            orient="auto"
+          >
+            <path className={styles.arrowData} d="M0,0.5 L7,4 L0,7.5 Z" />
           </marker>
         </defs>
       </svg>

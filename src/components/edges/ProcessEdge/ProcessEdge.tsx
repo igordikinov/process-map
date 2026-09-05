@@ -10,6 +10,7 @@
 // `step` / `integration`: React Flow кладёт тип в класс `.react-flow__edge-<type>`,
 // и общий тип слил бы два вида рёбер в один счётчик в тестах.
 import { BaseEdge, getSmoothStepPath, type Edge, type EdgeProps } from '@xyflow/react';
+import { EdgeLabel } from '../EdgeLabel';
 import { EDGE_BORDER_RADIUS } from '../edgeGeometry';
 import { useEdgeMarkers } from '../edgeMarkerContext';
 import styles from '../edges.module.css';
@@ -19,6 +20,13 @@ export type ProcessEdgeType = Edge<Record<string, unknown>, 'process'>;
 /** Ребро внутри группы шагов, уровень 2 (SPEC §4.2, артборд A2). */
 export type ProcessInnerEdgeType = Edge<Record<string, unknown>, 'processInner'>;
 
+/**
+ * Путь и точка подписи.
+ *
+ * `getSmoothStepPath` отдаёт `labelX`/`labelY` третьим и четвёртым значением —
+ * раньше они выбрасывались, и поле `label` из схемы не рисовалось ничем
+ * (process-map-70e.6).
+ */
 function smoothStepPathOf({
   sourceX,
   sourceY,
@@ -29,8 +37,8 @@ function smoothStepPathOf({
 }: Pick<
   EdgeProps<ProcessEdgeType>,
   'sourceX' | 'sourceY' | 'sourcePosition' | 'targetX' | 'targetY' | 'targetPosition'
->): string {
-  const [path] = getSmoothStepPath({
+>): { path: string; labelX: number; labelY: number } {
+  const [path, labelX, labelY] = getSmoothStepPath({
     sourceX,
     sourceY,
     sourcePosition,
@@ -39,29 +47,33 @@ function smoothStepPathOf({
     targetPosition,
     borderRadius: EDGE_BORDER_RADIUS,
   });
-  return path;
+  return { path, labelX, labelY };
 }
 
 export function ProcessEdge(props: EdgeProps<ProcessEdgeType>) {
   const markers = useEdgeMarkers();
+  const { path, labelX, labelY } = smoothStepPathOf(props);
 
   return (
-    <BaseEdge
-      path={smoothStepPathOf(props)}
-      className={styles.process}
-      markerEnd={`url(#${markers.process})`}
-    />
+    <>
+      <BaseEdge path={path} className={styles.process} markerEnd={`url(#${markers.process})`} />
+      <EdgeLabel label={props.label} x={labelX} y={labelY} />
+    </>
   );
 }
 
 export function ProcessInnerEdge(props: EdgeProps<ProcessInnerEdgeType>) {
   const markers = useEdgeMarkers();
+  const { path, labelX, labelY } = smoothStepPathOf(props);
 
   return (
-    <BaseEdge
-      path={smoothStepPathOf(props)}
-      className={styles.processInner}
-      markerEnd={`url(#${markers.processInner})`}
-    />
+    <>
+      <BaseEdge
+        path={path}
+        className={styles.processInner}
+        markerEnd={`url(#${markers.processInner})`}
+      />
+      <EdgeLabel label={props.label} x={labelX} y={labelY} />
+    </>
   );
 }

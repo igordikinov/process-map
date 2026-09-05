@@ -576,9 +576,17 @@ export function buildStageGraph(stage: Stage, showIntegrations = true): StageGra
     // это тоже переход, а не движение внутри одного блока.
     const crossesGroups = source.group !== target.group;
     const processType = crossesGroups ? 'process' : 'processInner';
+    /*
+     * ЯВНОЕ СОПОСТАВЛЕНИЕ, а не тернарник «всё, что не integration — поток»
+     * (process-map-70e.6). Прежняя запись отправляла в поток и рёбра
+     * kind: 'data', то есть третье значение схемы было мёртвым: в картах из
+     * презентаций таких рёбер нет, и заметить это было негде.
+     */
+    const edgeType =
+      edge.kind === 'integration' ? 'integration' : edge.kind === 'data' ? 'data' : processType;
     edges.push({
       id: edge.id,
-      type: edge.kind === 'integration' ? 'integration' : processType,
+      type: edgeType,
       source: edge.source,
       target: edge.target,
       sourceHandle: forward ? STEP_HANDLE.right : STEP_HANDLE.bottom,

@@ -14,6 +14,8 @@ export interface EdgeMarkerIds {
   /** Серая стрелка ребра внутри группы (process-map-fxg). */
   processInner: string;
   integration: string;
+  /** Стрелка ребра к артефакту данных (process-map-70e.6). */
+  data: string;
 }
 
 /** Пустые id — маркер просто не будет найден, ребро отрисуется без стрелки. */
@@ -21,6 +23,7 @@ export const EdgeMarkerContext = createContext<EdgeMarkerIds>({
   process: '',
   processInner: '',
   integration: '',
+  data: '',
 });
 
 export function useEdgeMarkers(): EdgeMarkerIds {
