@@ -15,7 +15,14 @@ test.beforeEach(async ({ page }) => {
 
 test('шапка показывает заголовок, число этапов и дату обновления', async ({ page }) => {
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
-  await expect(page.getByText('4 этапа')).toBeVisible();
+  /*
+   * Бейдж, а НЕ любой текст «4 этапа» (process-map-0c5.10): с появлением
+   * переключателя версий в шапке живёт живая область скринридера со строкой
+   * «Карта: Основные этапы, 4 этапа». Она 1×1 px с clip-path, но bounding box
+   * у неё непустой, поэтому Playwright считает её видимой, и getByText без
+   * уточнения резолвился в два элемента.
+   */
+  await expect(page.getByText('4 этапа', { exact: true })).toBeVisible();
   await expect(page.getByText(/^Обновлено /)).toBeVisible();
 });
 
@@ -135,23 +142,45 @@ test('настоящий клик мышью по карточке уводит 
   await expect(
     page.locator('.react-flow__node-step button[aria-label^="Шаг: "]').first(),
   ).toBeVisible();
-  await expect(page.getByText('E2E-процесс')).toBeVisible();
+  await expect(page.getByText('Модуль SNP')).toBeVisible();
 });
 
-test('до первой карточки этапа один Tab', async ({ page }) => {
+/*
+ * ПОРЯДОК ОБХОДА КЛАВИАТУРОЙ ЗАКРЕПЛЯЕТСЯ ПОШАГОВО (process-map-0c5.10).
+ *
+ * Раньше тест звался «до первой карточки этапа один Tab» и утверждал только
+ * итог. Появление переключателя версий в шапке сдвинуло обход на две
+ * остановки — и это правильно: контрол уровня страницы законно предшествует
+ * содержимому. Но старая форма теста ловила бы такой сдвиг лишь как «стало не
+ * то», не говоря, что именно вклинилось.
+ *
+ * Поэтому проверяется КАЖДЫЙ шаг поимённо: следующая кнопка, добавленная в
+ * шапку, обязана явиться в этом списке, а не сдвинуть обход молча.
+ */
+test('обход Tab: сначала переключатель версий, потом карточка этапа 1', async ({ page }) => {
   await page.locator('body').click({ position: { x: 2, y: 2 } });
-  await page.keyboard.press('Tab');
 
-  const focused = await page.evaluate(() => {
-    const el = document.activeElement;
-    return {
-      tag: el?.tagName ?? null,
-      label: el?.getAttribute('aria-label') ?? null,
-    };
-  });
+  const stops: { tag: string | null; label: string | null; text: string | null }[] = [];
+  for (let index = 0; index < 3; index += 1) {
+    await page.keyboard.press('Tab');
+    stops.push(
+      await page.evaluate(() => {
+        const el = document.activeElement;
+        return {
+          tag: el?.tagName ?? null,
+          label: el?.getAttribute('aria-label') ?? null,
+          text: el?.textContent?.trim() ?? null,
+        };
+      }),
+    );
+  }
 
-  expect(focused.tag).toBe('BUTTON');
-  expect(focused.label).toMatch(/^Этап 1: /);
+  expect(stops[0]?.tag).toBe('BUTTON');
+  expect(stops[0]?.text).toBe('Основные этапы');
+  expect(stops[1]?.tag).toBe('BUTTON');
+  expect(stops[1]?.text).toBe('Полная модель');
+  expect(stops[2]?.tag).toBe('BUTTON');
+  expect(stops[2]?.label).toMatch(/^Этап 1: /);
 });
 
 test('узлы не перетаскиваются (CLAUDE.md, v1)', async ({ page }) => {

@@ -132,7 +132,7 @@ export function StageDetail() {
 
   return (
     <div className={compact ? `${styles.root} ${styles.compact}` : styles.root} ref={rootRef}>
-      <Breadcrumbs stages={map.stages} compact={compact} />
+      <Breadcrumbs stages={map.stages} rootLabel={map.moduleLabel} compact={compact} />
       {/* role="region", а не "application" — см. комментарий в Overview.tsx. */}
       <div className={styles.canvas} role="region" aria-label={ru.stageDetail.canvasLabel}>
         {/* key по этапу на самом провайдере (не только на <ReactFlow> ниже):

@@ -133,7 +133,15 @@ const MSG = {
  * элемент остаётся `toBeVisible()` (CLAUDE.md «Ловушки»).
  */
 async function expectMessage(page: Page, role: 'alert' | 'status', text: string): Promise<void> {
-  const message = page.getByRole(role);
+  /*
+   * Живые области ШАПКИ исключаются (process-map-0c5.10). С появлением
+   * переключателя версий в шапке обзора живёт своя `role="status"` — она
+   * объявляет скринридеру, какая версия показана. Роль `alert` по-прежнему
+   * одна на экране, а вот `getByRole('status')` без фильтра стал
+   * неоднозначным. Фильтр по предку, а не по классу: имена классов у CSS
+   * Modules хешируются, и тест бы поехал при первой же пересборке.
+   */
+  const message = page.locator(`[role="${role}"]:not(header *)`);
   await expect(message).toHaveText(text);
   const box = await message.boundingBox();
   expect(box, 'строка сообщения без геометрии').not.toBeNull();
@@ -184,12 +192,21 @@ async function exportJson(page: Page): Promise<{ fileName: string; text: string 
   return { fileName: download.suggestedFilename(), text: readFileSync(path ?? '', 'utf8') };
 }
 
-/** Кладёт текст во временный файл и скармливает его скрытому file input. */
+/**
+ * Кладёт текст во временный файл и скармливает его скрытому file input.
+ *
+ * ЛОКАТОР УТОЧНЁН ПО `accept` (process-map-0c5.10). В режиме редактора форм
+ * ДВЕ: своя у импорта JSON и своя у импорта BPMN (process-map-70e.9) — accept
+ * у них разный, а общая форма потребовала бы состояния «какой импорт взведён».
+ * Голый `input[type="file"]` после этого стал резолвиться в два элемента, и
+ * восемь тестов этого файла падали на strict mode violation. Тот же приём уже
+ * применён в юнит-тестах (tests/importBpmnUi.test.tsx).
+ */
 async function importJson(page: Page, fileName: string, text: string): Promise<void> {
   const dir = mkdtempSync(join(tmpdir(), 'pm-import-'));
   const filePath = join(dir, fileName);
   writeFileSync(filePath, text, 'utf8');
-  await page.locator('input[type="file"]').setInputFiles(filePath);
+  await page.locator('input[type="file"][accept*="json"]').setInputFiles(filePath);
 }
 
 async function openStage(page: Page, index: number): Promise<void> {
@@ -210,7 +227,7 @@ test.beforeEach(async ({ page }) => {
   await page.setViewportSize(VIEWPORT);
 });
 
-test.describe('Тулбар редактора: три кнопки SPEC §4.4', () => {
+test.describe('Тулбар редактора: кнопки SPEC §4.4', () => {
   test('в просмотре кнопок нет, в редакторе есть, и клики доходят до них', async ({ page }) => {
     await page.goto('/');
     await page.waitForSelector('.react-flow__node-stage');

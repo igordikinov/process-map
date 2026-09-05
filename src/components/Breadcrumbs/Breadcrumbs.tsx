@@ -1,5 +1,5 @@
 // Шапка экрана детализации (SPEC §4.2, артборд A2): кнопка «Назад», крошки
-// «E2E-процесс › {stage.title}», бейдж «Этап N», справа счётчик узлов.
+// «{корень} › {stage.title}», бейдж «Этап N», справа счётчик узлов.
 //
 // Компонент самодостаточен по данным уровня 1/2: получает список этапов и сам
 // достаёт текущий из `useProcessStore` — так его можно смонтировать заранее
@@ -17,6 +17,24 @@ export interface BreadcrumbsProps {
    *  повторно на каждый ререндер и не плодить источники данных (см. loader.ts). */
   stages: ReturnType<typeof loadProcessMap>['stages'];
   /**
+   * Корень крошек — имя КАРТЫ, а не константа (process-map-0c5.12).
+   *
+   * Раньше здесь стояло «E2E-процесс», и это было неправдой на двух картах из
+   * трёх: на «Процессе планирования потребности в материалах» (адрес /mrp/) и
+   * на карте из модели, которая описывает десять модулей In.Plan. Пока карты
+   * жили на разных адресах, ложь никому не бросалась в глаза; с переключателем
+   * версий обе стоят на одной странице, и она видна за один клик.
+   *
+   * Значение — `map.moduleLabel`, решение владельца от 05.09.2026: «Модуль SNP»,
+   * «Модуль MRP», «Все модули In.Plan». Поле обязательно и непусто по схеме, и
+   * это ровно та строка, которой подписана рамка вокруг потока этапов на
+   * обзоре, — читатель видит на двух уровнях одно и то же имя.
+   *
+   * Пропом, а не чтением карты внутри: компонент остаётся чистым и уже
+   * принимает `stages`, а не карту целиком.
+   */
+  rootLabel: string;
+  /**
    * SPEC §4.5: шапка 44 px. Артборд A4 показывает только уровень 1, но
    * требование «шапка 44 px» относится к режиму, а не к экрану: две разные
    * высоты шапки на двух уровнях одного низкого фрейма — это дефект, а не
@@ -32,7 +50,7 @@ export interface BreadcrumbsProps {
 // src/assets/icons/index.ts про BASE_URL и `base: './'`.
 const RETURN_ICON_SRC = iconUrl('return-back');
 
-export function Breadcrumbs({ stages, compact = false }: BreadcrumbsProps) {
+export function Breadcrumbs({ stages, rootLabel, compact = false }: BreadcrumbsProps) {
   const currentStageId = useProcessStore((state) => state.currentStageId);
   const back = useProcessStore((state) => state.back);
 
@@ -61,7 +79,7 @@ export function Breadcrumbs({ stages, compact = false }: BreadcrumbsProps) {
       </button>
 
       <div className={styles.crumbs}>
-        <span className={styles.crumbLabel}>{ru.breadcrumbs.root}</span>
+        <span className={styles.crumbLabel}>{rootLabel}</span>
         <span className={styles.crumbSeparator}>›</span>
         <span className={styles.crumbActive}>{stage.title}</span>
         <span className={styles.badge}>{ru.breadcrumbs.stageBadge(stage.number)}</span>

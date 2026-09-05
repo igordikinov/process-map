@@ -56,7 +56,7 @@ describe('StageDetail', () => {
     expect(screen.queryByLabelText(ru.overview.canvasLabel)).not.toBeInTheDocument();
     expect(screen.getByLabelText(ru.stageDetail.canvasLabel)).toBeInTheDocument();
     // Шапка уровня 2 — смонтированный Breadcrumbs (SPEC §4.2).
-    expect(screen.getByText(ru.breadcrumbs.root)).toBeInTheDocument();
+    expect(screen.getByText(loadBaseProcessMap().moduleLabel)).toBeInTheDocument();
     expect(screen.getByText(stage.title)).toBeInTheDocument();
   });
 
