@@ -7,16 +7,29 @@
 // Правила отображения живут в taxonomy.ts и stageContent.ts, доменные
 // допущения — в profile.ts и profiles/. Этот файл не решает ничего про
 // содержание процесса.
-import { layoutStage } from '../../layout/stageLayout';
+//
+// РАСШИРЕНИЯ `.ts` В ИМПОРТАХ ЗДЕСЬ И ВО ВСЁМ src/data/bpmn/ ОБЯЗАТЕЛЬНЫ
+// (process-map-0c5.2), и это отличается от остального src/. Причина та же, что
+// уже записана в шапке src/layout/stageLayout.ts: модуль импортируется не
+// только Vite, но и Node из конвейера данных через `--experimental-strip-types`,
+// а тот требует явного расширения у рантаймных импортов. Без них прогон падал
+// с ERR_MODULE_NOT_FOUND.
+//
+// Расширение стоит и у типовых импортов, хотя они стираются до запуска: правило
+// «в этой папке у всех относительных импортов есть .ts» проверяемо одним взглядом,
+// а «у рантаймных есть, у типовых нет» — нет. Сторож — tests/bpmn/nodeImport.test.ts,
+// он импортирует адаптер настоящим Node: под Vite расширения не нужны, поэтому
+// обычный тест эту поломку не заметил бы.
+import { layoutStage } from '../../layout/stageLayout.ts';
 import {
   ProcessMapSchema,
   validateIntegrity,
   type ProcessMap,
   type ProcessNode,
   type Stage,
-} from '../schema';
-import { indexPlanes } from './di';
-import { assignUniqueIds, mapIdFrom, slugify } from './ids';
+} from '../schema.ts';
+import { indexPlanes } from './di.ts';
+import { assignUniqueIds, mapIdFrom, slugify } from './ids.ts';
 import {
   collectModules,
   countBelowLevel,
@@ -24,11 +37,11 @@ import {
   hasFlowNodes,
   shortTitleOf,
   type ModuleDraft,
-} from './modules';
-import { buildOverviewEdges, resolveCrossReferences } from './overviewEdges';
-import { NEUTRAL_PROFILE, type BpmnProfile } from './profile';
-import { profileFor } from './profiles/inplan';
-import { ReportBuilder, type BpmnReport, type ContentKind, type Disposition } from './report';
+} from './modules.ts';
+import { buildOverviewEdges, resolveCrossReferences } from './overviewEdges.ts';
+import { NEUTRAL_PROFILE, type BpmnProfile } from './profile.ts';
+import { profileFor } from './profiles/inplan.ts';
+import { ReportBuilder, type BpmnReport, type ContentKind, type Disposition } from './report.ts';
 import {
   collectAnnotations,
   collectDataUsage,
@@ -37,10 +50,10 @@ import {
   collectNodes,
   directionOf,
   joinDescription,
-} from './stageContent';
-import { classifyElement, isKnownNonNode } from './taxonomy';
-import { elementName, normalizeText } from './text';
-import { BPMN_NS, nsAll } from './xml';
+} from './stageContent.ts';
+import { classifyElement, isKnownNonNode } from './taxonomy.ts';
+import { elementName, normalizeText } from './text.ts';
+import { BPMN_NS, nsAll } from './xml.ts';
 
 export interface BpmnSourceMeta {
   readonly fileName: string;

@@ -9,10 +9,10 @@
 // файл её отменил: в модели In.Plan нет ни `collaboration`, ни `laneSet` —
 // единственная иерархия там подпроцессы. Лестница осталась бы кодом, который
 // невозможно проверить ни на одном имеющемся файле.
-import { readingOrder, type Bounds, type PlaneIndex } from './di';
-import { parseModuleName, type ModuleName } from './text';
-import { BPMN_NS, nsAll, nsChildren } from './xml';
-import { classifyElement } from './taxonomy';
+import { readingOrder, type Bounds, type PlaneIndex } from './di.ts';
+import { parseModuleName, type ModuleName } from './text.ts';
+import { BPMN_NS, nsAll, nsChildren } from './xml.ts';
+import { classifyElement } from './taxonomy.ts';
 
 export interface ModuleDraft {
   /** Сам элемент подпроцесса — нужен, чтобы считать спрятанное под ним. */

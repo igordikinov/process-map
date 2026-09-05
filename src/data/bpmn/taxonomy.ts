@@ -3,8 +3,8 @@
 // Единственное место, где решается «чем это будет на экране». Таблица закрытая
 // и исчерпывающая: неизвестный элемент возвращает undefined, и вызывающий код
 // ОБЯЗАН записать его в отчёт, а не пропустить молча.
-import type { EventDefinition, EventKind, GatewayKind, NodeType } from '../schema';
-import { BPMN_NS, nsChildren } from './xml';
+import type { EventDefinition, EventKind, GatewayKind, NodeType } from '../schema.ts';
+import { BPMN_NS, nsChildren } from './xml.ts';
 
 export interface BpmnKind {
   readonly type: NodeType;

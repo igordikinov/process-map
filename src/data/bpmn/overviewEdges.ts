@@ -16,10 +16,10 @@
 // Поэтому вывод работает только с объявленным профилем, а всё неразрешённое
 // попадает в отчёт — чтобы владелец видел, сколько переходов инструмент НЕ
 // понял, и не считал получившийся граф полным.
-import type { Edge } from '../schema';
-import type { BpmnProfile } from './profile';
-import { elementName } from './text';
-import { BPMN_NS, nsChildren } from './xml';
+import type { Edge } from '../schema.ts';
+import type { BpmnProfile } from './profile.ts';
+import { elementName } from './text.ts';
+import { BPMN_NS, nsChildren } from './xml.ts';
 
 export interface CrossReference {
   /** Код модуля-источника по профилю. */

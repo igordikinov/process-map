@@ -6,13 +6,13 @@
 // индексы (id узла по id элемента, геометрию из плана модуля). Разнесённые по
 // файлам, они передавали бы эти индексы друг другу параметрами — швов было бы
 // больше, чем содержания.
-import type { Direction, Edge, Group, ProcessNode } from '../schema';
-import { contains, type Bounds } from './di';
-import type { ModuleDraft } from './modules';
-import type { BpmnProfile } from './profile';
-import { annotationTextOf, elementName, leadingCode, normalizeText } from './text';
-import { classifyElement } from './taxonomy';
-import { BPMN_NS, nsChildren } from './xml';
+import type { Direction, Edge, Group, ProcessNode } from '../schema.ts';
+import { contains, type Bounds } from './di.ts';
+import type { ModuleDraft } from './modules.ts';
+import type { BpmnProfile } from './profile.ts';
+import { annotationTextOf, elementName, leadingCode, normalizeText } from './text.ts';
+import { classifyElement } from './taxonomy.ts';
+import { BPMN_NS, nsChildren } from './xml.ts';
 
 /** Сопоставление «id элемента BPMN → id узла карты», общее на весь документ. */
 export type IdMap = ReadonlyMap<string, string>;
