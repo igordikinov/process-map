@@ -137,11 +137,28 @@ export function mapJsonPath(id: DataMapId): string {
 }
 
 /**
- * Алиас `@map` для resolve.alias в vite.config.ts И в vitest.config.ts.
- * Через него src/data/loader.ts импортирует данные, не зная, какая это карта.
+ * Вторая ВЕРСИЯ страницы — карта, собранная из модели (process-map-0c5.6).
+ *
+ * Ключ — цель сборки, значение — карта, которая ляжет в тот же бандл второй
+ * версией и будет доступна читателю переключателем. Нет записи — нет второй
+ * версии, и переключатель на этом адресе не рендерится вовсе.
+ */
+export const MAP_ALT_VERSION: Partial<Record<MapId, BpmnMapId>> = { snp: 'inplan-model' };
+
+/**
+ * Алиасы данных для resolve.alias в vite.config.ts И в vitest.config.ts.
+ * Через них src/data/versions.ts импортирует данные, не зная, какие это карты.
+ *
+ * ОТКАТ `@map-alt` НА САМУ СЕБЯ — не заглушка, а рабочее решение. У страницы
+ * без второй версии оба алиаса ведут в один каталог: Rollup дедуплицирует
+ * модуль по resolved id, второго JSON в бандле не появляется, а список версий
+ * схлопывается до одной записи (versions.ts сравнивает id). Альтернатива —
+ * условный импорт в src/, то есть ветвление по карте внутри приложения,
+ * которого здесь нет намеренно (SPEC §3).
  */
 export function mapAlias(id: MapId): Record<string, string> {
-  return { '@map': mapDir(id) };
+  const alt = MAP_ALT_VERSION[id] ?? id;
+  return { '@map': mapDir(id), '@map-alt': mapDir(alt) };
 }
 
 /**

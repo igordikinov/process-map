@@ -14,11 +14,12 @@
 //   - переполнение квоты при записи (QuotaExceededError) → writeStoredOverrides
 //     возвращает false, состояние в памяти остаётся корректным, вызывающий UI
 //     решает, что показать пользователю.
-// Данные собираемой карты. Какой именно — решает алиас @map в конфигах
-// сборки (scripts/mapTarget.ts): в src/ нет ни process.env, ни import.meta.env,
-// ни ветвлений, и в бандл попадает ровно один JSON.
-import rawProcessJson from '@map/process.json';
+// Данные собираемых версий карты. Какие именно — решают алиасы @map и @map-alt
+// в конфигах сборки (scripts/mapTarget.ts): в src/ нет ни process.env, ни
+// import.meta.env, ни ветвлений по карте. Какая из версий показывается сейчас —
+// знает src/data/versions.ts, и только он.
 import { getImportedMap } from './activeMap';
+import { DEFAULT_VERSION_ID, getSelectedMap, getSelectedVersionId } from './versions';
 import {
   LEGACY_OVERRIDES_MAP_ID,
   LEGACY_OVERRIDES_STORAGE_KEY,
@@ -33,14 +34,19 @@ import {
 } from './schema';
 
 /**
- * Идентификатор карты и её ключ overrides.
+ * Идентификатор ВЕРСИИ ПО УМОЛЧАНИЮ и её ключ overrides.
  *
  * Берётся ИЗ ДАННЫХ, а не из переменной сборки: тогда ключ выведен из того
  * самого файла, который реально попал в бандл. Забытый MAP=mrp даёт карту SNP
  * с ключом SNP — то есть просто вторую копию SNP, — а не данные MRP под чужим
  * ключом (process-map-3wh.5).
+ *
+ * Раньше эта константа называлась «id встроенной карты», и встроенная карта
+ * была одна. Теперь версий может быть две, поэтому ключ АКТИВНОЙ версии
+ * считает activeOverridesKey(), а эта константа осталась ровно тем, чем была:
+ * ключом версии, с которой страница открывается.
  */
-const BUILTIN_MAP_ID = rawProcessJson.id;
+const BUILTIN_MAP_ID = DEFAULT_VERSION_ID;
 
 /**
  * Ключ overrides ВСТРОЕННОЙ карты.
@@ -75,7 +81,9 @@ function importedOverridesKey(mapId: string): string {
  */
 function activeOverridesKey(): string {
   const imported = getImportedMap();
-  return imported === null ? OVERRIDES_KEY : importedOverridesKey(imported.id);
+  return imported === null
+    ? overridesStorageKey(getSelectedVersionId())
+    : importedOverridesKey(imported.id);
 }
 
 // ───────────────────────────── чистые функции ─────────────────────────────
@@ -181,7 +189,13 @@ function migrateLegacyOverrides(): string | null {
   // Миграция касается ТОЛЬКО встроенной карты: под легаси-ключом лежит
   // черновик владельца, сделанный до разделения карт. Загруженной карте он не
   // принадлежит, и подмешивать его к ней было бы подлогом.
-  if (BUILTIN_MAP_ID !== LEGACY_OVERRIDES_MAP_ID || getImportedMap() !== null) {
+  // И только на ВЕРСИИ ПО УМОЛЧАНИЮ: черновик сделан по карте из презентации,
+  // а у карты из модели id узлов другие целиком — перенос был бы записью мусора.
+  if (
+    BUILTIN_MAP_ID !== LEGACY_OVERRIDES_MAP_ID ||
+    getSelectedVersionId() !== DEFAULT_VERSION_ID ||
+    getImportedMap() !== null
+  ) {
     return null;
   }
   try {
@@ -270,7 +284,7 @@ export function replaceOverrides(overrides: Overrides): boolean {
  * второй разбор ей не нужен; встроенная разбирается как прежде.
  */
 export function loadBaseProcessMap(): ProcessMap {
-  return getImportedMap() ?? parseProcessMap(rawProcessJson);
+  return getImportedMap() ?? getSelectedMap();
 }
 
 /** Карта из process.json с наложенными overrides из localStorage. */
