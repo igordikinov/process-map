@@ -8,8 +8,8 @@
     {
       "id": "stage-1-dp",
       "number": 1,
-      "title": "Планирование спроса",
-      "shortTitle": "DP",
+      "title": "DP · Планирование спроса",
+      "shortTitle": "DP · Планирование спроса",
       "keyOutputs": [
         "Факт продаж после автоматической очистки",
         "План поставок на логистические узлы",
@@ -1426,8 +1426,8 @@
     {
       "id": "stage-2-snp",
       "number": 2,
-      "title": "Планирование сети поставок",
-      "shortTitle": "SNP",
+      "title": "SNP · Планирование сети поставок",
+      "shortTitle": "SNP · Планирование сети поставок",
       "keyOutputs": [
         "Основные данные",
         "Транзакционные данные",
@@ -2741,8 +2741,8 @@
     {
       "id": "stage-3-ps",
       "number": 3,
-      "title": "Детальное планирование производства и Графикование",
-      "shortTitle": "PS",
+      "title": "PS · Детальное планирование производства и Графикование",
+      "shortTitle": "PS · Детальное планирование производства и Графикование",
       "keyOutputs": [
         "Основные данные",
         "Ограниченный План пр-ва по неделям",
@@ -3422,8 +3422,8 @@
     {
       "id": "stage-4-dm",
       "number": 4,
-      "title": "Управление данными",
-      "shortTitle": "DM",
+      "title": "DM · Управление данными",
+      "shortTitle": "DM · Управление данными",
       "keyOutputs": [],
       "groups": [],
       "nodes": [
@@ -3500,8 +3500,8 @@
     {
       "id": "stage-5-io",
       "number": 5,
-      "title": "Inventory Optimization",
-      "shortTitle": "IO",
+      "title": "IO · Inventory Optimization",
+      "shortTitle": "IO · Inventory Optimization",
       "keyOutputs": [
         "Данные для расчета запасов",
         "Расчитанные оптимальные запасы",
@@ -3913,8 +3913,8 @@
     {
       "id": "stage-6-sop",
       "number": 6,
-      "title": "Процесс S&OP",
-      "shortTitle": "SOP",
+      "title": "SOP · Процесс S&OP",
+      "shortTitle": "SOP · Процесс S&OP",
       "keyOutputs": [
         "Неограниченный Прогноз спроса",
         "Сценарии Прогноза",
@@ -6432,8 +6432,8 @@
     {
       "id": "stage-7-tpp",
       "number": 7,
-      "title": "Trade-Promo Planning",
-      "shortTitle": "TPP",
+      "title": "TPP · Trade-Promo Planning",
+      "shortTitle": "TPP · Trade-Promo Planning",
       "keyOutputs": [
         "Промо-план",
         "Промо-акции"
@@ -6940,7 +6940,7 @@
       "id": "stage-9-mrp-planirovanie",
       "number": 9,
       "title": "MRP Планирование потребности в материалах",
-      "shortTitle": "MRP Планирование",
+      "shortTitle": "MRP Планирование потребности в материалах",
       "keyOutputs": [
         "Производственный план",
         "спецификации (BOM) маршруты рецепты календари.",

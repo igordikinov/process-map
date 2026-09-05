@@ -35,7 +35,7 @@ import {
   countBelowLevel,
   findProcess,
   hasFlowNodes,
-  shortTitleOf,
+  stageLabelOf,
   type ModuleDraft,
 } from './modules.ts';
 import { buildOverviewEdges, resolveCrossReferences } from './overviewEdges.ts';
@@ -384,11 +384,26 @@ export function bpmnToProcessMap(doc: Document, meta: BpmnSourceMeta): Adaptatio
       ),
     ].slice(0, 4);
 
+    const label = stageLabelOf(module.meta);
+
     const stage: Stage = {
       id: stageId,
       number: index + 1,
-      title: module.meta.title === '' ? module.bpmnId : module.meta.title,
-      shortTitle: shortTitleOf(module.meta),
+      /*
+       * ОДНА И ТА ЖЕ СТРОКА В ОБА ПОЛЯ (process-map-ax5), и это не небрежность.
+       *
+       * `title` уходит в подсказку, в крошки и в aria-label карточки, а
+       * `shortTitle` — в видимую подпись. Разные строки здесь означали бы, что
+       * зрячий видит «DP», а скринридер произносит «Планирование спроса», то
+       * есть сослаться на одну карточку они не смогут (WCAG 2.5.3). У карт из
+       * презентаций эти поля тоже совпадают везде, кроме двух этапов, где
+       * короткое название задано автором вручную.
+       *
+       * Обрезка — дело карточки: у неё фиксированная ширина и многоточие по
+       * CSS, а обрезанная строка в подсказке была бы бесполезна.
+       */
+      title: label === '' ? module.bpmnId : label,
+      shortTitle: label === '' ? module.bpmnId : label,
       keyOutputs,
       groups: groupResult.groups,
       nodes,
