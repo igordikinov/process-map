@@ -281,6 +281,13 @@ SYSTEM_CODES = ("DP", "PS", "IO", "ERP", "MRP", "INPLAN", "BI", "EPM")
 NODE_KEY_ORDER = (
     "id",
     "type",
+    # Уточнение типа для узлов BPMN. Импортёр презентаций их не пишет, но
+    # порядок обязан совпадать со схемой ключ в ключ:
+    # tests/snp/importPreserve.test.ts сравнивает этот кортеж со
+    # ProcessNodeSchema.shape точно и по порядку.
+    "gatewayKind",
+    "eventKind",
+    "eventDefinition",
     "label",
     "description",
     "group",

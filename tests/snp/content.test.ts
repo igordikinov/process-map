@@ -12,6 +12,15 @@ import requiredNodeIds from '../fixtures/snp/required-nodes.json';
 const map = ProcessMapSchema.parse(processJson);
 
 describe('карта SNP: содержание', () => {
+  it('ровно четыре этапа с номерами 1..4', () => {
+    // Переехало из tests/mapContract.test.ts (process-map-70e.4): четвёрка —
+    // свойство ЭТОЙ презентации, а не любой карты. Схема с тех пор допускает
+    // любое N ≥ 1, потому что этапы карты BPMN приходят из модулей файла.
+    // Сторож не ослаб: обрезанный разбор презентации по-прежнему красит тест.
+    expect(map.stages).toHaveLength(4);
+    expect(map.stages.map((stage) => stage.number)).toEqual([1, 2, 3, 4]);
+  });
+
   it('содержит не менее 40 узлов суммарно по всем этапам', () => {
     // Порог — про объём ИМЕННО этой презентации (6 слайдов, ~40 шагов, PRD).
     // Для карты MRP он недостижим: слайд 8 даёт 12 шагов.

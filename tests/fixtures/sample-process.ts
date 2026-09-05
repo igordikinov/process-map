@@ -16,7 +16,7 @@ import type {
 const SYSTEM_CODES = ['DP', 'PS', 'IO', 'ERP'] as const;
 const NODES_PER_STAGE = 11; // 4 этапа × 11 = 44 узла, что удовлетворяет "≥ 40".
 
-function buildStage(stageNumber: 1 | 2 | 3 | 4): Stage {
+function buildStage(stageNumber: number): Stage {
   const stageId = `stage-${stageNumber}`;
   const groups: Group[] = [{ id: `${stageId}-group-main`, label: `Группа ${stageNumber}` }];
 
@@ -80,7 +80,7 @@ function buildStage(stageNumber: 1 | 2 | 3 | 4): Stage {
 }
 
 export function buildSampleProcessMap(): ProcessMap {
-  const stages: Stage[] = [1, 2, 3, 4].map((n) => buildStage(n as 1 | 2 | 3 | 4));
+  const stages: Stage[] = [1, 2, 3, 4].map((n) => buildStage(n));
 
   const overviewEdges: Edge[] = [
     { id: 'overview-edge-1', source: 'stage-1', target: 'stage-2', kind: 'process' },

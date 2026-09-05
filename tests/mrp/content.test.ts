@@ -17,6 +17,15 @@ const map = ProcessMapSchema.parse(processJson);
 const nodes = map.stages.flatMap((stage) => stage.nodes);
 const steps = nodes.filter((node) => node.type !== 'data');
 
+describe('карта MRP: четыре этапа', () => {
+  it('ровно четыре этапа с номерами 1..4', () => {
+    // Переехало из tests/mapContract.test.ts (process-map-70e.4) по той же
+    // причине, что и у SNP: четвёрка — свойство слайда 8, а не контракта карты.
+    expect(map.stages).toHaveLength(4);
+    expect(map.stages.map((stage) => stage.number)).toEqual([1, 2, 3, 4]);
+  });
+});
+
 /** Заголовки четырёх этапов — надписи над контейнерами слайда 8, дословно. */
 const STAGE_TITLES = [
   'Расчёт потребности',

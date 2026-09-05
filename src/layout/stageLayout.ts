@@ -51,12 +51,24 @@ export type Size = NodeSize;
  * (он же сверяется с токенами --pm-*-node-* в tests/sizes.test.ts).
  * IntegrationNode и WarningNode отдельных размеров в SPEC не имеют и рисуются
  * карточкой шага, поэтому используют размер StepNode.
+ *
+ * Шлюз, событие и подпроцесс (BPMN, process-map-70e.4) — тоже размер карточки
+ * шага. Это ОСОЗНАННОЕ ОТСТУПЛЕНИЕ ОТ НОТАЦИИ, а не экономия: ромб 50×50 и
+ * круг 36×36 не вмещают подпись, и по стандарту BPMN она рисуется СНАРУЖИ
+ * фигуры — на полотне её пришлось бы вынести, и она наехала бы на соседей.
+ * Вид узла кодируется иконкой внутри карточки (задача process-map-70e.7).
+ *
+ * Эта таблица — единственный работающий сторож исчерпаемости NodeType: новое
+ * значение перечисления роняет tsc здесь и заставляет назначить размер.
  */
 export const NODE_SIZE: Record<NodeType, Size> = {
   step: STEP_NODE_SIZE,
   integration: STEP_NODE_SIZE,
   warning: STEP_NODE_SIZE,
   data: DATA_NODE_SIZE,
+  gateway: STEP_NODE_SIZE,
+  event: STEP_NODE_SIZE,
+  subprocess: STEP_NODE_SIZE,
 };
 
 export const STAGE_NODE_SIZE: Size = STAGE_SIZE;

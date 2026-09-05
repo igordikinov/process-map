@@ -84,6 +84,73 @@ describe('ProcessMapSchema', () => {
     expect(parsed.stages[0]?.nodes[0]?.direction).toBe('out');
   });
 
+  // ────────────────── расширение под BPMN (process-map-70e.4) ──────────────────
+
+  it('принимает типы узлов gateway, event и subprocess', () => {
+    const map = buildSampleProcessMap();
+    const node = map.stages[0]?.nodes[0];
+    expect(node).toBeTruthy();
+    for (const type of ['gateway', 'event', 'subprocess'] as const) {
+      node!.type = type;
+      expect(() => ProcessMapSchema.parse(map), type).not.toThrow();
+    }
+  });
+
+  it('сохраняет уточнение вида шлюза и события', () => {
+    const map = buildSampleProcessMap();
+    const node = map.stages[0]?.nodes[0];
+    expect(node).toBeTruthy();
+    node!.type = 'gateway';
+    node!.gatewayKind = 'exclusive';
+    expect(ProcessMapSchema.parse(map).stages[0]?.nodes[0]?.gatewayKind).toBe('exclusive');
+
+    node!.type = 'event';
+    node!.gatewayKind = undefined;
+    node!.eventKind = 'start';
+    node!.eventDefinition = 'link';
+    const parsed = ProcessMapSchema.parse(map).stages[0]?.nodes[0];
+    expect(parsed?.eventKind).toBe('start');
+    expect(parsed?.eventDefinition).toBe('link');
+  });
+
+  it('отвергает вид шлюза, которого нет в перечислении', () => {
+    // Перечисление закрытое намеренно: разбор BPMN обязан сводить элементы
+    // Camunda к известным значениям, а не изобретать новые в рантайме.
+    const map = buildSampleProcessMap();
+    const node = map.stages[0]?.nodes[0];
+    (node as unknown as { gatewayKind: string }).gatewayKind = 'выдуманный';
+    expect(() => ProcessMapSchema.parse(map)).toThrow();
+  });
+
+  /*
+   * КЛЮЧЕВОЕ СВОЙСТВО, на котором держится совместимость: zod не добавляет
+   * отсутствующие необязательные ключи в результат разбора. Именно поэтому
+   * расширение схемы тремя полями не меняет ни байта в экспорте карт snp и mrp
+   * и не трогает их отпечаток (tests/mapFingerprint.test.ts).
+   */
+  it('не дописывает отсутствующие уточнения в разобранный узел', () => {
+    const parsed = ProcessMapSchema.parse(buildSampleProcessMap());
+    const node = parsed.stages[0]?.nodes[0];
+    expect(node).toBeTruthy();
+    expect('gatewayKind' in node!).toBe(false);
+    expect('eventKind' in node!).toBe(false);
+    expect('eventDefinition' in node!).toBe(false);
+  });
+
+  it('число этапов больше не ограничено четырьмя, но номер обязан быть целым от 1', () => {
+    // Этапы карты BPMN приходят из модулей файла: в модели владельца их 12,
+    // из них непустых 10. Жёсткое 1|2|3|4 отвергало бы такой файл.
+    const map = buildSampleProcessMap();
+    const stage = map.stages[0];
+    expect(stage).toBeTruthy();
+    stage!.number = 12;
+    expect(() => ProcessMapSchema.parse(map), 'двенадцатый этап').not.toThrow();
+    stage!.number = 0;
+    expect(() => ProcessMapSchema.parse(map), 'нулевого этапа не бывает').toThrow();
+    stage!.number = 1.5;
+    expect(() => ProcessMapSchema.parse(map), 'номер целый').toThrow();
+  });
+
   it('отвергает keyOutputs из более чем 4 элементов', () => {
     // Лимит поднят с трёх до четырёх (process-map-24i): презентация перечисляет
     // у этапа 3 ровно четыре опубликованных плана, и третий пункт срезался.

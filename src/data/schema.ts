@@ -2,8 +2,67 @@
 // Типы выводятся из схем через z.infer — интерфейсы SPEC не дублируются руками.
 import { z } from 'zod';
 
-export const NodeTypeSchema = z.enum(['step', 'data', 'integration', 'warning']);
+// Тип узла уровня 2. Первые четыре значения — исходная модель, снятая с
+// презентаций; три последних добавлены импортом BPMN (эпик M6, задача
+// process-map-70e.4).
+//
+// ПОЧЕМУ ТРИ ЗНАЧЕНИЯ, А НЕ ДВЕНАДЦАТЬ. Вид шлюза и вид события живут в
+// отдельных полях ниже, а не в самом перечислении. Тип узла отображается
+// ОДИН В ОДИН в тип узла React Flow (tests/stageGraph.test.ts) и в пункт
+// легенды: плоское перечисление вида gatewayExclusive | eventStartMessage дало
+// бы дюжину почти одинаковых компонентов в nodeTypes и дюжину пунктов легенды
+// под полотном шириной 1024.
+//
+// ПЕРЕЧИСЛЕНИЕ ЗАКРЫТОЕ, и открывать его в z.string() нельзя: единственный
+// работающий сторож исчерпаемости — NODE_SIZE: Record<NodeType, Size> в
+// src/layout/stageLayout.ts. При добавлении значения tsc падает и заставляет
+// назначить размер; с открытым союзом сторож исчез бы, а React Flow на
+// незнакомый тип молча нарисовал бы узел по умолчанию. Разбор BPMN обязан
+// СВОДИТЬ элементы Camunda к этим значениям, а не изобретать новые в рантайме.
+export const NodeTypeSchema = z.enum([
+  'step',
+  'data',
+  'integration',
+  'warning',
+  'gateway',
+  'event',
+  'subprocess',
+]);
 export type NodeType = z.infer<typeof NodeTypeSchema>;
+
+// Вид шлюза BPMN. Имеет смысл только при type === 'gateway'.
+export const GatewayKindSchema = z.enum([
+  'exclusive',
+  'parallel',
+  'inclusive',
+  'eventBased',
+  'complex',
+]);
+export type GatewayKind = z.infer<typeof GatewayKindSchema>;
+
+// Место события в потоке. Имеет смысл только при type === 'event'.
+//
+// Значения 'boundary' в перечислении НЕТ намеренно: узел не может быть
+// прикреплён к узлу, и в модели владельца (In.Plan Process Model v11)
+// граничных событий нет ни одного — заводить значение под конструкцию,
+// которую нечем показать и которая не встречается, значило бы обещать
+// поддержку, которой не будет.
+export const EventKindSchema = z.enum(['start', 'intermediate', 'end']);
+export type EventKind = z.infer<typeof EventKindSchema>;
+
+// Определение события: чем оно вызывается или что бросает. 'none' — простое
+// событие без определения; в модели владельца такие все, кроме 'link'.
+export const EventDefinitionSchema = z.enum([
+  'none',
+  'link',
+  'message',
+  'timer',
+  'error',
+  'signal',
+  'escalation',
+  'terminate',
+]);
+export type EventDefinition = z.infer<typeof EventDefinitionSchema>;
 
 export const SystemCodeSchema = z.enum(['DP', 'PS', 'IO', 'ERP', 'MRP', 'INPLAN', 'BI', 'EPM']);
 export type SystemCode = z.infer<typeof SystemCodeSchema>;
@@ -27,6 +86,17 @@ export type Direction = z.infer<typeof DirectionSchema>;
 export const ProcessNodeSchema = z.object({
   id: z.string(),
   type: NodeTypeSchema,
+  // Уточнение типа для узлов, пришедших из BPMN. Поля ставит разбор схемы по
+  // элементу, а не человек: руками их не правят и в PRESERVED_NODE_FIELDS
+  // импортёра они не входят — прецедент тот же, что у direction.
+  //
+  // Опциональны, а не обязательны при своём типе: zod не выражает зависимость
+  // «поле обязательно, если type === X» без discriminatedUnion, а он
+  // потребовал бы разбить ProcessNode на семь схем и переписать всех
+  // потребителей. Цена — договорённость, а не проверка типом.
+  gatewayKind: GatewayKindSchema.optional(),
+  eventKind: EventKindSchema.optional(),
+  eventDefinition: EventDefinitionSchema.optional(),
   label: z.string(),
   description: z.string().optional(),
   group: z.string().optional(),
@@ -108,7 +178,17 @@ export type ExternalIO = z.infer<typeof ExternalIOSchema>;
 
 export const StageSchema = z.object({
   id: z.string(),
-  number: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]),
+  // Номер этапа, начиная с единицы.
+  //
+  // БЫЛО z.union([1,2,3,4]) — жёсткая четвёрка, снятая с презентаций SNP и MRP.
+  // Снято задачей process-map-70e.4: этапы загруженной схемы BPMN приходят из
+  // подпроцессов верхнего уровня, и их столько, сколько в файле. В модели
+  // владельца модулей двенадцать, из них непустых десять.
+  //
+  // Инвариант «ровно четыре» не исчез, а ПЕРЕЕХАЛ из tests/mapContract.test.ts
+  // в tests/snp/content.test.ts и tests/mrp/content.test.ts: по таксономии
+  // SPEC §7 это факт про поставляемые карты, а не про любую карту.
+  number: z.number().int().min(1),
   title: z.string(),
   shortTitle: z.string(),
   keyOutputs: z.array(z.string()).max(4),
