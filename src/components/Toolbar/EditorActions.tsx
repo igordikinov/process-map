@@ -157,14 +157,25 @@ export function EditorActions() {
     void file
       .text()
       .then((text) => {
-        const overrides = parseImportedOverrides(text, loadBaseProcessMap());
-        if (overrides === null) {
+        const result = parseImportedOverrides(text, loadBaseProcessMap());
+        if (result.status === 'rejected') {
           setMessage({ kind: 'error', text: ru.toolbar.importError });
           return;
         }
+        /*
+         * Файл исправной, но ДРУГОЙ карты (process-map-0c5.9). Раньше такого
+         * исхода не было: карты жили на разных адресах. Теперь на одном адресе
+         * две версии, и файл соседней даёт ноль совпадений по id узлов —
+         * пользователь получал бы «файл принят, расхождений нет», то есть ему
+         * сказали бы, что всё в порядке.
+         */
+        if (result.status === 'other-map') {
+          setMessage({ kind: 'error', text: ru.toolbar.importOtherMap(result.mapId) });
+          return;
+        }
         // Счётчик берётся у уже готового диффа, а не считается заново.
-        const applied = Object.keys(overrides).length;
-        commitOverrides(() => replaceOverrides(overrides));
+        const applied = Object.keys(result.overrides).length;
+        commitOverrides(() => replaceOverrides(result.overrides));
         setMessage({
           kind: 'success',
           text: applied === 0 ? ru.toolbar.importNoChanges : ru.toolbar.importApplied(applied),

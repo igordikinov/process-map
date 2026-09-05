@@ -18,6 +18,7 @@ import App from '../src/App';
 import { clearImportedMap, getImportReport, isImportedActive } from '../src/data/activeMap';
 import { MAX_BPMN_BYTES } from '../src/data/bpmn/xml';
 import { loadBaseProcessMap } from '../src/data/loader';
+import { serializeProcessMap } from '../src/utils/processTransfer';
 import { refreshProcessMap } from '../src/hooks/useProcessMap';
 import { ru } from '../src/i18n/ru';
 import { createInitialState, useProcessStore } from '../src/store/useProcessStore';
@@ -108,6 +109,36 @@ describe('до импорта', () => {
    * Геометрию в jsdom не проверить (layout'а нет), поэтому сторожится причина:
    * кнопки лежат в разных контейнерах.
    */
+  /*
+   * ПОЛНЫЙ ПУТЬ ДО СТРОКИ НА ЭКРАНЕ (process-map-0c5.9). Разбор проверен в
+   * tests/loader.test.ts; здесь — что пользователю сказали правду. Раньше файл
+   * другой карты давал «Файл принят, расхождений нет».
+   */
+  it('импорт JSON от другой карты даёт свою строку отказа, а не «расхождений нет»', async () => {
+    renderEditor();
+    const other = JSON.parse(serializeProcessMap(loadBaseProcessMap())) as {
+      id: string;
+    };
+    other.id = 'karta-drugoy-versii';
+    const input = document.querySelector<HTMLInputElement>(
+      'input[type="file"][accept*="json"]',
+    ) as HTMLInputElement;
+    fireEvent.change(input, {
+      target: { files: [new File([JSON.stringify(other)], 'process.json')] },
+    });
+
+    const message = await waitFor(() => {
+      const found = [...document.querySelectorAll('[role="alert"], [role="status"]')].filter(
+        (element) => element.closest('header') === null,
+      );
+      expect(found.length).toBe(1);
+      return found[0] as HTMLElement;
+    });
+
+    expect(message).toHaveTextContent(ru.toolbar.importOtherMap('karta-drugoy-versii'));
+    expect(message).not.toHaveTextContent(ru.toolbar.importNoChanges);
+  });
+
   it('кнопки правок и кнопки выбора карты лежат в разных группах тулбара', () => {
     renderEditor();
 
