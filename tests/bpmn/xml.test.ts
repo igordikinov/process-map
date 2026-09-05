@@ -4,9 +4,13 @@
 // XML. Это существенно: три проверки проходят только потому, что оба движка
 // ведут себя одинаково, и ещё одна написана именно из-за того, что они ведут
 // себя ПО-РАЗНОМУ (см. «обрезанный файл» ниже).
+import { readFileSync, statSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   BPMN_NS,
+  MAX_BPMN_BYTES,
+  MAX_BPMN_ELEMENTS,
   declaredEncoding,
   hasDoctypeInProlog,
   nsAll,
@@ -265,10 +269,51 @@ describe('лимит числа элементов', () => {
    * мы можем не только себя.
    */
   it('отвергает документ, в котором элементов больше потолка', () => {
-    const many = '<bpmn:task/>'.repeat(20_001);
+    // Считается ОТ КОНСТАНТЫ, а не от числа: иначе тест продолжал бы проверять
+    // прежний лимит после его правки и молча терял бы смысл.
+    const many = '<bpmn:task/>'.repeat(MAX_BPMN_ELEMENTS + 1);
     expect(parseBpmnDocument(definitions(many))).toEqual({
       status: 'rejected',
       reason: 'too-many-elements',
     });
+  });
+});
+
+/*
+ * НАСТОЯЩАЯ МОДЕЛЬ ВЛАДЕЛЬЦА — самая ценная проверка файла, и появилась она
+ * последней (process-map-70e.1).
+ *
+ * Ровно этот тест поймал бы дефект, который иначе доехал бы до пользователя:
+ * потолок числа элементов стоял на 20 000, а в модели их 15 725 — 79% лимита.
+ * Никакой синтетический тест этого не показывает, потому что синтетика
+ * подгоняется под лимит, а не под реальность. Проверяются обе стороны: файл
+ * принимается И у лимитов остаётся честный запас.
+ */
+describe('модель In.Plan из Camunda: файл целиком проходит сторожа', () => {
+  const PATH = resolve(process.cwd(), 'In.Plan Process Model v11.bpmn');
+  const source = readFileSync(PATH, 'utf8');
+
+  it('разбирается как BPMN', () => {
+    const result = parseBpmnDocument(source);
+    expect(result.status).toBe('ok');
+  });
+
+  it('лимиты имеют запас, а не еле-еле пропускают файл', () => {
+    const bytes = statSync(PATH).size;
+    const doc = okDoc(source);
+    const elements = doc.getElementsByTagName('*').length;
+
+    // Запас не меньше троекратного. Если модель вырастет настолько, что запас
+    // исчезнет, тест покраснеет ЗАРАНЕЕ — до того, как честный файл начнёт
+    // отклоняться у пользователя с формулировкой «слишком много элементов».
+    expect(bytes * 3).toBeLessThan(MAX_BPMN_BYTES);
+    expect(elements * 3).toBeLessThan(MAX_BPMN_ELEMENTS);
+  });
+
+  it('префиксы файла разбираются пространствами имён, а не строками', () => {
+    const doc = okDoc(source);
+    // В файле префикс `bpmn:`, но код о нём не знает — и не должен.
+    expect(nsAll(doc, MODEL, 'subProcess').length).toBeGreaterThan(0);
+    expect(nsAll(doc, MODEL, 'sequenceFlow').length).toBeGreaterThan(0);
   });
 });
