@@ -32,24 +32,32 @@ import { useEffect, useRef } from 'react';
 import { useReactFlow, type FitViewOptions } from '@xyflow/react';
 
 export interface RefitViewportProps {
-  /** Значение, смена которого обязана пересчитать вид. */
-  compact: boolean;
+  /**
+   * Значение, смена которого обязана пересчитать вид.
+   *
+   * Раньше здесь стоял один `compact`, и этого хватало, пока карта была одна.
+   * С переключателем версий (process-map-0c5.7) состав полотна меняется и без
+   * смены режима: четыре карточки становятся десятью, габарит растёт вдвое, а
+   * вид остался бы подогнанным под прежний — часть карточек за кадром. Поэтому
+   * ключ строковый и собирается из всего, что меняет габарит.
+   */
+  fitKey: string;
   fitViewOptions: FitViewOptions;
 }
 
-export function RefitViewport({ compact, fitViewOptions }: RefitViewportProps) {
+export function RefitViewport({ fitKey, fitViewOptions }: RefitViewportProps) {
   const { fitView } = useReactFlow();
-  // Одна подгонка на одно значение режима: без этого эффект перезапускался бы
+  // Одна подгонка на одно значение ключа: без этого эффект перезапускался бы
   // от смены ссылки на fitView/fitViewOptions и дёргал бы вид на ровном месте.
-  const appliedFor = useRef<boolean | null>(null);
+  const appliedFor = useRef<string | null>(null);
 
   useEffect(() => {
-    if (appliedFor.current === compact) {
+    if (appliedFor.current === fitKey) {
       return;
     }
-    appliedFor.current = compact;
+    appliedFor.current = fitKey;
     void fitView(fitViewOptions);
-  }, [compact, fitView, fitViewOptions]);
+  }, [fitKey, fitView, fitViewOptions]);
 
   return null;
 }

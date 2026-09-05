@@ -62,7 +62,19 @@ async function importFile(content: string | Blob, name = 'model.bpmn'): Promise<
   const file = content instanceof Blob ? content : new File([content], name, { type: 'text/xml' });
   fireEvent.change(bpmnInput(), { target: { files: [file] } });
   return waitFor(() => {
-    const messages = document.querySelectorAll('[role="alert"], [role="status"]');
+    /*
+     * Живые области ШАПКИ сюда не считаются. С появлением переключателя версий
+     * (process-map-0c5.7) в шапке обзора живёт своя `role="status"` — она
+     * объявляет, какая версия показана. Раньше живая область на экране была
+     * ровно одна, и проверка «их ровно одна» сторожила, что тулбар не отвечает
+     * дважды. Сторож остаётся, но считает теперь только ответы ТУЛБАРА:
+     * одновременно эти две области не срабатывают (при загруженной схеме
+     * переключателя нет вовсе), а смешивать их в одном счётчике значило бы
+     * проверять не то, что написано в имени теста.
+     */
+    const messages = [...document.querySelectorAll('[role="alert"], [role="status"]')].filter(
+      (element) => element.closest('header') === null,
+    );
     expect(messages.length).toBe(1);
     return messages[0] as HTMLElement;
   });
