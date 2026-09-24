@@ -165,6 +165,18 @@ MAP_UPDATED_AT_MRP = "2026-09-01"
 MAP_DATA_FINGERPRINT_MRP = "394e6ee9b381b0fd01eda89ffc7391993810474ae7c0cdee669023bf429fc9cd"
 
 
+# Сколько этапов у карты, если профиль не сказал иного (MapSpec.stage_count).
+#
+# ПРЕЖНИЙ КОММЕНТАРИЙ «ограничение zod-схемы: number ∈ {1,2,3,4}» БЫЛ НЕПРАВДОЙ
+# и потому удалён, а не перенесён: StageSchema.number — это
+# z.number().int().min(1), верхней границы у неё нет. Требование «ровно четыре
+# этапа» живёт не в схеме, а в содержательных тестах конкретных карт
+# (tests/snp/content.test.ts:20 и tests/mrp/content.test.ts:24), то есть у
+# каждой карты своё. Отсюда и параметр: число этапов — свойство презентации, а
+# не всего импортёра.
+STAGE_COUNT = 4
+
+
 @dataclass(frozen=True)
 class MapSpec:
     """
@@ -199,6 +211,26 @@ class MapSpec:
     module_label: str
     updated_at: str
     fingerprint: str
+
+    # --- поля с умолчаниями (process-map-9mn.13) ------------------------------
+    # Объявлены здесь, а заполняются только той картой, устройство презентации
+    # которой отличается от двух уже собранных. У обеих записей ниже значения
+    # умолчательные, и потому обе карты пересобираются побайтово так же, как до
+    # появления этих полей, — единственная проверка, которая это ловит.
+    #
+    # Сколько этапов ожидает импортёр. Было константой STAGE_COUNT на весь файл,
+    # то есть «четыре» приписывалось любой презентации, какую ни подставь.
+    stage_count: int = STAGE_COUNT
+    # Слайд обзора (0-based) — для презентаций, где обзор есть, но лежит не на
+    # втором слайде. У профиля 'overview+details' обзор задан устройством
+    # презентации SNP (слайд 2) и читается по нему, а не отсюда; None означает
+    # «полем не пользуются».
+    overview_slide: int | None = None
+    # Навигационные слайды (0-based) — разделители между модулями. Разбору
+    # содержания не мешают, но это единственное место, где код модуля, его
+    # русское название и порядок записаны явно, поэтому профиль, которому они
+    # нужны, перечисляет их здесь, а не ищет эвристикой.
+    nav_slides: tuple[int, ...] = ()
 
 
 MAPS: dict[str, MapSpec] = {
@@ -259,7 +291,6 @@ KEY_OUTPUT_BOTTOM_OFFSET = 700_000
 DECOR_ARROW_MAX_WIDTH = 400_000      # мелкие стрелки-коннекторы между боксами обзора
 
 MAX_KEY_OUTPUTS = 4                  # ограничение zod-схемы
-STAGE_COUNT = 4                      # ограничение zod-схемы: number ∈ {1,2,3,4}
 
 # Заливка плашек-артефактов (входы и выход процесса) в профиле «одиночный слайд».
 # В презентации SNP входы нарисованы надписями, здесь — автофигурами, и без
@@ -366,8 +397,14 @@ EXIT_LINKS_LOST = 2
 # как пришедшее из презентации. Так строка остаётся читаемой как формулировка
 # решения («связать все четыре»), а не как дельта к текущему состоянию слайда,
 # и правка презентации не превращает список в тихую ложь.
+#
+# КЛЮЧ `map` ОБЯЗАТЕЛЕН У КАЖДОЙ ЗАПИСИ ВСЕХ ЧЕТЫРЁХ ТАБЛИЦ и стоит ПЕРВЫМ
+# полем записи. Решение владельца относится к одной карте, а не ко всем сразу;
+# отбор делает decisions_for (ниже), она же останавливает импорт, если ключ
+# забыт или назван картой, которой нет в MAPS. Про «первым полем» — там же.
 OWNER_DECISION_EDGES: tuple[dict, ...] = (
     {
+        "map": "snp",
         "task": "process-map-7bz",
         "stage": 3,
         "source": "raschet-ogranichennyh-planov",
@@ -389,6 +426,7 @@ OWNER_DECISION_EDGES: tuple[dict, ...] = (
 
 STAGE_INPUT_ENRICHMENT: tuple[dict, ...] = (
     {
+        "map": "snp",
         "task": "process-map-qjl",
         "stage": 4,
         # sid исходной фигуры слайда 2 — уходит в IdFactory как происхождение
@@ -417,6 +455,7 @@ STAGE_INPUT_ENRICHMENT: tuple[dict, ...] = (
 
 OWNER_DECISION_EXTERNAL_IO: tuple[dict, ...] = (
     {
+        "map": "snp",
         "task": "process-map-vjz.5",
         "stage": 1,
         "system": "ERP",
@@ -438,6 +477,7 @@ OWNER_DECISION_EXTERNAL_IO: tuple[dict, ...] = (
 
 STAGE_GROUP_SPLIT: tuple[dict, ...] = (
     {
+        "map": "snp",
         "task": "process-map-028",
         "stage": 4,
         "label": "TLB",
@@ -460,6 +500,52 @@ STAGE_GROUP_SPLIT: tuple[dict, ...] = (
         ),
     },
 )
+
+
+def decisions_for(spec: MapSpec, table: Sequence[dict]) -> tuple[dict, ...]:
+    """
+    Записи таблицы решений владельца, относящиеся ИМЕННО К ЭТОЙ карте.
+
+    ЗАЧЕМ. Все четыре таблицы выше собирались, когда карта была одна, и
+    применялись безусловно — любая запись накладывалась на любую карту. Пока
+    таблицы описывали только SNP, это не проявлялось: вторая карта собирается
+    другим профилем, который до них просто не доходит. Третья карта дойдёт, и
+    тогда «этапа 3 нет в презентации» из решения по SNP остановило бы сборку
+    чужой карты, а совпадение номеров этапов, наоборот, применило бы к ней
+    чужое решение молча. Второе хуже первого.
+
+    ЗАПИСЬ БЕЗ КЛЮЧА `map` — ОСТАНОВКА, а не тихое «значит, применять везде»:
+    забытый ключ обязан упасть на первом же прогоне, а не через полгода чужим
+    ребром в чужой карте.
+
+    Ключ проверяется по реестру MAPS: опечатка в имени карты иначе дала бы
+    запись, которая не применится никогда и ни к чему, — самый тихий способ
+    потерять решение владельца.
+
+    ПОЧЕМУ КЛЮЧ СТОИТ ПЕРВЫМ ПОЛЕМ ЗАПИСИ. tests/snp/importPreserve.test.ts
+    разбирает все четыре таблицы регулярками с ЖЁСТКИМ порядком ключей
+    (`"task": … , "stage": …`) — Python в CI не запускается, другого способа
+    сверить объявление с данными нет. Вставка между 'task' и 'stage' ломает
+    разбор, перед 'task' не ломает ни одного.
+    """
+    chosen: list[dict] = []
+    for entry in table:
+        key = entry.get("map")
+        if key is None:
+            raise SystemExit(
+                f"решение владельца ({entry.get('task', 'без задачи')}) объявлено без "
+                f"ключа «map» — непонятно, к какой карте оно относится. Добавьте ключ "
+                f"первым полем записи в scripts/import-pptx.py."
+            )
+        if key not in MAPS:
+            raise SystemExit(
+                f"решение владельца ({entry.get('task', 'без задачи')}) объявлено для "
+                f"неизвестной карты «{key}». Известны: {', '.join(sorted(MAPS))}."
+            )
+        if key == spec.key:
+            chosen.append(entry)
+    return tuple(chosen)
+
 
 A = "{http://schemas.openxmlformats.org/drawingml/2006/main}"
 P = "{http://schemas.openxmlformats.org/presentationml/2006/main}"
@@ -548,6 +634,19 @@ class Shape:
     start_sid: int | None = None
     end_sid: int | None = None
     consumed_by: str | None = None   # для отчёта: кто «съел» текстовую фигуру
+    # Заливка ВМЕСТЕ С МОДИФИКАТОРАМИ ЦВЕТА (read_fill_key), например
+    # 'scheme:tx2|alpha76000+lumMod65000+lumOff35000'. Отдельное поле рядом с
+    # fill, а не вместо него: fill сравнивается на точное равенство в
+    # классификаторах обеих опубликованных карт (см. read_fill_key).
+    fill_key: str | None = None
+    # shape_id группы, внутри которой фигура нашлась (None — лежит прямо на
+    # слайде). Для отчёта: заход в группы обязан быть виден, а не молчалив.
+    inside_group: int | None = None
+
+    # Оба поля стоят в конце, потому что у них есть умолчания, а dataclass
+    # требует, чтобы поля с умолчаниями шли после полей без них. Втиснуть их к
+    # родственному по смыслу `fill` не выйдет, не раздав умолчаний половине
+    # dataclass'а.
 
     @property
     def text(self) -> str:
@@ -628,6 +727,14 @@ class SlideReport:
     # Рёбра, у которых хотя бы один конец разрешён явной привязкой коннектора,
     # а не геометрией (process-map-3wh.16).
     cxn_edges: list[str] = field(default_factory=list)
+    # Фигуры, найденные ВНУТРИ групп (p:grpSp), а не прямо на слайде
+    # (process-map-9mn.13). Пустой список означает «групп на слайде нет», а не
+    # «не смотрели»: read_slide заходит в группы всегда.
+    from_groups: list[str] = field(default_factory=list)
+    # Какой веткой phase_band нашёл полосу фаз: 'containers' | 'top-row'.
+    # None — полосу фаз на этом слайде не искали: ни один из двух собранных
+    # профилей этого не делает, ярусы нужны третьему (process-map-9mn.13).
+    phase_band_rule: str | None = None
 
 
 # --------------------------------------------------------------------------------------
@@ -681,6 +788,58 @@ def read_fill(element) -> str | None:
             if local == "srgbClr":
                 return "srgb:" + str(color.get("val")).upper()
             return "scheme:" + str(color.get("val"))
+        if tag.endswith("Fill"):
+            return tag
+    return None
+
+
+def read_fill_key(element) -> str | None:
+    """
+    Заливка ВМЕСТЕ С МОДИФИКАТОРАМИ ЦВЕТА:
+    'scheme:tx2|alpha76000+lumMod65000+lumOff35000'.
+
+    ЗАЧЕМ ОТДЕЛЬНАЯ ФУНКЦИЯ, А НЕ ПРАВКА read_fill. Результат read_fill
+    сравнивается на ТОЧНОЕ РАВЕНСТВО в четырёх местах, от которых зависит
+    классификация узлов обеих опубликованных карт: is_integration
+    (srgb:A6A6A6), is_container (noFill), is_artifact_box (scheme:accent2) и
+    подбор боксов в build_overview. Добавь модификаторы в общий ключ — и
+    фигура, у которой к той же заливке приписан lumMod, перестанет совпадать
+    со строкой-эталоном. Карта пересобралась бы с другой классификацией узлов
+    МОЛЧА: ни одна проверка не сверяет типы узлов с презентацией, сверять не с
+    чем. Поэтому read_fill остаётся как есть, а модификаторы читает соседняя
+    функция, и пользуются ею только новые правила.
+
+    ЗАЧЕМ ВООБЩЕ. На слайде 3 презентации L2 фаза [67] и шаг [124] — это
+    schemeClr tx2 С модификаторами (lumMod 65000, lumOff 35000, alpha 76000), а
+    подробности [44], [50], [63]…[66], [70] — тот же tx2 БЕЗ модификаторов.
+    read_fill отдаёт для всех восьми одно и то же 'scheme:tx2', то есть два
+    разных яруса карты становятся неразличимы.
+
+    МОДИФИКАТОРЫ ОТСОРТИРОВАНЫ по имени: их порядок в XML — дело PowerPoint, и
+    ключ, зависящий от порядка, развёл бы одинаковые заливки на два яруса.
+    Модификатор без val (такие бывают, например a:gamma) сохраняется одним
+    именем — потерять его молча нельзя.
+    """
+    sp_pr = element.find(P + "spPr")
+    if sp_pr is None:
+        return None
+    for child in sp_pr:
+        tag = etree.QName(child).localname
+        if tag == "noFill":
+            return "noFill"
+        if tag == "solidFill":
+            if len(child) == 0:
+                return "solid"
+            color = child[0]
+            local = etree.QName(color).localname
+            if local == "srgbClr":
+                base = "srgb:" + str(color.get("val")).upper()
+            else:
+                base = "scheme:" + str(color.get("val"))
+            mods = sorted(
+                f"{etree.QName(mod).localname}{mod.get('val') or ''}" for mod in color
+            )
+            return f"{base}|{'+'.join(mods)}" if mods else base
         if tag.endswith("Fill"):
             return tag
     return None
@@ -768,9 +927,148 @@ def classify_shape_kind(shape) -> str:
     return "other"
 
 
-def read_slide(slide) -> list[Shape]:
-    shapes: list[Shape] = []
-    for shape in slide.shapes:
+# Преобразование «координаты как есть»: слой прямо на слайде.
+IDENTITY_TRANSFORM: tuple[float, float, float, float] = (0.0, 0.0, 1.0, 1.0)
+
+
+def group_transform(element) -> tuple[float, float, float, float]:
+    """
+    Аффинное преобразование из системы координат ДЕТЕЙ группы в систему слайда:
+    (dx, dy, sx, sy), где x_слайда = dx + sx · x_ребёнка.
+
+    Группа хранит ДВЕ рамки (p:grpSpPr/a:xfrm): a:off + a:ext — где группа
+    лежит на слайде, a:chOff + a:chExt — в каких координатах записаны её дети.
+    Совпадают они далеко не всегда: у групп слайда 9 презентации L2
+    преобразование тождественно (off == chOff, ext == chExt), а у групп слайда
+    3 — нет. Поэтому «просто взять left/top ребёнка» неверно, и проверить это
+    на одном слайде нельзя.
+
+    ПОВЁРНУТАЯ ГРУППА — ОСТАНОВКА ИМПОРТА. Поворот вокруг центра группы
+    превращает прямоугольник ребёнка в прямоугольник, у которого нет
+    представления в модели Box (у неё нет угла), а положить фигуру НЕ ТУДА
+    можно совершенно незаметно: координаты остаются правдоподобными. Лучше
+    громко отказаться, чем собрать карту, где часть шагов стоит не в своих
+    этапах. То же и с отражением группы (flipH/flipV): зеркалить содержимое
+    этим преобразованием нечем.
+    Ни в одной из трёх презентаций репозитория повёрнутых и отражённых групп
+    нет (проверено перебором grpSpPr), так что сегодня эта ветка молчит.
+    """
+    grp_sp_pr = element.find(P + "grpSpPr")
+    xfrm = grp_sp_pr.find(A + "xfrm") if grp_sp_pr is not None else None
+    if xfrm is None:
+        return IDENTITY_TRANSFORM
+
+    raw_rot = xfrm.get("rot")
+    if raw_rot is not None and int(raw_rot) % 21_600_000 != 0:
+        raise SystemExit(
+            f"группа повёрнута на {int(raw_rot) / 60000.0}° — зайти внутрь нельзя: "
+            f"повёрнутую рамку ребёнка выразить нечем, а поставить фигуру не туда "
+            f"можно молча. Разверните группу в презентации или разгруппируйте её."
+        )
+    if xfrm.get("flipH") == "1" or xfrm.get("flipV") == "1":
+        raise SystemExit(
+            "группа отражена (flipH/flipV) — зайти внутрь нельзя по той же причине, "
+            "что и в повёрнутую: зеркалить содержимое этим преобразованием нечем."
+        )
+
+    off = xfrm.find(A + "off")
+    ext = xfrm.find(A + "ext")
+    ch_off = xfrm.find(A + "chOff")
+    ch_ext = xfrm.find(A + "chExt")
+    if off is None or ext is None or ch_off is None or ch_ext is None:
+        # Не объявлена хотя бы одна из двух рамок — ни рамку группы, ни рамку
+        # детей поодиночке применить не к чему: преобразование задаёт только их
+        # ПАРА. По умолчанию они совпадают, то есть дети записаны прямо в
+        # координатах слайда.
+        return IDENTITY_TRANSFORM
+
+    child_cx, child_cy = int(ch_ext.get("cx")), int(ch_ext.get("cy"))
+    if child_cx == 0 or child_cy == 0:
+        raise SystemExit(
+            "у группы нулевая рамка детей (a:chExt) — масштаб не определён, "
+            "зайти внутрь нельзя"
+        )
+    scale_x = int(ext.get("cx")) / child_cx
+    scale_y = int(ext.get("cy")) / child_cy
+    return (
+        int(off.get("x")) - int(ch_off.get("x")) * scale_x,
+        int(off.get("y")) - int(ch_off.get("y")) * scale_y,
+        scale_x,
+        scale_y,
+    )
+
+
+def compose_transform(
+    outer: tuple[float, float, float, float],
+    inner: tuple[float, float, float, float],
+) -> tuple[float, float, float, float]:
+    """Преобразование вложенной группы: сначала внутреннее, затем внешнее."""
+    return (
+        outer[0] + outer[2] * inner[0],
+        outer[1] + outer[3] * inner[1],
+        outer[2] * inner[2],
+        outer[3] * inner[3],
+    )
+
+
+def transformed_box(
+    transform: tuple[float, float, float, float], left: int, top: int, width: int, height: int
+) -> Box:
+    """
+    Рамка фигуры в координатах слайда.
+
+    Отдельной ветки «тождество — вернуть как есть» здесь НЕТ намеренно, хотя
+    напрашивается: она была бы неубиваемой. Координаты слайда не выходят за
+    12.2 млн EMU, для таких целых round(0.0 + 1.0·x) возвращает ровно x, и
+    убрать такую ветку не смогла бы заметить ни одна проверка. Что целые
+    координаты доезжают до JSON целыми, сторожит побайтовое совпадение
+    пересобранных карт: групп в обеих презентациях нет, значит весь их разбор
+    идёт этим самым тождественным преобразованием.
+    """
+    dx, dy, scale_x, scale_y = transform
+    return Box(
+        round(dx + scale_x * left),
+        round(dy + scale_y * top),
+        round(scale_x * width),
+        round(scale_y * height),
+    )
+
+
+def read_shapes(
+    shapes,
+    transform: tuple[float, float, float, float] = IDENTITY_TRANSFORM,
+    inside: int | None = None,
+) -> list[Shape]:
+    """
+    Фигуры коллекции, включая лежащие ВНУТРИ групп (p:grpSp).
+
+    ЗАЧЕМ ЗАХОДИТЬ В ГРУППЫ. Раньше импортёр читал только верхний уровень, и
+    сгруппированная фигура просто не существовала для него. На слайде 9
+    презентации L2 девять подписей шагов из двенадцати лежат в трёх группах:
+    без захода карта MRP потеряла бы три четверти шагов МОЛЧА — ни одна
+    проверка не знает, сколько шагов должно было получиться.
+
+    БЕЗОПАСНОСТЬ ДЛЯ ДВУХ ОПУБЛИКОВАННЫХ КАРТ ДОКАЗАНА ПЕРЕБОРОМ, а не оценена:
+    в презентации «SNP Е2Е процесс.pptx» групп нет ни одной на все шесть
+    слайдов, на слайде 8 «In.Plan MRP 17-08-2026.pptx» — тоже ни одной (группы
+    в той колоде есть, но на слайдах 2, 3, 7, 26, 31, которых импортёр не
+    читает). То есть заход не может ничего в них изменить, и это проверяется
+    побайтовым совпадением пересобранных карт.
+
+    Сама группа фигурой НЕ становится: у неё нет ни текста, ни заливки, а её
+    рамка — служебная и попала бы в геометрию контейнеров и подписей.
+    """
+    result: list[Shape] = []
+    for shape in shapes:
+        if shape.shape_type == MSO_SHAPE_TYPE.GROUP:
+            result.extend(
+                read_shapes(
+                    shape.shapes,
+                    compose_transform(transform, group_transform(shape._element)),  # noqa: SLF001
+                    int(shape.shape_id),
+                )
+            )
+            continue
         if shape.left is None or shape.top is None:
             continue
         element = shape._element  # noqa: SLF001 — python-pptx не даёт публичного доступа к XML
@@ -778,11 +1076,17 @@ def read_slide(slide) -> list[Shape]:
         head_arrow, tail_arrow = read_line_ends(element)
         start_sid, end_sid = read_connection(element)
         rot = read_rotation(element)
-        shapes.append(
+        result.append(
             Shape(
                 sid=int(shape.shape_id),
                 kind=classify_shape_kind(shape),
-                box=Box(int(shape.left), int(shape.top), int(shape.width), int(shape.height)),
+                box=transformed_box(
+                    transform,
+                    int(shape.left),
+                    int(shape.top),
+                    int(shape.width),
+                    int(shape.height),
+                ),
                 paragraphs=read_paragraphs(shape),
                 fill=read_fill(element),
                 flip_h=flip_h,
@@ -792,9 +1096,33 @@ def read_slide(slide) -> list[Shape]:
                 tail_arrow=tail_arrow,
                 start_sid=start_sid,
                 end_sid=end_sid,
+                fill_key=read_fill_key(element),
+                inside_group=inside,
             )
         )
+    return result
+
+
+def read_slide(slide, report: SlideReport | None = None) -> list[Shape]:
+    """
+    Фигуры слайда в едином порядке Shape.sort_key — обёртка над read_shapes.
+
+    Сортировка одна на весь слайд, а не по уровням вложенности: после
+    преобразования координат фигура из группы ничем не отличается от лежащей
+    прямо на слайде, и разбор обязан видеть их вперемешку — так же, как их
+    видит читатель презентации.
+    """
+    shapes = read_shapes(slide.shapes)
     shapes.sort(key=Shape.sort_key)
+    if report is not None:
+        for shape in shapes:
+            if shape.inside_group is None:
+                continue
+            label = shape.text[:60] if shape.has_text else f"{shape.kind} без текста"
+            report.from_groups.append(
+                f"слайд {report.slide_no}: [{shape.sid}] «{label}» — внутри группы "
+                f"[{shape.inside_group}]"
+            )
     return shapes
 
 
@@ -1072,6 +1400,231 @@ def innermost_container(containers: Sequence[tuple[Shape, str]], box: Box) -> st
     return best[1] if best else None
 
 
+# --------------------------------------------------------------------------------------
+# Ярусы слайда: полоса фаз и разведение шагов с подробностями
+# --------------------------------------------------------------------------------------
+#
+# ЯРУС ОПРЕДЕЛЯЕТСЯ СИГНАТУРОЙ ЗАЛИВКИ, А НЕ КООРДИНАТОЙ Y. Соблазн «верхний
+# ряд — фазы, следующий — шаги, нижний — подробности» разбивается о замер: на
+# слайдах 5, 7 и 11 презентации L2 есть ШАГИ НИЖЕ яруса подробностей — левая
+# колонка входов продолжается под ним ([38] слайда 5, [38] слайда 7, [55]
+# слайда 11). Правило «по y» отправило бы эти три шага в подробности.
+#
+# Координата y при этом нужна — но ОДИН раз и не для классификации: полоса фаз
+# ищется как верхний ряд, а дальше ярус каждой фигуры определяет её заливка.
+# Поэтому низко лежащий шаг остаётся шагом: у него заливка фазы, под которой
+# он стоит.
+#
+# ЗАЛИВКА БЕРЁТСЯ С МОДИФИКАТОРАМИ (read_fill_key). Без них правило не работает
+# вовсе: на слайде 3 фаза [67], шаги [51], [124] и семь коробок подробностей —
+# всё это schemeClr tx2, и различаются они ровно модификаторами.
+
+# Разброс верха фигур внутри одного ряда. Замер по всем рядам, которые
+# group_rows строит на слайдах 3/5/7/11 колоды L2 (не только по полосам фаз):
+#
+#   · максимальный разброс ВНУТРИ ряда — 20426 EMU: слайд 7, ряд подробностей
+#     [54], [39], [40], [55]. Порог обязан быть НЕ МЕНЬШЕ, иначе ряд распадётся.
+#     (У самих полос фаз разброс меньше — 10738 EMU на слайде 5, — но group_rows
+#     строит все ряды слайда, и порог обязан годиться для каждого.)
+#   · минимальный зазор МЕЖДУ соседними рядами — 210841 EMU: слайд 5, одинокий
+#     нижний шаг [38] под рядом подробностей. Порог обязан быть МЕНЬШЕ, иначе
+#     два ряда слипнутся в один.
+#
+# Итого допустимо [20426, 210841) — отношение 10.3, а не порядки. Отдельно для
+# ПОЛОСЫ ФАЗ запас больше: ближайший к полосе ряд шагов отстоит на 502322 EMU
+# (слайд 11), и до этого значения band не сломается, сломаются лишь ряды ниже.
+#
+# 120000 СЕРЕДИНОЙ НЕ ЯВЛЯЕТСЯ ни в каком смысле (арифметическая 115633,
+# геометрическая 65624) — это просто круглое число внутри отрезка: 5.9 запаса
+# снизу и 1.76 сверху. Границы зажаты фикстурой самопроверки ТОЧНО этими двумя
+# числами, так что подвинуть порог за пределы отрезка не выйдет молча.
+PHASE_ROW_TOLERANCE = 120_000
+# Меньше трёх фигур в ряду — это не полоса фаз, а случайное совпадение верхов.
+PHASE_ROW_MIN_MEMBERS = 3
+
+
+@dataclass
+class PhaseBand:
+    """Полоса фаз слайда: чем на этом слайде поделён процесс."""
+
+    # 'containers' | 'top-row' — какая ветка сработала. В отчёт, потому что
+    # ветка выбирается по слайду, и по карте потом не видно, какая именно.
+    rule: str
+    shapes: tuple[Shape, ...]        # геометрия фазы (контейнер или сама плашка)
+    labels: tuple[str, ...]          # подпись фазы
+    title_shapes: tuple[Shape, ...]  # подписи-текстбоксы; пусто у ветки 'top-row'
+
+
+@dataclass
+class TierSplit:
+    """Фигуры слайда, разложенные по ярусам."""
+
+    phases: tuple[Shape, ...]
+    steps: tuple[Shape, ...]
+    details: tuple[Shape, ...]
+    # Ни один ярус не подошёл. СПИСОК ОБЯЗАН БЫТЬ НА ВИДУ У ВЫЗЫВАЮЩЕГО, и не
+    # потому, что сюда попадает мусор, — сюда попадает и то, и другое:
+    #   · на слайде 11 это две плашки легенды («Легенда», «Шаги демо»), и
+    #     содержанием процесса они действительно не являются;
+    #   · на слайде 9, если вызывающий НЕ отсеял плашки-артефакты, сюда уезжают
+    #     четыре настоящие подробности — то есть ровно содержание процесса, а их
+    #     место в details занимают пять артефактов.
+    # Поэтому «непустой others» — это не «немного мусора», а вопрос к разбору.
+    others: tuple[Shape, ...]
+    step_keys: frozenset[str]
+    detail_key: str | None
+
+
+def tier_key(shape: Shape) -> str:
+    """
+    Сигнатура яруса: тип фигуры плюс заливка с модификаторами.
+
+    ТИП ФИГУРЫ В СИГНАТУРЕ НЕ ДЛЯ КРАСОТЫ. На слайде 11 подробности нарисованы
+    ТЕКСТБОКСАМИ без заливки, а внизу того же слайда лежат две автофигуры тоже
+    без заливки — плашки легенды. По одной заливке эти восемь фигур неразличимы,
+    и легенда уехала бы в подробности процесса. На слайдах 3, 5 и 7 подробности,
+    наоборот, автофигуры, так что закрепить один тип нельзя — только различать.
+    """
+    return f"{shape.kind}:{shape.fill_key}"
+
+
+def is_tier_candidate(shape: Shape) -> bool:
+    """
+    У фигуры есть ярус: она с текстом и у неё есть ЯВНАЯ заливка.
+
+    Отсутствие заливки (fill_key is None) — не ярус «никакой», а «признака
+    нет»: так выглядят номер слайда на слайдах 7 и 9 и служебные фигуры. Ярус
+    определяется заливкой, поэтому фигура без неё ни в один ярус не попадает.
+    """
+    return shape.has_text and shape.kind in ("auto", "textbox") and shape.fill_key is not None
+
+
+def group_rows(shapes: Sequence[Shape], tolerance: int) -> list[list[Shape]]:
+    """Фигуры, сгруппированные в ряды по верхней кромке; ряды сверху вниз."""
+    rows: list[list[Shape]] = []
+    for shape in sorted(shapes, key=lambda s: (s.box.top, s.box.left)):
+        if rows and shape.box.top - rows[-1][0].box.top <= tolerance:
+            rows[-1].append(shape)
+        else:
+            rows.append([shape])
+    for row in rows:
+        row.sort(key=lambda s: s.box.left)
+    return rows
+
+
+def phase_band(shapes: Sequence[Shape], report: SlideReport | None = None) -> PhaseBand | None:
+    """
+    Полоса фаз слайда. ДВЕ ВЕТКИ, и выбирает между ними сам слайд.
+
+    · есть контейнеры (is_container) — фаза это КОНТЕЙНЕР, а подпись к нему
+      лежит отдельным текстбоксом сверху (find_title_for_container). Так устроен
+      слайд 9 презентации L2: четыре бесфонных рамки с подписями «Расчет
+      потребности», «Обработка ошибок и предупреждений», «Анализ и корректировка
+      результатов», «Сценарное планирование».
+    · контейнеров нет — фаза это сама плашка с текстом, и полоса фаз это
+      ВЕРХНИЙ РЯД таких плашек, где участников не меньше трёх. Так устроены
+      слайды 3, 5, 7 и 11: на каждом ровно четыре фазы одним рядом.
+
+    Порог «не меньше трёх» отделяет полосу от случайного совпадения верхов у
+    пары фигур; на всех четырёх слайдах полоса набирает четырёх участников, а
+    следующий ряд (шаги) — от шести.
+
+    Контейнер без подписи останавливает импорт, а не пропускается: фаза без
+    имени — это дыра в карте, и заметить её потом неоткуда.
+
+    None означает «полосы фаз на слайде нет». Что с этим делать, решает профиль
+    разбора: сообщение об ошибке зависит от того, какой слайд разбирается.
+    """
+    containers = sorted(
+        [s for s in shapes if is_container(s)],
+        key=lambda s: (round(s.box.top / 1_000_000), s.box.left),
+    )
+    if containers:
+        # Список подписей УБЫВАЕТ по мере разбора: один текстбокс не может
+        # подписывать две фазы. Раньше здесь стояло `title.consumed_by = …`, но
+        # это чужое поле: phase_band по имени и докстроке только ИЩЕТ, а пометка
+        # переживает выход из функции и меняет ответ find_title_for_container на
+        # следующем проходе по тем же фигурам. Сегодня безвредно (рабочих
+        # вызовов нет), в профиле три яруса выстрелило бы.
+        available = [s for s in shapes if s.kind == "textbox" and s.has_text]
+        band: list[Shape] = []
+        labels: list[str] = []
+        titles: list[Shape] = []
+        for container in containers:
+            title = find_title_for_container(container, available)
+            if title is None:
+                raise SystemExit(
+                    f"контейнер-фаза [{container.sid}] без подписи — фазу собрать нельзя"
+                )
+            available.remove(title)
+            band.append(container)
+            labels.append(title.text)
+            titles.append(title)
+        found = PhaseBand("containers", tuple(band), tuple(labels), tuple(titles))
+    else:
+        found = None
+        for row in group_rows([s for s in shapes if is_tier_candidate(s)], PHASE_ROW_TOLERANCE):
+            if len(row) >= PHASE_ROW_MIN_MEMBERS:
+                found = PhaseBand("top-row", tuple(row), tuple(s.text for s in row), ())
+                break
+    if report is not None and found is not None:
+        report.phase_band_rule = found.rule
+    return found
+
+
+def dominant_key(shapes: Sequence[Shape]) -> str | None:
+    """Самая многочисленная сигнатура яруса; при равенстве — меньшая по алфавиту."""
+    counts = Counter(tier_key(s) for s in shapes)
+    if not counts:
+        return None
+    return min(counts, key=lambda key: (-counts[key], key))
+
+
+def split_tiers(shapes: Sequence[Shape], band: PhaseBand) -> TierSplit:
+    """
+    Раскладывает фигуры слайда по ярусам: фазы, шаги, подробности.
+
+    ШАГИ ОПРЕДЕЛЯЮТСЯ ПО-РАЗНОМУ В ДВУХ ВЕТКАХ, и это не небрежность, а замер:
+
+    · 'top-row' — шаг красится В ЦВЕТ СВОЕЙ ФАЗЫ. На слайде 3 полоса фаз даёт
+      четыре сигнатуры (A6A6A6, AD27BA, 9000FF и tx2 с модификаторами), и ровно
+      эти же четыре стоят у восьми шагов под ней. Значит шаг — это фигура с
+      сигнатурой полосы, где бы она ни лежала: так низко лежащие [38] слайда 5,
+      [38] слайда 7 и [55] слайда 11 остаются шагами.
+    · 'containers' — фаза это бесфонная рамка, и цвет шага с ней не совпадает
+      ни у кого (слайд 9: рамки noFill, шаги scheme:accent1). Здесь шаг — самая
+      многочисленная сигнатура: двенадцать шагов против четырёх подробностей.
+
+    ПОДРОБНОСТЬ — самая многочисленная сигнатура среди оставшихся. Проверено на
+    четырёх слайдах: 7 + 5 + 4 + 6 = 22 коробки подробностей при 31 шаге,
+    ошибок классификации нет.
+
+    ПЛАШКИ-АРТЕФАКТЫ (входы и выходы процесса) ОТСЕИВАЕТ ВЫЗЫВАЮЩИЙ, до вызова.
+    split_tiers про них не знает и знать не должен: на слайде 9 их пять штук
+    одной заливкой (scheme:accent3), и оставленные в наборе они выигрывают у
+    подробностей по численности. Распознаёт их is_artifact_box — отдельный
+    признак, а не ярус.
+    """
+    known = {id(s) for s in band.shapes} | {id(s) for s in band.title_shapes}
+    candidates = [s for s in shapes if is_tier_candidate(s) and id(s) not in known]
+    if band.rule == "containers":
+        step_key = dominant_key(candidates)
+        step_keys = frozenset() if step_key is None else frozenset({step_key})
+    else:
+        step_keys = frozenset(tier_key(s) for s in band.shapes)
+    steps = [s for s in candidates if tier_key(s) in step_keys]
+    rest = [s for s in candidates if tier_key(s) not in step_keys]
+    detail_key = dominant_key(rest)
+    return TierSplit(
+        phases=tuple(band.shapes),
+        steps=tuple(steps),
+        details=tuple(s for s in rest if tier_key(s) == detail_key),
+        others=tuple(s for s in rest if tier_key(s) != detail_key),
+        step_keys=step_keys,
+        detail_key=detail_key,
+    )
+
+
 def rotate_point(point: tuple[float, float], cx: float, cy: float, degrees: float) -> tuple[float, float]:
     """Поворот точки вокруг центра. Ось Y экранная (вниз), поэтому знак как в DrawingML."""
     if not degrees:
@@ -1263,6 +1816,7 @@ def build_stage(
     ids: IdFactory,
     report: SlideReport,
     seen_signatures: set[tuple],
+    spec: MapSpec,
 ) -> dict:
     title_shape = next((s for s in shapes if s.kind == "placeholder" and s.has_text), None)
     title = normalize_text(title_shape.text) if title_shape else f"Этап {stage_number}"
@@ -1412,7 +1966,16 @@ def build_stage(
     #    Часть формулировок берётся со слайда обзора, а не отсюда, — см.
     #    STAGE_INPUT_ENRICHMENT. Замена делается ДО ids.make: иначе id остался бы
     #    слагом старой строки и разошёлся бы с подписью узла.
-    enrichment = next((e for e in STAGE_INPUT_ENRICHMENT if e["stage"] == stage_number), None)
+    #    Решения владельца отбираются по карте (decisions_for): таблица общая на
+    #    весь импортёр, а решение принято про одну конкретную презентацию.
+    enrichment = next(
+        (
+            e
+            for e in decisions_for(spec, STAGE_INPUT_ENRICHMENT)
+            if e["stage"] == stage_number
+        ),
+        None,
+    )
     expand = dict(enrichment["expand"]) if enrichment is not None else {}
     expanded: set[str] = set()
 
@@ -1893,8 +2456,8 @@ def build_single_slide_map(
         raise SystemExit(f"У карты «{spec.key}» профиль single-slide, но slide_index не задан")
 
     slide_no = spec.slide_index + 1
-    shapes = read_slide(slides[spec.slide_index])
     report = SlideReport(slide_no=slide_no)
+    shapes = read_slide(slides[spec.slide_index], report)
     questions: list[str] = []
 
     textboxes = [s for s in shapes if s.kind == "textbox" and s.has_text]
@@ -1910,9 +2473,9 @@ def build_single_slide_map(
         [s for s in shapes if is_container(s)],
         key=lambda s: (round(s.box.top / 1_000_000), s.box.left),
     )
-    if len(containers) != STAGE_COUNT:
+    if len(containers) != spec.stage_count:
         raise SystemExit(
-            f"слайд {slide_no}: ожидалось {STAGE_COUNT} контейнеров-этапов, "
+            f"слайд {slide_no}: ожидалось {spec.stage_count} контейнеров-этапов, "
             f"найдено {len(containers)}"
         )
 
@@ -2267,23 +2830,24 @@ def build_process_map(
     questions: list[str] = []
 
     overview_report = SlideReport(slide_no=2)
-    overview_shapes = read_slide(slides[1])
+    overview_shapes = read_slide(slides[1], overview_report)
     overview = build_overview(overview_shapes, overview_report)
 
     ids = IdFactory(collisions)
     seen_signatures: set[tuple] = set()
     stages: list[dict] = []
-    for index in range(STAGE_COUNT):
+    for index in range(spec.stage_count):
         slide_no = index + 3
         report = SlideReport(slide_no=slide_no)
         stage = build_stage(
             slide_no=slide_no,
             stage_number=index + 1,
-            shapes=read_slide(slides[index + 2]),
+            shapes=read_slide(slides[index + 2], report),
             overview_title=overview.titles[index] if index < len(overview.titles) else None,
             ids=ids,
             report=report,
             seen_signatures=seen_signatures,
+            spec=spec,
         )
         stages.append(stage)
         reports.append(report)
@@ -2299,11 +2863,11 @@ def build_process_map(
     # Результат первой фазы всё равно выбрасывается, кроме карты коллизий, а
     # рёбра решения новых id не создают, так что пропуск ни на что не влияет.
     if collisions is not None:
-        apply_owner_decision_edges(stages, reports)
+        apply_owner_decision_edges(stages, reports, decisions_for(spec, OWNER_DECISION_EDGES))
         # Деление группы сверяется по подписям узлов, а не по id, поэтому
         # временные id первой фазы ему не мешают — но держим рядом с рёбрами:
         # обе таблицы описывают решения владельца поверх презентации.
-        apply_stage_group_split(stages, reports)
+        apply_stage_group_split(stages, reports, decisions_for(spec, STAGE_GROUP_SPLIT))
 
     # Внешние системы этапа, названные владельцем (process-map-vjz.5). Идёт
     # ПОСЛЕ сборки этапов: таблица дописывает в stage["inputs"], которые к этому
@@ -2313,7 +2877,8 @@ def build_process_map(
         for shape in overview_shapes
         if shape.has_text
     }
-    apply_owner_decision_external_io(stages, overview_texts, overview_report)
+    external_io = decisions_for(spec, OWNER_DECISION_EXTERNAL_IO)
+    apply_owner_decision_external_io(stages, overview_texts, overview_report, external_io)
 
     # Правая колонка выходов этапа (SPEC §4.2) — блоки выходов слайда 2.
     #
@@ -2445,7 +3010,10 @@ def build_process_map(
     # свимлейн с подписью входа этапа 1 и стрелкой в этап 2: свимлейн держит одну
     # карточку на систему (collectSystems в overviewGraph.ts), и ERP этапов 1 и 2
     # делят её. Подпись при этом от одного этапа, а пунктир — к другому.
-    for entry in OWNER_DECISION_EXTERNAL_IO:
+    #
+    # Точка применения той же таблицы, что и выше, — и отбор по карте здесь
+    # такой же обязательный: иначе чужое решение добавило бы ребро в обзор.
+    for entry in external_io:
         stage = next(s for s in stages if s["number"] == entry["stage"])
         pair = (
             (entry["system"], stage["id"])
@@ -2485,6 +3053,7 @@ def apply_owner_decision_external_io(
     stages: list[dict],
     overview_texts: AbstractSet[str],
     report: SlideReport,
+    entries: Sequence[dict],
 ) -> None:
     """
     Добавляет внешние системы этапа, названные владельцем, а не выведенные из текста.
@@ -2498,8 +3067,14 @@ def apply_owner_decision_external_io(
     Расхождение с презентацией — остановка импорта, как в
     apply_owner_decision_edges и apply_stage_input_enrichment: если слайд
     поправят, решение владельца обязано упасть громко, а не рассосаться молча.
+
+    `entries` — уже отобранные по карте записи (decisions_for), и параметр
+    ОБЯЗАТЕЛЬНЫЙ. Умолчания «вся таблица целиком» здесь быть не может: до
+    появления ключа `map` оно означало «правильно», а теперь означало бы
+    «применить решения всех карт сразу» — то самое, ради чего задача и
+    затевалась. То же у apply_stage_group_split и apply_owner_decision_edges.
     """
-    for entry in OWNER_DECISION_EXTERNAL_IO:
+    for entry in entries:
         label = entry["label"]
         if normalize_text(label).casefold() not in overview_texts:
             raise SystemExit(
@@ -2536,7 +3111,7 @@ def apply_owner_decision_external_io(
 def apply_stage_group_split(
     stages: list[dict],
     stage_reports: Sequence[SlideReport],
-    splits: Sequence[dict] = STAGE_GROUP_SPLIT,
+    splits: Sequence[dict],
 ) -> None:
     """
     Выделяет часть узлов этапа в отдельную группу (STAGE_GROUP_SPLIT, process-map-028).
@@ -2590,7 +3165,7 @@ def apply_stage_group_split(
 def apply_owner_decision_edges(
     stages: list[dict],
     stage_reports: Sequence[SlideReport],
-    decisions: Sequence[dict] = OWNER_DECISION_EDGES,
+    decisions: Sequence[dict],
 ) -> None:
     """
     Досыпает в этапы рёбра из OWNER_DECISION_EDGES — единственные рёбра
@@ -2853,6 +3428,42 @@ def print_report(
             print(f"    · {item}")
     else:
         print("  привязок в презентации нет — все связи выведены геометрически")
+
+    # Фигуры, найденные внутри групп (process-map-9mn.13). Блок нужен по той же
+    # причине, что и соседние: заход в группу — это место, где координаты
+    # ПЕРЕСЧИТАНЫ, а не взяты как есть, и увидеть это больше негде.
+    from_groups = [item for report in reports for item in report.from_groups]
+    print("\n" + "=" * 78)
+    print("ФИГУРЫ, ПРОЧИТАННЫЕ ВНУТРИ ГРУПП — ИХ КООРДИНАТЫ ПЕРЕСЧИТАНЫ")
+    print("=" * 78)
+    if from_groups:
+        print(f"  {len(from_groups)} фигур лежат в группах (p:grpSp), а не прямо на слайде.")
+        print("  Рамка группы задаёт систему координат детей (a:chOff/a:chExt против")
+        print("  a:off/a:ext), поэтому left/top таких фигур приведены к координатам слайда.")
+        print("  Повёрнутая или отражённая группа импорт останавливает: положить фигуру")
+        print("  не туда можно молча, а увидеть это по карте — нельзя.")
+        for item in from_groups:
+            print(f"    · {item}")
+    else:
+        print("  групп на разобранных слайдах нет — все фигуры лежат прямо на слайде")
+
+    # Каким правилом найдена полоса фаз. Блок печатается, ТОЛЬКО если полосу
+    # вообще искали: два собранных профиля ярусами не пользуются, и постоянная
+    # строка «не искали» в их отчётах была бы шумом, а не сведением.
+    band_rules = [
+        (report.slide_no, report.phase_band_rule)
+        for report in reports
+        if report.phase_band_rule is not None
+    ]
+    if band_rules:
+        print("\n" + "=" * 78)
+        print("ПОЛОСА ФАЗ — КАКИМ ПРАВИЛОМ НАЙДЕНА")
+        print("=" * 78)
+        print("  'containers' — фаза это бесфонная рамка с подписью сверху;")
+        print("  'top-row' — фаза это плашка с текстом из верхнего ряда слайда.")
+        print("  Ветку выбирает сам слайд, и по готовой карте её уже не видно.")
+        for slide_no, rule in band_rules:
+            print(f"    · слайд {slide_no}: {rule}")
 
     # Узлы, ставшие интеграциями не по заливке, а по коду системы (7v1).
     promoted = [item for report in reports for item in report.promoted_integrations]
@@ -3285,7 +3896,10 @@ def _previous_fixture() -> dict:
 
 
 def run_self_test() -> int:
-    """Проверки переноса ручных полей. Только stdlib, презентация не нужна."""
+    """
+    Проверки переноса ручных полей и разбора слайда. Презентация не нужна:
+    фикстуры (в том числе кусочки XML) собираются в памяти.
+    """
     checks = 0
 
     def check(condition: bool, message: str) -> None:
@@ -3474,6 +4088,482 @@ def run_self_test() -> int:
             bool(entry["add"]) or bool(entry["expand"]),
             f"обогащение {entry['task']} ничего не меняет",
         )
+
+    # 1e. Отбор решений владельца по карте (decisions_for, process-map-9mn.13).
+    #     Фикстура параметром, а не подменой глобали, — по той же причине, что и
+    #     у рёбер выше: таблицы разбирает регуляркой tests/snp/importPreserve.
+    fake_table = (
+        {"map": "snp", "task": "self-test", "stage": 1, "why": "своя карта"},
+        {"map": "mrp", "task": "self-test", "stage": 1, "why": "чужая карта"},
+    )
+    picked = decisions_for(MAPS["snp"], fake_table)
+    check(len(picked) == 1, f"decisions_for отдал {len(picked)} записей вместо одной")
+    check(picked[0]["map"] == "snp", "decisions_for применил решение чужой карты")
+    check(
+        len(decisions_for(MAPS["mrp"], fake_table)) == 1,
+        "decisions_for не нашёл решения второй карты",
+    )
+    # Запись без ключа — остановка, а не тихое «применить везде».
+    try:
+        decisions_for(MAPS["snp"], ({"task": "self-test", "stage": 1},))
+    except SystemExit as error:
+        check("map" in str(error), "в сообщении не назван пропущенный ключ map")
+    else:
+        check(False, "решение без ключа map не остановило импорт")
+    # Опечатка в имени карты — тоже остановка: иначе решение не применится
+    # никогда и ни к чему, а это самый тихий способ его потерять.
+    try:
+        decisions_for(MAPS["snp"], ({"map": "snp-2", "task": "self-test", "stage": 1},))
+    except SystemExit as error:
+        check("snp-2" in str(error), "в сообщении нет неизвестного имени карты")
+    else:
+        check(False, "неизвестная карта в решении не остановила импорт")
+
+    # У каждой записи каждой таблицы есть map, и он из реестра MAPS. Проверка
+    # именно здесь: сборка одной карты чужих таблиц не касается и опечатку в
+    # них не заметит.
+    owner_tables = {
+        "OWNER_DECISION_EDGES": OWNER_DECISION_EDGES,
+        "STAGE_INPUT_ENRICHMENT": STAGE_INPUT_ENRICHMENT,
+        "OWNER_DECISION_EXTERNAL_IO": OWNER_DECISION_EXTERNAL_IO,
+        "STAGE_GROUP_SPLIT": STAGE_GROUP_SPLIT,
+    }
+    for name, table in owner_tables.items():
+        check(bool(table), f"таблица решений {name} пуста")
+        for entry in table:
+            check(entry.get("map") in MAPS, f"{name} ({entry.get('task')}): map не из MAPS")
+            # Порядок ключей в литерале — не косметика: таблицы разбирает
+            # регуляркой tests/snp/importPreserve.test.ts, и ключ между 'task'
+            # и 'stage' ломает разбор, а перед 'task' — не ломает ни одного.
+            check(
+                next(iter(entry)) == "map",
+                f"{name} ({entry.get('task')}): ключ map обязан быть ПЕРВЫМ полем записи",
+            )
+        covered = sum(len(decisions_for(MAPS[key], table)) for key in MAPS)
+        check(covered == len(table), f"{name}: записи разошлись по картам с потерей")
+
+    # 1f. Заливка с модификаторами (read_fill_key, process-map-9mn.13).
+    xml_ns = (
+        'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" '
+        'xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"'
+    )
+
+    def _sp(fill_xml: str):
+        return etree.fromstring(f"<p:sp {xml_ns}><p:spPr>{fill_xml}</p:spPr></p:sp>")
+
+    tx2_mods = _sp(
+        '<a:solidFill><a:schemeClr val="tx2">'
+        '<a:lumMod val="65000"/><a:lumOff val="35000"/><a:alpha val="76000"/>'
+        "</a:schemeClr></a:solidFill>"
+    )
+    tx2_plain = _sp('<a:solidFill><a:schemeClr val="tx2"/></a:solidFill>')
+    check(
+        read_fill_key(tx2_mods) == "scheme:tx2|alpha76000+lumMod65000+lumOff35000",
+        f"модификаторы не вошли в ключ заливки: {read_fill_key(tx2_mods)}",
+    )
+    check(read_fill_key(tx2_plain) == "scheme:tx2", "заливка без модификаторов изменилась")
+    # Порядок модификаторов в XML — дело PowerPoint, ключ от него зависеть не может.
+    shuffled = _sp(
+        '<a:solidFill><a:schemeClr val="tx2">'
+        '<a:alpha val="76000"/><a:lumOff val="35000"/><a:lumMod val="65000"/>'
+        "</a:schemeClr></a:solidFill>"
+    )
+    check(
+        read_fill_key(shuffled) == read_fill_key(tx2_mods),
+        "порядок модификаторов в XML изменил ключ заливки",
+    )
+    # И ради чего всё затевалось: read_fill обе заливки отдаёт одинаковыми.
+    check(
+        read_fill(tx2_mods) == read_fill(tx2_plain) == "scheme:tx2",
+        "read_fill перестал схлопывать модификаторы — соседняя функция потеряла смысл",
+    )
+    check(
+        read_fill_key(_sp('<a:solidFill><a:srgbClr val="a6a6a6"/></a:solidFill>')) == "srgb:A6A6A6",
+        "srgb-заливка в ключе не приведена к верхнему регистру",
+    )
+    check(read_fill_key(_sp("<a:noFill/>")) == "noFill", "noFill потерян в ключе заливки")
+
+    # 1g. Преобразование координат группы (group_transform, process-map-9mn.13).
+    def _grp(off, ext, ch_off, ch_ext, extra: str = "") -> etree._Element:
+        return etree.fromstring(
+            f"<p:grpSp {xml_ns}><p:grpSpPr><a:xfrm {extra}>"
+            f'<a:off x="{off[0]}" y="{off[1]}"/><a:ext cx="{ext[0]}" cy="{ext[1]}"/>'
+            f'<a:chOff x="{ch_off[0]}" y="{ch_off[1]}"/>'
+            f'<a:chExt cx="{ch_ext[0]}" cy="{ch_ext[1]}"/>'
+            f"</a:xfrm></p:grpSpPr></p:grpSp>"
+        )
+
+    # Тождество: так устроены все три группы слайда 9 колоды L2.
+    identity = group_transform(_grp((100, 200), (1000, 500), (100, 200), (1000, 500)))
+    check(identity == IDENTITY_TRANSFORM, f"тождественная группа дала {identity}")
+    # Сдвиг и масштаб: так устроены группы слайда 3 той же колоды.
+    moved = group_transform(_grp((1000, 2000), (2000, 1000), (500, 100), (1000, 500)))
+    check(moved == (0.0, 1800.0, 2.0, 2.0), f"сдвиг+масштаб дал {moved}")
+    check(
+        transformed_box(moved, 500, 100, 1000, 500) == Box(1000, 2000, 2000, 1000),
+        "рамка ребёнка не легла в рамку группы",
+    )
+    # Вложенность: преобразования перемножаются, а не заменяют друг друга.
+    nested = compose_transform(moved, group_transform(_grp((0, 0), (200, 200), (0, 0), (100, 100))))
+    check(nested == (0.0, 1800.0, 4.0, 4.0), f"вложенная группа дала {nested}")
+    check(
+        transformed_box(nested, 10, 10, 5, 5) == Box(40, 1840, 20, 20),
+        "рамка из вложенной группы посчитана не по обоим преобразованиям",
+    )
+    # Тождественное преобразование не гоняет целые координаты через float.
+    check(
+        transformed_box(IDENTITY_TRANSFORM, 9114155, 4675271, 1566850, 784830)
+        == Box(9114155, 4675271, 1566850, 784830),
+        "координаты фигуры вне групп изменились — карты пересоберутся иначе",
+    )
+    # Поворот группы — остановка, а не тихий заход не туда.
+    try:
+        group_transform(_grp((0, 0), (100, 100), (0, 0), (100, 100), 'rot="2700000"'))
+    except SystemExit as error:
+        check("45" in str(error), f"в сообщении нет угла поворота: {error}")
+    else:
+        check(False, "повёрнутая группа не остановила импорт")
+    # Полный оборот поворотом не является.
+    check(
+        group_transform(_grp((0, 0), (100, 100), (0, 0), (100, 100), 'rot="21600000"'))
+        == IDENTITY_TRANSFORM,
+        "поворот на 360° принят за поворот",
+    )
+    # Отражение — та же беда, что и поворот: зеркалить рамку ребёнка нечем.
+    try:
+        group_transform(_grp((0, 0), (100, 100), (0, 0), (100, 100), 'flipH="1"'))
+    except SystemExit as error:
+        check("flip" in str(error), f"в сообщении не назван flip: {error}")
+    else:
+        check(False, "отражённая группа не остановила импорт")
+
+    # 1g². Заход внутрь групп (read_shapes, process-map-9mn.13).
+    #
+    #      ЗАЧЕМ ЗДЕСЬ, А НЕ ПРОГОНОМ ПРЕЗЕНТАЦИИ. Сторож остальной работы —
+    #      побайтовое совпадение пересобранных карт, но именно ЭТО изменение он
+    #      не проверяет и не может: групп нет ни в презентации SNP, ни на слайде
+    #      8 презентации MRP, так что «заходить в группы» и «не заходить» дают
+    #      для обеих карт один и тот же файл. Презентация, где группы есть, в
+    #      реестре MAPS пока не объявлена. Без этой проверки заход не сторожит
+    #      ничто, а стоит он девяти шагов из двенадцати на слайде 9 колоды L2.
+    class _FakeShape:
+        """Минимум API python-pptx, которым пользуется read_shapes."""
+
+        def __init__(self, shape_id, shape_type, left, top, width, height, element, children=()):
+            self.shape_id = shape_id
+            self.shape_type = shape_type
+            self.left, self.top, self.width, self.height = left, top, width, height
+            self._element = element
+            self.shapes = children
+            self.has_text_frame = False
+
+    leaf_element = _sp('<a:solidFill><a:schemeClr val="accent1"/></a:solidFill>')
+
+    def _leaf(sid: int, left: int, top: int) -> _FakeShape:
+        return _FakeShape(sid, MSO_SHAPE_TYPE.AUTO_SHAPE, left, top, 100, 50, leaf_element)
+
+    # Группа со сдвигом и масштабом ×2 (устройство групп слайда 3 колоды L2),
+    # внутри неё — вложенная группа-тождество (устройство групп слайда 9).
+    inner = _FakeShape(
+        200,
+        MSO_SHAPE_TYPE.GROUP,
+        0,
+        0,
+        0,
+        0,
+        _grp((500, 100), (1000, 500), (500, 100), (1000, 500)),
+        [_leaf(3, 700, 300)],
+    )
+    outer = _FakeShape(
+        100,
+        MSO_SHAPE_TYPE.GROUP,
+        0,
+        0,
+        0,
+        0,
+        _grp((1000, 2000), (2000, 1000), (500, 100), (1000, 500)),
+        [_leaf(2, 600, 200), inner],
+    )
+    nested_shapes = read_shapes([_leaf(1, 10, 20), outer])
+    by_sid = {s.sid: s for s in nested_shapes}
+    check(
+        sorted(by_sid) == [1, 2, 3],
+        f"read_shapes отдал не все фигуры: {sorted(by_sid)} (фигуры из групп потеряны?)",
+    )
+    check(
+        by_sid[1].box == Box(10, 20, 100, 50) and by_sid[1].inside_group is None,
+        "фигура вне групп изменилась при заходе в группы",
+    )
+    # Ребёнок группы: (600 - 500)·2 + 1000 = 1200, (200 - 100)·2 + 2000 = 2200.
+    check(
+        by_sid[2].box == Box(1200, 2200, 200, 100),
+        f"координаты фигуры из группы посчитаны неверно: {by_sid[2].box}",
+    )
+    check(by_sid[2].inside_group == 100, "фигура из группы не помнит своей группы")
+    # Вложенная группа тождественна, значит преобразование то же самое.
+    check(
+        by_sid[3].box == Box(1400, 2400, 200, 100),
+        f"координаты фигуры из вложенной группы посчитаны неверно: {by_sid[3].box}",
+    )
+    check(by_sid[3].inside_group == 200, "фигура помнит внешнюю группу вместо внутренней")
+    # Сама группа фигурой не становится: её рамка служебная и попала бы в
+    # геометрию контейнеров и подписей.
+    check(100 not in by_sid and 200 not in by_sid, "группа попала в разбор отдельной фигурой")
+    check(by_sid[2].fill_key == "scheme:accent1", "заливка фигуры из группы не прочитана")
+
+    # 1h. Полоса фаз и ярусы (phase_band / split_tiers, process-map-9mn.13).
+    def _tier_shape(sid: int, left: int, top: int, text: str, fill_key: str | None, kind: str = "auto") -> Shape:
+        return Shape(
+            sid=sid,
+            kind=kind,
+            box=Box(left, top, 1_000_000, 500_000),
+            paragraphs=[text] if text else [],
+            fill=None if fill_key is None else fill_key.split("|")[0],
+            flip_h=False,
+            flip_v=False,
+            rot=0.0,
+            head_arrow=False,
+            tail_arrow=False,
+            fill_key=fill_key,
+        )
+
+    # Слайд без контейнеров, устройство слайдов 3/5/7/11 колоды L2.
+    # Заливки взяты оттуда же: фаза и шаг — tx2 С модификаторами, подробность —
+    # тот же tx2 БЕЗ них. Это и есть коллизия, которую read_fill не разводит.
+    phase_fill = "scheme:tx2|alpha76000+lumMod65000+lumOff35000"
+    detail_fill = "scheme:tx2"
+    # ВЕРТИКАЛЬНЫЕ КООРДИНАТЫ ЗДЕСЬ НЕ КРУГЛЫЕ И НЕ СЛУЧАЙНЫЕ: это ровно те два
+    # замера с колоды L2, между которыми обязан лежать PHASE_ROW_TOLERANCE.
+    #   · разброс внутри полосы = 20426 — максимальный разброс внутри ряда на
+    #     слайдах 3/5/7/11 (слайд 7, ряд подробностей [54], [39], [40], [55]).
+    #     Порог МЕНЬШЕ него разваливает этот ряд;
+    #   · зазор между рядами = 210841 — минимальный зазор между соседними
+    #     рядами там же (слайд 5, нижний шаг [38] под рядом подробностей).
+    #     Порог НЕ МЕНЬШЕ него слепляет эти два ряда.
+    # Фикстура с круглыми числами (разброс 10000, зазор 1000000) держала порог
+    # слишком слабо с ОБЕИХ сторон: и 10500, и 600000 проходили самопроверку,
+    # ломая при этом настоящую колоду — на слайде 5 полоса теряла фазу, на
+    # слайде 11 разрасталась с 4 фигур до 11.
+    row_spread = 20_426
+    row_gap = 210_841
+    band_top = 1_000_000 + row_gap
+    top_row = [
+        # Верхний ряд из ДВУХ фигур полосой фаз не является: такой ряд даёт
+        # случайное совпадение верхов, и правило обязано его пропустить.
+        _tier_shape(1, 0, 1_000_000, "шапка", "srgb:FFFFFF"),
+        _tier_shape(2, 2_000_000, 1_000_000, "дата", "srgb:FFFFFF"),
+        # Полоса фаз: три участника, разброс верхов ровно предельный.
+        _tier_shape(3, 0, band_top, "Фаза 1", "srgb:AD27BA"),
+        _tier_shape(4, 2_000_000, band_top + row_spread, "Фаза 2", phase_fill),
+        _tier_shape(5, 4_000_000, band_top, "Фаза 3", "srgb:9000FF"),
+        # Шаги: заливка своей фазы.
+        _tier_shape(6, 0, band_top + row_gap, "Шаг 1", "srgb:AD27BA"),
+        _tier_shape(7, 2_000_000, band_top + row_gap, "Шаг 2", phase_fill),
+        # Подробности: tx2 без модификаторов, нарисованы ТЕКСТБОКСАМИ — так они
+        # нарисованы на слайде 11.
+        _tier_shape(8, 0, band_top + 2 * row_gap, "Подробность 1", detail_fill, kind="textbox"),
+        _tier_shape(9, 2_000_000, band_top + 2 * row_gap, "Подробность 2", detail_fill, kind="textbox"),
+        _tier_shape(10, 4_000_000, band_top + 2 * row_gap, "Подробность 3", detail_fill, kind="textbox"),
+        # ШАГ НИЖЕ ЯРУСА ПОДРОБНОСТЕЙ — ровно то, на чём ломается правило «по y»
+        # (так лежат [38] слайда 5, [38] слайда 7 и [55] слайда 11).
+        _tier_shape(11, 0, band_top + 3 * row_gap, "Шаг 3", "srgb:AD27BA"),
+        # Плашка легенды: ТА ЖЕ заливка, что у подробностей, но другой тип
+        # фигуры. На слайде 11 так и есть — там совпадает noFill, здесь tx2,
+        # чтобы обе беды слайда проверялись на одной фикстуре. Слей типы в один
+        # ярус — и легенда станет пятой подробностью процесса.
+        _tier_shape(12, 0, band_top + 4 * row_gap, "Легенда", detail_fill, kind="auto"),
+        _tier_shape(
+            13, 2_000_000, band_top + 4 * row_gap, "Подробность 4", detail_fill, kind="textbox"
+        ),
+        # Без явной заливки яруса нет вовсе: так выглядит номер слайда.
+        _tier_shape(14, 6_000_000, band_top + 4 * row_gap, "11", None, kind="textbox"),
+    ]
+    # Порог зажат фикстурой с двух сторон — говорим это прямо, чтобы при
+    # неудачной правке константы сообщение называло причину, а не последствие.
+    check(
+        row_spread <= PHASE_ROW_TOLERANCE < row_gap,
+        f"PHASE_ROW_TOLERANCE={PHASE_ROW_TOLERANCE} вне отрезка "
+        f"[{row_spread}, {row_gap}), замеренного по слайдам 3/5/7/11 колоды L2: "
+        f"меньше нижней границы — ряд подробностей слайда 7 распадается, "
+        f"не меньше верхней — нижний шаг [38] слайда 5 слипается с рядом над ним",
+    )
+    # group_rows меряет зазор от НАЧАЛА ряда, а не от предыдущей фигуры. Разница
+    # не теоретическая: при отсчёте от предыдущей цепочка фигур, каждая из
+    # которых близко к соседней, склеивается в ряд ЛЮБОЙ высоты — порог
+    # перестаёт что-либо ограничивать, и полосой фаз может стать половина
+    # слайда. На сегодняшней колоде обе версии дают одно и то же (ряды там
+    # отстоят далеко), поэтому проверка своя, а не через слайды.
+    chain = [
+        _tier_shape(60, 0, 0, "a", "noFill"),
+        _tier_shape(61, 0, PHASE_ROW_TOLERANCE - 1, "b", "noFill"),
+        _tier_shape(62, 0, 2 * (PHASE_ROW_TOLERANCE - 1), "c", "noFill"),
+    ]
+    chained = [[s.sid for s in row] for row in group_rows(chain, PHASE_ROW_TOLERANCE)]
+    check(chained == [[60, 61], [62]], f"group_rows склеил цепочку в один ряд: {chained}")
+
+    band_report = SlideReport(slide_no=3)
+    band = phase_band(top_row, band_report)
+    check(band is not None, "полоса фаз не найдена на слайде без контейнеров")
+    assert band is not None
+    check(band.rule == "top-row", f"сработала не та ветка: {band.rule}")
+    check(band_report.phase_band_rule == "top-row", "ветка не попала в отчёт")
+    check(
+        [s.sid for s in band.shapes] == [3, 4, 5],
+        f"полосой фаз назван не тот ряд: {[s.sid for s in band.shapes]}",
+    )
+    check(band.labels == ("Фаза 1", "Фаза 2", "Фаза 3"), f"подписи фаз: {band.labels}")
+
+    split = split_tiers(top_row, band)
+    check(
+        [s.sid for s in split.steps] == [6, 7, 11],
+        f"шаги разобраны неверно: {[s.sid for s in split.steps]}",
+    )
+    check(
+        [s.sid for s in split.details] == [8, 9, 10, 13],
+        f"подробности разобраны неверно: {[s.sid for s in split.details]}",
+    )
+    # В «прочее» уходят шапка слайда (ряд из двух фигур над полосой фаз) и
+    # плашка легенды. Выбросить их молча нельзя: пропавшая фигура — это ровно
+    # тот дефект, ради которого затеян заход в группы.
+    check(
+        [s.sid for s in split.others] == [1, 2, 12],
+        f"в «прочее» попало не то: {[s.sid for s in split.others]}",
+    )
+    # Фигура без явной заливки не попадает НИ В ОДИН ярус, включая «прочее»:
+    # ярус определяется заливкой, а её у такой фигуры нет.
+    sorted_out = {s.sid for s in split.steps + split.details + split.others + split.phases}
+    check(14 not in sorted_out, "фигура без заливки получила ярус")
+    # Та самая коллизия: по read_fill шаг [7] и подробность [8] неразличимы.
+    step_seven = next(s for s in split.steps if s.sid == 7)
+    detail_eight = next(s for s in split.details if s.sid == 8)
+    check(
+        step_seven.fill == detail_eight.fill == "scheme:tx2",
+        "фикстура не воспроизводит коллизию tx2 — проверять нечего",
+    )
+    check(
+        step_seven.fill_key != detail_eight.fill_key,
+        "read_fill_key не развёл шаг и подробность одной базовой заливки",
+    )
+
+    # Слайд с контейнерами, устройство слайда 9 колоды L2: фаза это бесфонная
+    # рамка, подпись к ней лежит отдельным текстбоксом сверху.
+    def _container(sid: int, left: int, top: int) -> Shape:
+        shape = _tier_shape(sid, left, top, "", "noFill")
+        shape.box = Box(left, top, CONTAINER_MIN_WIDTH + 500_000, 800_000)
+        shape.fill = "noFill"
+        return shape
+
+    #
+    # ЧИСЛЕННОСТЬ ЯРУСОВ ПОВТОРЯЕТ СЛАЙД 9, а не взята удобной: там 12 шагов
+    # (scheme:accent1) > 5 плашек-артефактов (scheme:accent3) > 4 подробности
+    # (textbox без заливки). Важен именно этот порядок: артефактов меньше, чем
+    # шагов, поэтому шаги разбираются верно и без фильтрации, но БОЛЬШЕ, чем
+    # подробностей, — и стоит вызывающему забыть про is_artifact_box, как
+    # подробности и артефакты меняются местами. Здесь те же неравенства на
+    # меньших числах: 6 > 5 > 3.
+    artifact_fill = "scheme:accent3"
+    with_containers = [
+        _container(20, 0, 2_000_000),
+        _container(21, 4_000_000, 2_000_000),
+        _tier_shape(22, 0, 1_500_000, "Расчет потребности", "noFill", kind="textbox"),
+        _tier_shape(23, 4_000_000, 1_500_000, "Обработка ошибок", "noFill", kind="textbox"),
+        *[
+            _tier_shape(24 + n, 100_000 + n * 600_000, 2_100_000, f"Шаг {n + 1}", "scheme:accent1")
+            for n in range(6)
+        ],
+        *[
+            _tier_shape(
+                30 + n, 100_000 + n * 600_000, 2_700_000, f"Артефакт {n + 1}", artifact_fill
+            )
+            for n in range(5)
+        ],
+        *[
+            _tier_shape(
+                35 + n,
+                100_000 + n * 600_000,
+                3_300_000,
+                f"Подробность {n + 1}",
+                "noFill",
+                kind="textbox",
+            )
+            for n in range(3)
+        ],
+    ]
+    container_report = SlideReport(slide_no=9)
+    band2 = phase_band(with_containers, container_report)
+    check(band2 is not None, "полоса фаз не найдена на слайде с контейнерами")
+    assert band2 is not None
+    check(band2.rule == "containers", f"сработала не та ветка: {band2.rule}")
+    check(container_report.phase_band_rule == "containers", "ветка не попала в отчёт")
+    check(
+        band2.labels == ("Расчет потребности", "Обработка ошибок"),
+        f"подписи фаз-контейнеров: {band2.labels}",
+    )
+    # phase_band НИЧЕГО не помечает во входных фигурах: по имени и докстроке она
+    # только ищет. Пометка consumed_by пережила бы выход из функции и изменила
+    # бы ответ find_title_for_container на следующем проходе по тем же фигурам —
+    # а проход этот в профиле три яруса будет.
+    check(
+        all(s.consumed_by is None for s in with_containers),
+        "phase_band пометила входные фигуры — правка чужого поля переживёт выход",
+    )
+
+    # Так, как профиль обязан звать split_tiers: плашки-артефакты отсеяны ДО.
+    filtered = [s for s in with_containers if s.fill_key != artifact_fill]
+    split2 = split_tiers(filtered, band2)
+    check(
+        [s.sid for s in split2.steps] == [24, 25, 26, 27, 28, 29],
+        f"шаги внутри контейнеров разобраны неверно: {[s.sid for s in split2.steps]}",
+    )
+    check(
+        [s.sid for s in split2.details] == [35, 36, 37],
+        f"подробности при контейнерах разобраны неверно: {[s.sid for s in split2.details]}",
+    )
+    check(not split2.others, f"при отсеянных артефактах «прочего» быть не должно: {split2.others}")
+
+    # А так — если вызывающий про is_artifact_box забыл. Проверка закрепляет
+    # ИМЕННО ЭТОТ отказ, а не «как-нибудь да разберётся»: артефакты занимают
+    # ярус подробностей, а настоящие подробности уезжают в others. Пока такого
+    # вызывающего нет, но докстрока split_tiers обещает ровно это поведение, и
+    # обещание обязано быть проверено, а не написано.
+    unfiltered = split_tiers(with_containers, band2)
+    check(
+        [s.sid for s in unfiltered.steps] == [24, 25, 26, 27, 28, 29],
+        f"шаги сбились от неотсеянных артефактов: {[s.sid for s in unfiltered.steps]}",
+    )
+    check(
+        [s.sid for s in unfiltered.details] == [30, 31, 32, 33, 34],
+        f"неотсеянные артефакты обязаны вытеснить подробности: "
+        f"{[s.sid for s in unfiltered.details]}",
+    )
+    check(
+        [s.sid for s in unfiltered.others] == [35, 36, 37],
+        f"вытесненные подробности обязаны быть видны в others: "
+        f"{[s.sid for s in unfiltered.others]}",
+    )
+
+    # Контейнер без подписи — остановка: безымянная фаза это дыра в карте.
+    try:
+        phase_band([_container(99, 0, 2_000_000)])
+    except SystemExit as error:
+        check("99" in str(error), "в сообщении нет id контейнера без подписи")
+    else:
+        check(False, "контейнер без подписи не остановил импорт")
+    # Один текстбокс не подписывает две фазы: список подписей убывает по ходу
+    # разбора. Раньше это держалось на пометке consumed_by — правке чужого поля,
+    # которая переживала выход из функции.
+    try:
+        phase_band(
+            [
+                _container(50, 0, 2_000_000),
+                _container(51, 200_000, 2_000_000),
+                _tier_shape(52, 0, 1_500_000, "Единственная подпись", "noFill", kind="textbox"),
+            ]
+        )
+    except SystemExit as error:
+        check("51" in str(error), f"вторая фаза забрала чужую подпись: {error}")
+    else:
+        check(False, "две фазы поделили один текстбокс-подпись")
 
     # 2. Первый запуск: предыдущего файла нет.
     fresh = _fresh_fixture()
