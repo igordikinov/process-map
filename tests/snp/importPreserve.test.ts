@@ -537,3 +537,50 @@ describe('import-pptx.py: коды систем согласованы со сх
     expect(missing, 'код есть в союзе, но не в ru.systems').toEqual([]);
   });
 });
+
+/**
+ * Тело объявления таблицы решений владельца по имени — тем же способом, каким
+ * его читают разборщики выше.
+ */
+function readDecisionBlock(name: string): string {
+  const block = new RegExp(`^${name}[^\\n]*=\\s*\\(\\n([\\s\\S]*?)\\n\\)\\n`, 'm').exec(
+    importerSource,
+  );
+  return block?.[1] ?? '';
+}
+
+// Ключ `map` в таблицах решений владельца (process-map-9mn.13).
+//
+// Решение владельца относится к ОДНОЙ карте. Пока карта была одна, таблицы
+// применялись безусловно, и это не проявлялось. Третья карта пойдёт тем же
+// профилем разбора, что и SNP, и тогда запись без ключа либо остановит её
+// сборку («этапа 3 нет в презентации»), либо — хуже — применится к ней молча,
+// совпав номером этапа.
+//
+// Проверка считает ключи, а не разбирает записи: ровно так же, как разборщики
+// выше, она смотрит на ИСХОДНИК, потому что Python в CI не запускается. Счёт
+// 'map' против 'task' ловит забытый ключ в любой из четырёх таблиц, не требуя
+// пятой регулярки, которую пришлось бы чинить при каждой правке формата.
+describe('import-pptx.py: решения владельца привязаны к карте', () => {
+  const tables = [
+    'OWNER_DECISION_EDGES',
+    'STAGE_INPUT_ENRICHMENT',
+    'OWNER_DECISION_EXTERNAL_IO',
+    'STAGE_GROUP_SPLIT',
+  ];
+
+  it('у каждой записи каждой таблицы есть ключ map', () => {
+    const counted = tables.map((name) => {
+      const body = readDecisionBlock(name);
+      expect(body, `${name} в scripts/import-pptx.py пуст или не найден`).not.toBe('');
+      const tasks = [...body.matchAll(/"task":/g)].length;
+      expect(tasks, `в ${name} нет ни одной записи`).toBeGreaterThan(0);
+      return { name, tasks, maps: [...body.matchAll(/"map":/g)].length };
+    });
+    const broken = counted.filter((item) => item.maps !== item.tasks);
+    expect(
+      broken.map((item) => `${item.name}: записей ${item.tasks}, ключей map ${item.maps}`),
+      'решение владельца без ключа map относилось бы ко всем картам сразу',
+    ).toEqual([]);
+  });
+});
