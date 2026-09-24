@@ -16,9 +16,29 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { ProcessMapSchema, validateIntegrity } from '../src/data/schema.ts';
+import { hasModules, moduleOfStage, stagesOfModule } from '../src/data/modules.ts';
 import { layoutStage } from '../src/layout/stageLayout.ts';
 
 const DATA_ROOT = resolve(process.cwd(), 'src', 'data');
+
+/**
+ * Сколько уровней у каждой карты на диске — ОБЪЯВЛЕНО ЗДЕСЬ (эпик M8, задача
+ * process-map-9mn.10).
+ *
+ * ПОЧЕМУ ТАБЛИЦА, А НЕ «НИ У КОГО НЕТ МОДУЛЕЙ». Сегодня трёхуровневых карт нет
+ * ни одной, и проверка `maps.filter(hasModules)` пустым списком была бы верна —
+ * но она ловит только одну ошибку из двух. Красное «ожидалось пусто» не
+ * подсказывает автору новой карты, что делать, а главное — молчит на ОБРАТНОЙ
+ * ошибке: карта задумана трёхуровневой, а modules не доехали до диска (сбой
+ * импортёра, потерянная правка), и она тихо раздаётся как двухуровневая.
+ * Таблица ловит обе: новая карта обязана в ней появиться, а объявленное —
+ * совпасть с тем, что в файле.
+ */
+const DECLARED_LEVELS: Readonly<Record<string, 2 | 3>> = {
+  snp: 2,
+  mrp: 2,
+  'inplan-model': 2,
+};
 
 interface DiscoveredMap {
   /** Имя каталога: src/data/<id>/process.json */
@@ -171,5 +191,51 @@ describe.each(maps)('контракт карты: $id', ({ id, source }) => {
     // Рисуется рамкой вокруг потока этапов (overviewGraph.ts). Пустая строка
     // прошла бы схему и дала бы безымянную рамку на экране.
     expect(map.moduleLabel.trim()).not.toBe('');
+  });
+
+  it('число уровней объявлено в DECLARED_LEVELS', () => {
+    expect(
+      DECLARED_LEVELS[id],
+      `Новая карта «${id}» на диске, а число её уровней не объявлено. ` +
+        `Впишите в DECLARED_LEVELS этого файла '${id}': 3 — если у карты есть modules, ` +
+        `'${id}': 2 — если их нет. Задача process-map-9mn.15.`,
+    ).toBeDefined();
+  });
+
+  it('объявленное число уровней совпадает с hasModules', () => {
+    const declared = DECLARED_LEVELS[id];
+    expect(
+      hasModules(map),
+      declared === 3
+        ? `карта «${id}» объявлена трёхуровневой, но modules в файле нет: ` +
+            'похоже, конвейер данных прогнан не до конца (npm run data)'
+        : `у карты «${id}» появились modules, а объявлена она двухуровневой: ` +
+            'поправьте DECLARED_LEVELS в этом файле',
+    ).toBe(declared === 3);
+  });
+
+  it('каждый этап принадлежит ровно одному модулю (двухуровневая карта: ни одному)', () => {
+    // СВЯЗНОСТЬ уровня 1 глазами потребителей, а не схемы: покрытие stageIds
+    // validateIntegrity проверяет по документу, здесь оно перепроверяется через
+    // те самые функции, которыми экран собирает уровень 2. Разойдись они с
+    // документом — экран потерял бы этап молча, и ни одна проверка схемы этого
+    // бы не увидела.
+    //
+    // На двухуровневой карте ветка проходит вхолостую (модулей нет ни одного),
+    // и это здесь уже принятый приём: файл обязан оставаться верным для КАЖДОЙ
+    // карты, а не только для той, под которую написан.
+    if (!hasModules(map)) {
+      expect(map.stages.filter((stage) => moduleOfStage(map, stage.id) !== undefined)).toEqual([]);
+      return;
+    }
+
+    const covered = map.modules.flatMap((module) =>
+      stagesOfModule(map, module.id).map((stage) => stage.id),
+    );
+    expect(new Set(covered).size, 'этап попал сразу в два модуля').toBe(covered.length);
+    expect([...covered].sort()).toEqual(map.stages.map((stage) => stage.id).sort());
+    for (const stage of map.stages) {
+      expect(moduleOfStage(map, stage.id)?.id, `этап "${stage.id}" без владельца`).toBeDefined();
+    }
   });
 });
