@@ -8,7 +8,21 @@ import prettierConfig from 'eslint-config-prettier';
 const HEX_COLOR_PATTERN = '^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$';
 
 export default tseslint.config(
-  { ignores: ['dist', 'coverage', 'playwright-report', 'test-results', 'node_modules'] },
+  {
+    // .claude/worktrees/ — worktree сессионных агентов: полная копия репозитория,
+    // вложенная в репозиторий (process-map-btb). Flat config .gitignore не читает,
+    // поэтому без этой строки `eslint .` обходит и её: файлов вдвое больше, а
+    // нарушение в чужом незаконченном WIP роняет `npm run check` у всякого, у кого
+    // worktree лежит на диске. То же исключение — в vitest.config.ts и .gitignore.
+    ignores: [
+      'dist',
+      'coverage',
+      'playwright-report',
+      'test-results',
+      'node_modules',
+      '.claude/worktrees/',
+    ],
+  },
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
     files: ['**/*.{ts,tsx}'],
