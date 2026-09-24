@@ -5,9 +5,12 @@
 // ДВУХУРОВНЕВОЙ фикстуре, и все его проверки остаются верными ровно потому, что
 // поле modules необязательное. Трёхуровневой карте нужна своя сборка, и
 // смешивать их в одном файле значило бы к каждому тесту дописывать, про какую
-// из двух карт он. Общая фикстура трёхуровневой карты появится задачей
-// process-map-9mn.11 — тогда локальный сборщик ниже уедет туда; здесь он
-// минимальный, чтобы не предвосхищать её форму.
+// из двух карт он.
+//
+// Сборка эта — общая и лежит в tests/fixtures/three-level-process.ts
+// (задача process-map-9mn.11): на ней же будет стоять src/data/modules.ts.
+// Локальный сборщик, живший здесь до 9mn.11, уехал туда и переписан — почему
+// именно переписан, а не перенесён, написано в шапке фикстуры.
 //
 // Реальные карты на диске этот файл не читает — это делает
 // tests/mapContract.test.ts (SPEC §7: механика схемы отдельно от данных).
@@ -15,79 +18,134 @@ import { describe, expect, it } from 'vitest';
 import {
   ModuleSchema,
   ProcessMapSchema,
+  SystemCodeSchema,
   validateIntegrity,
-  type Module,
-  type ProcessMap,
 } from '../src/data/schema.ts';
 import { buildSampleProcessMap } from './fixtures/sample-process.ts';
+import {
+  buildThreeLevelProcessMap,
+  parseThreeLevelProcessMap,
+  IO_SYSTEM_CODES,
+  MODULE_DEMAND,
+  MODULE_EDGE_LABEL,
+  MODULE_IDS,
+  MODULE_PRODUCTION,
+  MODULE_STAGE_IDS,
+  MODULE_SUPPLY,
+  SYSTEM_OUTSIDE_IO,
+  SYSTEM_OUTSIDE_IO_2,
+  type ThreeLevelProcessMap,
+} from './fixtures/three-level-process.ts';
 
-const MODULE_A = 'demand-planning';
-const MODULE_B = 'supply-planning';
-
-/*
- * Коды систем для рёбер уровня 1 берутся ВНЕ множества, которое двухуровневая
- * фикстура раскладывает по ExternalIO (SYSTEM_CODES = DP, PS, IO, ERP в
- * tests/fixtures/sample-process.ts). Это не придирка к красоте: концы
- * moduleEdges сверяются с ПЕРЕЧИСЛЕНИЕМ SystemCodeSchema, а не с кодами,
- * встреченными в ExternalIO, — и код из пересечения двух множеств не отличает
- * одну реализацию от другой. С 'ERP' подмена проверки на `systemCodes.has`
- * оставляла все тесты зелёными; с 'BI' и 'EPM' — краснеет. Сторожит это
- * отдельный тест ниже, а не только комментарий.
- */
-const SYSTEM_OUTSIDE_IO = 'BI';
-const SYSTEM_OUTSIDE_IO_2 = 'EPM';
-
-/**
- * Трёхуровневая карта из двухуровневой фикстуры: четыре этапа режутся на два
- * модуля по два. Обзорное ребро stage-2 → stage-3 при этом удаляется — в
- * двухуровневой карте оно законно, а здесь пересекает границу модулей, и на
- * уровне 1 его выражает module-edge-1.
- */
-function buildThreeLevelMap(): ProcessMap {
-  const map = buildSampleProcessMap();
-  map.modules = [
-    {
-      id: MODULE_A,
-      number: 1,
-      title: 'Планирование спроса',
-      shortTitle: 'DP · Планирование спроса',
-      label: 'Модуль DP',
-      keyOutputs: ['Согласованный прогноз'],
-      stageIds: ['stage-1', 'stage-2'],
-    },
-    {
-      id: MODULE_B,
-      number: 2,
-      title: 'Планирование сети поставок',
-      shortTitle: 'SNP · Планирование сети поставок',
-      label: 'Модуль SNP',
-      keyOutputs: [],
-      stageIds: ['stage-3', 'stage-4'],
-    },
-  ];
-  map.moduleEdges = [
-    {
-      id: 'module-edge-1',
-      source: MODULE_A,
-      target: MODULE_B,
-      kind: 'process',
-      label: 'Итоговый неограниченный прогноз',
-    },
-    { id: 'module-edge-2', source: SYSTEM_OUTSIDE_IO, target: MODULE_A, kind: 'integration' },
-  ];
-  map.overviewEdges = map.overviewEdges.filter((edge) => edge.id !== 'overview-edge-2');
-  return map;
+/** Коды систем, реально разложенные фикстурой по stage.inputs/outputs. */
+function systemCodesInExternalIO(map: ThreeLevelProcessMap): Set<string> {
+  return new Set(
+    map.stages.flatMap((stage) => [...stage.inputs, ...stage.outputs]).map((io) => io.system),
+  );
 }
 
-describe('ModuleSchema', () => {
-  it('фикстура трёхуровневой карты разбирается и целостна', () => {
+describe('фикстура трёхуровневой карты', () => {
+  // Свойства САМОЙ фикстуры. Они здесь не ради полноты: на каждом из них стоит
+  // либо тест ниже, либо задача process-map-9mn.10, и молчаливая потеря любого
+  // из них обессмысливает проверки, которые продолжают зеленеть.
+
+  it('разбирается и целостна', () => {
     // Позитивная опора для всех негативных тестов ниже: если краснеет она,
     // красное в остальных ничего не доказывает.
-    const map = buildThreeLevelMap();
+    //
+    // Она же — СТОРОЖ ГЛАВНОГО ТРЕБОВАНИЯ. Фикстура опирается рёбрами уровня 1
+    // на коды систем, которых нет в её ExternalIO (см. тест ниже), поэтому
+    // сверка концов moduleEdges с множеством встреченных кодов вместо
+    // перечисления краснеет ПРЯМО ЗДЕСЬ, не дожидаясь отдельной проверки.
+    const map = buildThreeLevelProcessMap();
     expect(() => ProcessMapSchema.parse(map)).not.toThrow();
     expect(validateIntegrity(ProcessMapSchema.parse(map))).toEqual([]);
   });
 
+  it('опирается на коды систем, которых нет в её ExternalIO', () => {
+    // Требование из ревью 9mn.9, и оно несущее. Концы moduleEdges сверяются с
+    // ПЕРЕЧИСЛЕНИЕМ SystemCodeSchema, а не с кодами из ExternalIO. Код из
+    // пересечения двух множеств не отличает одну реализацию от другой: с 'ERP'
+    // подмена проверки на `systemCodes.has` оставляла зелёными все девятнадцать
+    // тестов. Поэтому фикстура обязана ставить концами рёбер уровня 1 коды,
+    // которых в её собственных свимлейнах нет.
+    //
+    // Проверяются обе стороны ребра: система источником и система приёмником.
+    const map = parseThreeLevelProcessMap();
+    const codesInIO = systemCodesInExternalIO(map);
+
+    expect(
+      map.moduleEdges.some((edge) => edge.source === SYSTEM_OUTSIDE_IO),
+      'источник',
+    ).toBe(true);
+    expect(
+      map.moduleEdges.some((edge) => edge.target === SYSTEM_OUTSIDE_IO_2),
+      'приёмник',
+    ).toBe(true);
+    expect(codesInIO.has(SYSTEM_OUTSIDE_IO), SYSTEM_OUTSIDE_IO).toBe(false);
+    expect(codesInIO.has(SYSTEM_OUTSIDE_IO_2), SYSTEM_OUTSIDE_IO_2).toBe(false);
+  });
+
+  it('коды «снаружи» — настоящие члены перечисления, а не выдуманные строки', () => {
+    // Иначе положительные тесты про «код системы законный конец ребра модулей»
+    // зеленели бы по неверной причине, а отрицательные краснели бы не на том:
+    // 'ZZ' не проходит ни по одной реализации, и подменить им константу —
+    // значит выключить проверку, не уронив ни одного теста.
+    expect(SystemCodeSchema.safeParse(SYSTEM_OUTSIDE_IO).success, SYSTEM_OUTSIDE_IO).toBe(true);
+    expect(SystemCodeSchema.safeParse(SYSTEM_OUTSIDE_IO_2).success, SYSTEM_OUTSIDE_IO_2).toBe(true);
+  });
+
+  it('объявленный список кодов ExternalIO совпадает с разложенным по этапам', () => {
+    // Сторож объявления: свимлейн с новым кодом, добавленный мимо
+    // IO_SYSTEM_CODES, сделал бы «снаружи» пустым понятием — и заметить это
+    // было бы нечем, потому что все существующие тесты остались бы зелёными.
+    const map = parseThreeLevelProcessMap();
+    expect([...systemCodesInExternalIO(map)].sort()).toEqual([...IO_SYSTEM_CODES].sort());
+  });
+
+  it('различает уровни: модули с разным числом фаз, у фаз есть узлы', () => {
+    // При двух модулях по две фазы «фазы модуля B» и «фазы, кроме модуля A» —
+    // одно множество, и ошибка выбора модуля неотличима от правильного ответа
+    // (stagesOfModule, задача process-map-9mn.10).
+    const map = parseThreeLevelProcessMap();
+    const counts = map.modules.map((module) => module.stageIds.length);
+
+    expect(map.modules.length, 'модулей больше одного').toBeGreaterThan(1);
+    expect(Math.min(...counts), 'у каждого модуля больше одной фазы').toBeGreaterThan(1);
+    expect(new Set(counts).size, 'числа фаз различаются').toBeGreaterThan(1);
+    expect(
+      map.stages.every((stage) => stage.nodes.length > 0),
+      'у фаз есть узлы',
+    ).toBe(true);
+  });
+
+  it('объявленный состав модулей совпадает с построенным', () => {
+    // MODULE_STAGE_IDS — то, с чем задача process-map-9mn.10 будет сверять
+    // stagesOfModule. Если объявление разойдётся с картой, сверять будет не с
+    // чем, а тест той задачи станет тавтологией.
+    const map = parseThreeLevelProcessMap();
+    expect(map.modules.map((module) => module.id)).toEqual([...MODULE_IDS]);
+    for (const module of map.modules) {
+      expect(module.stageIds, module.id).toEqual([...(MODULE_STAGE_IDS[module.id] ?? [])]);
+    }
+  });
+
+  it('у каждого модуля есть собственные обзорные рёбра', () => {
+    // Иначе overviewEdgesOf(map, moduleId) нечем отличить от «вернул пусто».
+    const map = parseThreeLevelProcessMap();
+    const moduleOfStage = new Map(
+      map.modules.flatMap((module) => module.stageIds.map((id) => [id, module.id] as const)),
+    );
+    const withEdges = new Set(
+      map.overviewEdges
+        .map((edge) => moduleOfStage.get(edge.source) ?? moduleOfStage.get(edge.target))
+        .filter((moduleId): moduleId is string => moduleId !== undefined),
+    );
+    expect([...withEdges].sort()).toEqual([...MODULE_IDS].sort());
+  });
+});
+
+describe('ModuleSchema', () => {
   it('карта без modules остаётся валидной: поле необязательное', () => {
     // Ровно это оставляет три существующих process.json (snp, mrp,
     // inplan-model) валидными без единой правки.
@@ -110,37 +168,37 @@ describe('ModuleSchema', () => {
   it('отвергает пустой список модулей: «модулей нет» выражается отсутствием поля', () => {
     // Иначе у документа два разных способа сказать одно и то же и два места,
     // где их надо различать.
-    const map = buildThreeLevelMap();
+    const map = buildThreeLevelProcessMap();
     map.modules = [];
     expect(() => ProcessMapSchema.parse(map)).toThrow();
   });
 
   it('принимает единственный модуль: уровень 1 с одной карточкой законен', () => {
-    const map = buildThreeLevelMap();
-    map.modules = [
-      { ...(map.modules![0] as Module), stageIds: ['stage-1', 'stage-2', 'stage-3', 'stage-4'] },
-    ];
+    const map = buildThreeLevelProcessMap();
+    map.modules = [{ ...map.modules[0]!, stageIds: map.stages.map((stage) => stage.id) }];
+    // Рёбра уровня 1 ссылались на исчезнувшие модули: без этой строки тест
+    // краснел бы не там, где смотрит.
     map.moduleEdges = [];
     const parsed = ProcessMapSchema.parse(map);
     expect(validateIntegrity(parsed)).toEqual([]);
   });
 
   it('отвергает модуль без единой фазы', () => {
-    const map = buildThreeLevelMap();
-    map.modules![0]!.stageIds = [];
+    const map = buildThreeLevelProcessMap();
+    map.modules[0]!.stageIds = [];
     expect(() => ProcessMapSchema.parse(map)).toThrow();
   });
 
   it('отвергает id модуля вне kebab-case: он попадает в ?module=<id>', () => {
-    const map = buildThreeLevelMap();
-    map.modules![0]!.id = 'Планирование спроса';
+    const map = buildThreeLevelProcessMap();
+    map.modules[0]!.id = 'Планирование спроса';
     expect(() => ProcessMapSchema.parse(map)).toThrow();
   });
 
   it('отвергает keyOutputs модуля из более чем четырёх пунктов, но принимает пустой', () => {
     // Верхняя граница как у этапа; нижней нет — у MRP на слайде обзора
     // выходного артефакта нет вовсе (process-map-9mn.5).
-    const module = buildThreeLevelMap().modules![0]!;
+    const module = buildThreeLevelProcessMap().modules[0]!;
     expect(() => ModuleSchema.parse({ ...module, keyOutputs: [] }), 'пусто').not.toThrow();
     expect(
       () => ModuleSchema.parse({ ...module, keyOutputs: ['A', 'B', 'C', 'D'] }),
@@ -152,26 +210,45 @@ describe('ModuleSchema', () => {
     ).toThrow();
   });
 
+  it('принимает модуль с пустым keyOutputs прямо в карте', () => {
+    // Фикстура закрепляет это положительно: у последнего модуля выходов нет, и
+    // карта остаётся целостной. Проверка `.max(4)` выше про верхнюю границу
+    // ничего не говорит о том, что бывает с документом целиком.
+    const map = parseThreeLevelProcessMap();
+    expect(map.modules.some((module) => module.keyOutputs.length === 0)).toBe(true);
+    expect(validateIntegrity(map)).toEqual([]);
+  });
+
   it('сохраняет label ребра модулей: артефакт между модулями живёт именно там', () => {
     // Артефакт со слайда 1 — это Edge.label, а не ExternalIO, и
     // SystemCodeSchema под него не расширяется. Если бы zod вычищал label,
     // подпись связи уровня 1 исчезла бы при экспорте.
-    const parsed = ProcessMapSchema.parse(buildThreeLevelMap());
-    expect(parsed.moduleEdges?.[0]?.label).toBe('Итоговый неограниченный прогноз');
+    const map = parseThreeLevelProcessMap();
+    expect(map.moduleEdges[0]?.label).toBe(MODULE_EDGE_LABEL);
+  });
+
+  it('сохраняет screen модуля и не выдумывает его отсутствующим', () => {
+    // Ссылка на экран у карточки уровня 1 — необязательное поле, и оба его
+    // состояния должны переживать разбор: иначе «Открыть в модуле» либо
+    // исчезнет у того, у кого ссылка есть, либо появится у того, у кого её нет.
+    const map = parseThreeLevelProcessMap();
+    const withScreen = map.modules.filter((module) => module.screen !== undefined);
+    expect(withScreen.length, 'модуль со ссылкой').toBeGreaterThan(0);
+    expect(withScreen.length, 'модуль без ссылки').toBeLessThan(map.modules.length);
   });
 });
 
 describe('validateIntegrity: модули', () => {
   it('находит ссылку модуля на несуществующий этап', () => {
-    const map = ProcessMapSchema.parse(buildThreeLevelMap());
-    map.modules![0]!.stageIds.push('stage-99');
+    const map = parseThreeLevelProcessMap();
+    map.modules[0]!.stageIds.push('stage-99');
     const problems = validateIntegrity(map);
     expect(problems.some((problem) => problem.includes('stage-99'))).toBe(true);
   });
 
   it('находит этап, заявленный сразу двумя модулями', () => {
-    const map = ProcessMapSchema.parse(buildThreeLevelMap());
-    map.modules![1]!.stageIds.push('stage-1');
+    const map = parseThreeLevelProcessMap();
+    map.modules[1]!.stageIds.push('stage-1');
     const problems = validateIntegrity(map);
     expect(problems.some((problem) => problem.includes('двумя модулями'))).toBe(true);
     expect(problems.some((problem) => problem.includes('stage-1'))).toBe(true);
@@ -180,8 +257,8 @@ describe('validateIntegrity: модули', () => {
   it('различает повтор этапа ВНУТРИ одного модуля', () => {
     // Диагноз обязан отличаться от «заявлен двумя модулями»: иначе читатель
     // пойдёт искать второй модуль, которого нет.
-    const map = ProcessMapSchema.parse(buildThreeLevelMap());
-    map.modules![0]!.stageIds.push('stage-1');
+    const map = parseThreeLevelProcessMap();
+    map.modules[0]!.stageIds.push('stage-1');
     const problems = validateIntegrity(map);
     expect(problems.some((problem) => problem.includes('заявляет этап "stage-1" дважды'))).toBe(
       true,
@@ -193,15 +270,15 @@ describe('validateIntegrity: модули', () => {
     // Проверка живёт здесь, а не в tests/mapContract.test.ts, потому что карту
     // приносит не только диск: загруженную пользователем модель BPMN разбирает
     // src/data/bpmn/adapter.ts, и весь её контроль — схема плюс эта функция.
-    const map = ProcessMapSchema.parse(buildThreeLevelMap());
-    map.modules![1]!.id = MODULE_A;
+    const map = parseThreeLevelProcessMap();
+    map.modules[1]!.id = MODULE_DEMAND;
     const problems = validateIntegrity(map);
     expect(problems.some((problem) => problem.includes('Дублирующийся id модуля'))).toBe(true);
   });
 
   it('находит дублирующийся номер модуля', () => {
-    const map = ProcessMapSchema.parse(buildThreeLevelMap());
-    map.modules![1]!.number = map.modules![0]!.number;
+    const map = parseThreeLevelProcessMap();
+    map.modules[1]!.number = map.modules[0]!.number;
     const problems = validateIntegrity(map);
     expect(problems.some((problem) => problem.includes('Дублирующийся номер модуля'))).toBe(true);
   });
@@ -209,8 +286,15 @@ describe('validateIntegrity: модули', () => {
   it('дыра в номерах модулей законна: проверяется уникальность, а не сплошность', () => {
     // Карта берёт пять модулей презентации из восьми (process-map-9mn: без TPM
     // и DRP/TLB) и имеет право сохранить исходную нумерацию.
-    const map = ProcessMapSchema.parse(buildThreeLevelMap());
-    map.modules![1]!.number = 7;
+    //
+    // Дыра есть в САМОЙ фикстуре, а не подстраивается тестом: иначе базовая
+    // карта тихо утверждала бы обратное — «номера модулей идут подряд», — и
+    // проверка сплошности, добавленная по ошибке, прошла бы весь корпус.
+    const map = parseThreeLevelProcessMap();
+    const numbers = map.modules.map((module) => module.number);
+    const span = Math.max(...numbers) - Math.min(...numbers) + 1;
+    expect(span, 'номера не подряд').toBeGreaterThan(numbers.length);
+    expect(new Set(numbers).size, 'и при этом уникальны').toBe(numbers.length);
     expect(validateIntegrity(map)).toEqual([]);
   });
 
@@ -218,19 +302,27 @@ describe('validateIntegrity: модули', () => {
     // Схема такое пропустит по построению: stageIds — ссылки, и ничто в типе
     // не требует, чтобы они покрыли весь stages. Этап при этом исчез бы с
     // экранов целиком.
-    const map = ProcessMapSchema.parse(buildThreeLevelMap());
-    map.modules![1]!.stageIds = ['stage-3'];
+    const map = parseThreeLevelProcessMap();
+    const orphaned = map.modules[1]!.stageIds.slice(1);
+    map.modules[1]!.stageIds = map.modules[1]!.stageIds.slice(0, 1);
     const problems = validateIntegrity(map);
-    expect(problems.some((problem) => problem.includes('stage-4'))).toBe(true);
-    expect(problems.some((problem) => problem.includes('не заявлен ни одним модулем'))).toBe(true);
+    for (const stageId of orphaned) {
+      expect(
+        problems.some(
+          (problem) => problem.includes(stageId) && problem.includes('не заявлен ни одним модулем'),
+        ),
+        stageId,
+      ).toBe(true);
+    }
   });
 
   it('находит обзорное ребро между этапами разных модулей', () => {
-    const map = ProcessMapSchema.parse(buildThreeLevelMap());
+    const map = parseThreeLevelProcessMap();
+    const [first, second] = map.modules;
     map.overviewEdges.push({
       id: 'cross-module-edge',
-      source: 'stage-2',
-      target: 'stage-3',
+      source: first!.stageIds[first!.stageIds.length - 1]!,
+      target: second!.stageIds[0]!,
       kind: 'process',
     });
     const problems = validateIntegrity(map);
@@ -240,8 +332,11 @@ describe('validateIntegrity: модули', () => {
   it('обзорное ребро «система → этап» остаётся законным при модулях', () => {
     // Конец-система ничьему модулю не принадлежит, и сравнивать его модуль не с
     // чем: свимлейны уровня 1 — это внешние системы, а не узлы графа.
-    const map = ProcessMapSchema.parse(buildThreeLevelMap());
-    expect(map.overviewEdges.some((edge) => edge.source === 'DP')).toBe(true);
+    const map = parseThreeLevelProcessMap();
+    const codesInIO = systemCodesInExternalIO(map);
+    expect(
+      map.overviewEdges.some((edge) => codesInIO.has(edge.source) || codesInIO.has(edge.target)),
+    ).toBe(true);
     expect(validateIntegrity(map)).toEqual([]);
   });
 
@@ -254,38 +349,55 @@ describe('validateIntegrity: модули', () => {
     expect(validateIntegrity(map)).toEqual([]);
   });
 
-  it('находит конец ребра модулей, который не является ни модулем, ни системой', () => {
-    // Этап — законный конец обзорного ребра, но не ребра уровня 1: этапов на
-    // уровне 1 нет.
-    const map = ProcessMapSchema.parse(buildThreeLevelMap());
-    map.moduleEdges!.push({
-      id: 'broken-module-edge',
-      source: MODULE_A,
+  // Оба конца ребра уровня 1 проверяются ОТДЕЛЬНЫМИ тестами, и это не
+  // симметрия ради симметрии: пока тест был один и портил только target,
+  // выключение проверки source не роняло ни одного теста из тридцати трёх —
+  // ребро «этап → модуль» проезжало молча. Мутация подтвердила (задача
+  // process-map-9mn.11). Этап — законный конец ОБЗОРНОГО ребра, но не ребра
+  // уровня 1: этапов на уровне 1 нет.
+  //
+  // Второй конец в каждом тесте — настоящий модуль, иначе сработала бы ещё и
+  // проверка «ни один конец не является модулем», и тест зеленел бы от неё.
+  it('находит негодный target ребра модулей', () => {
+    const map = parseThreeLevelProcessMap();
+    map.moduleEdges.push({
+      id: 'broken-module-edge-target',
+      source: MODULE_DEMAND,
       target: 'stage-1',
       kind: 'process',
     });
     const problems = validateIntegrity(map);
-    expect(problems.some((problem) => problem.includes('broken-module-edge'))).toBe(true);
+    expect(
+      problems.some(
+        (problem) =>
+          problem.includes('broken-module-edge-target') && problem.includes('target "stage-1"'),
+      ),
+    ).toBe(true);
   });
 
-  it('коды систем в тестах взяты вне ExternalIO фикстуры: иначе проверка слепа', () => {
-    // Сторож предыдущего дефекта: код, встреченный в ExternalIO, проходит и по
-    // перечислению, и по множеству кодов карты, поэтому тестом на нём нельзя
-    // отличить одну реализацию от другой. Если кто-то заменит константы на
-    // 'ERP' или 'DP', покраснеет здесь, а не тихо развалится вся проверка.
-    const map = buildThreeLevelMap();
-    const codesInIO = new Set(
-      map.stages.flatMap((stage) => [...stage.inputs, ...stage.outputs]).map((io) => io.system),
-    );
-    expect(codesInIO.has(SYSTEM_OUTSIDE_IO), SYSTEM_OUTSIDE_IO).toBe(false);
-    expect(codesInIO.has(SYSTEM_OUTSIDE_IO_2), SYSTEM_OUTSIDE_IO_2).toBe(false);
+  it('находит негодный source ребра модулей', () => {
+    const map = parseThreeLevelProcessMap();
+    map.moduleEdges.push({
+      id: 'broken-module-edge-source',
+      source: 'stage-1',
+      target: MODULE_DEMAND,
+      kind: 'process',
+    });
+    const problems = validateIntegrity(map);
+    expect(
+      problems.some(
+        (problem) =>
+          problem.includes('broken-module-edge-source') && problem.includes('source "stage-1"'),
+      ),
+    ).toBe(true);
   });
 
   it('принимает код системы концом ребра модулей', () => {
-    const map = ProcessMapSchema.parse(buildThreeLevelMap());
-    map.moduleEdges!.push({
+    // Код берётся ВНЕ ExternalIO фикстуры — см. сторож в блоке про фикстуру.
+    const map = parseThreeLevelProcessMap();
+    map.moduleEdges.push({
       id: 'module-edge-system',
-      source: MODULE_B,
+      source: MODULE_SUPPLY,
       target: SYSTEM_OUTSIDE_IO_2,
       kind: 'integration',
     });
@@ -296,8 +408,8 @@ describe('validateIntegrity: модули', () => {
     // Связь «система → система» на уровне 1 не соединяет ничего из
     // нарисованного: экран рисует модули, а системы существуют на нём только
     // как то, с чем модуль обменивается.
-    const map = ProcessMapSchema.parse(buildThreeLevelMap());
-    map.moduleEdges!.push({
+    const map = parseThreeLevelProcessMap();
+    map.moduleEdges.push({
       id: 'system-to-system',
       source: SYSTEM_OUTSIDE_IO,
       target: SYSTEM_OUTSIDE_IO_2,
@@ -318,7 +430,12 @@ describe('validateIntegrity: модули', () => {
     // 1 частично проезжал бы молча.
     const map = ProcessMapSchema.parse(buildSampleProcessMap());
     map.moduleEdges = [
-      { id: 'module-edge-orphan', source: MODULE_A, target: MODULE_B, kind: 'process' },
+      {
+        id: 'module-edge-orphan',
+        source: MODULE_DEMAND,
+        target: MODULE_PRODUCTION,
+        kind: 'process',
+      },
       {
         id: 'module-edge-systems',
         source: SYSTEM_OUTSIDE_IO,
@@ -335,10 +452,23 @@ describe('validateIntegrity: модули', () => {
     // React Flow рисует уровни на разных экранах, но id рёбер в документе
     // глобальны: совпадение id ребра уровня 1 с id обзорного ребра — ошибка
     // того же класса, что и совпадение внутри одного уровня.
-    const map = ProcessMapSchema.parse(buildThreeLevelMap());
+    const map = parseThreeLevelProcessMap();
     const existing = map.overviewEdges[0]!;
-    map.moduleEdges!.push({ ...existing, source: MODULE_A, target: MODULE_B });
+    map.moduleEdges.push({ ...existing, source: MODULE_DEMAND, target: MODULE_SUPPLY });
     const problems = validateIntegrity(map);
     expect(problems.some((problem) => problem.includes('Дублирующийся id ребра'))).toBe(true);
+  });
+
+  it('находит дублирующийся id узла между фазами РАЗНЫХ модулей', () => {
+    // Уникальность id узлов глобальна, и модули её не ослабляют: два шага под
+    // одним id в разных модулях — это один и тот же узел React Flow на двух
+    // экранах и один и тот же ключ overrides.
+    const map = parseThreeLevelProcessMap();
+    const [firstModule, secondModule] = map.modules;
+    const donor = map.stages.find((stage) => stage.id === firstModule!.stageIds[0])!;
+    const acceptor = map.stages.find((stage) => stage.id === secondModule!.stageIds[0])!;
+    acceptor.nodes.push({ ...donor.nodes[0]!, id: donor.nodes[0]!.id });
+    const problems = validateIntegrity(map);
+    expect(problems.some((problem) => problem.includes('Дублирующийся id узла'))).toBe(true);
   });
 });
