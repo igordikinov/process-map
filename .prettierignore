@@ -23,6 +23,11 @@ design/
 .beads/
 .codex/
 .agents/
+# .claude/skills/ — те же скиллы того же генератора, что и в .agents/, только с
+# абзацем про вызов из Claude Code. Prettier переписывает кавычки в YAML-шапке
+# (singleQuote), генератор возвращает двойные — и так по кругу, каждый раз
+# роняя npm run check, который в CI блокирует деплой (process-map-g9y).
+.claude/skills/
 
 # Содержат управляемый блок beads (маркер BEGIN BEADS INTEGRATION с хешем) —
 # prettier трогает и его, и пустые строки вокруг.
