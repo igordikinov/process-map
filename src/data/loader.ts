@@ -14,10 +14,12 @@
 //   - переполнение квоты при записи (QuotaExceededError) → writeStoredOverrides
 //     возвращает false, состояние в памяти остаётся корректным, вызывающий UI
 //     решает, что показать пользователю.
-// Данные собираемой карты. Какой именно — решает алиас @map в конфигах
-// сборки (scripts/mapTarget.ts): в src/ нет ни process.env, ни import.meta.env,
-// ни ветвлений, и в бандл попадает ровно один JSON.
-import rawProcessJson from '@map/process.json';
+// Данные собираемых версий карты. Какие именно — решают алиасы @map и @map-alt
+// в конфигах сборки (scripts/mapTarget.ts): в src/ нет ни process.env, ни
+// import.meta.env, ни ветвлений по карте. Какая из версий показывается сейчас —
+// знает src/data/versions.ts, и только он.
+import { getImportedMap } from './activeMap';
+import { DEFAULT_VERSION_ID, getSelectedMap, getSelectedVersionId } from './versions';
 import {
   LEGACY_OVERRIDES_MAP_ID,
   LEGACY_OVERRIDES_STORAGE_KEY,
@@ -32,18 +34,57 @@ import {
 } from './schema';
 
 /**
- * Идентификатор карты и её ключ overrides.
+ * Идентификатор ВЕРСИИ ПО УМОЛЧАНИЮ и её ключ overrides.
  *
  * Берётся ИЗ ДАННЫХ, а не из переменной сборки: тогда ключ выведен из того
  * самого файла, который реально попал в бандл. Забытый MAP=mrp даёт карту SNP
  * с ключом SNP — то есть просто вторую копию SNP, — а не данные MRP под чужим
  * ключом (process-map-3wh.5).
+ *
+ * Раньше эта константа называлась «id встроенной карты», и встроенная карта
+ * была одна. Теперь версий может быть две, поэтому ключ АКТИВНОЙ версии
+ * считает activeOverridesKey(), а эта константа осталась ровно тем, чем была:
+ * ключом версии, с которой страница открывается.
  */
-const MAP_ID = rawProcessJson.id;
+const BUILTIN_MAP_ID = DEFAULT_VERSION_ID;
 
-/** Ключ overrides ЗАГРУЖЕННОЙ карты. Экспортируется, чтобы тесты и отладка
- *  брали ровно то значение, которым пользуется код, а не повторяли формулу. */
-export const OVERRIDES_KEY = overridesStorageKey(MAP_ID);
+/**
+ * Ключ overrides ВСТРОЕННОЙ карты.
+ *
+ * Остаётся экспортом: на него завязаны tests/loader-merge.test.ts и
+ * e2e/helpers.ts, где формула ключа продублирована намеренно. Он же остаётся
+ * ключом по умолчанию — пока карту не подменили, активная карта и есть
+ * встроенная.
+ */
+export const OVERRIDES_KEY = overridesStorageKey(BUILTIN_MAP_ID);
+
+/**
+ * Ключ overrides ЗАГРУЖЕННОЙ карты — в отдельном пространстве имён
+ * (process-map-70e.8).
+ *
+ * ПОЧЕМУ НЕ `overridesStorageKey(importedId)`. Файл BPMN может дать id, который
+ * после слагификации совпадёт с id встроенной карты. Сегодня модель владельца
+ * даёт `process-model-l0`, но это свойство одного файла, а не правило. При
+ * совпадении правки чужой карты легли бы в ключ встроенной, а «Сбросить
+ * правки» стёрло бы чужой черновик — ровно тот сценарий, ради которого SPEC §3
+ * и разводил ключи по картам.
+ */
+function importedOverridesKey(mapId: string): string {
+  return `inplan-process-map:imported:${mapId}:overrides:v1`;
+}
+
+/**
+ * Ключ overrides той карты, которая показывается СЕЙЧАС.
+ *
+ * Все чтения и записи идут через него: иначе правки загруженной карты попали бы
+ * в ключ встроенной, и «Сбросить правки» на одной стирало бы черновик другой.
+ */
+function activeOverridesKey(): string {
+  const imported = getImportedMap();
+  return imported === null
+    ? overridesStorageKey(getSelectedVersionId())
+    : importedOverridesKey(imported.id);
+}
 
 // ───────────────────────────── чистые функции ─────────────────────────────
 
@@ -145,7 +186,16 @@ export function isStorageAvailable(): boolean {
  * миграция идемпотентно повторится при следующей загрузке.
  */
 function migrateLegacyOverrides(): string | null {
-  if (MAP_ID !== LEGACY_OVERRIDES_MAP_ID) {
+  // Миграция касается ТОЛЬКО встроенной карты: под легаси-ключом лежит
+  // черновик владельца, сделанный до разделения карт. Загруженной карте он не
+  // принадлежит, и подмешивать его к ней было бы подлогом.
+  // И только на ВЕРСИИ ПО УМОЛЧАНИЮ: черновик сделан по карте из презентации,
+  // а у карты из модели id узлов другие целиком — перенос был бы записью мусора.
+  if (
+    BUILTIN_MAP_ID !== LEGACY_OVERRIDES_MAP_ID ||
+    getSelectedVersionId() !== DEFAULT_VERSION_ID ||
+    getImportedMap() !== null
+  ) {
     return null;
   }
   try {
@@ -167,7 +217,7 @@ function migrateLegacyOverrides(): string | null {
 /** Читает overrides из localStorage. Любая проблема → {}. */
 export function readStoredOverrides(): Overrides {
   try {
-    const raw = globalThis.localStorage?.getItem(OVERRIDES_KEY) ?? migrateLegacyOverrides();
+    const raw = globalThis.localStorage?.getItem(activeOverridesKey()) ?? migrateLegacyOverrides();
     if (raw === null || raw === undefined) {
       return {};
     }
@@ -184,7 +234,7 @@ export function writeStoredOverrides(overrides: Overrides): boolean {
     return false;
   }
   try {
-    storage.setItem(OVERRIDES_KEY, JSON.stringify(overrides));
+    storage.setItem(activeOverridesKey(), JSON.stringify(overrides));
     return true;
   } catch {
     return false;
@@ -214,7 +264,7 @@ export function removeNodeOverride(nodeId: string): Overrides {
 /** Полный сброс правок («Сбросить правки», SPEC §4.4). */
 export function resetOverrides(): void {
   try {
-    globalThis.localStorage?.removeItem(OVERRIDES_KEY);
+    globalThis.localStorage?.removeItem(activeOverridesKey());
   } catch {
     // Хранилище недоступно — сбрасывать нечего.
   }
@@ -227,9 +277,14 @@ export function replaceOverrides(overrides: Overrides): boolean {
 
 // ───────────────────────────── публичная загрузка ─────────────────────────────
 
-/** Валидированная карта из process.json, без пользовательских правок. */
+/**
+ * Валидированная карта БЕЗ пользовательских правок — та, что показывается сейчас.
+ *
+ * Загруженная карта уже прошла схему и проверку целостности в адаптере, поэтому
+ * второй разбор ей не нужен; встроенная разбирается как прежде.
+ */
 export function loadBaseProcessMap(): ProcessMap {
-  return parseProcessMap(rawProcessJson);
+  return getImportedMap() ?? getSelectedMap();
 }
 
 /** Карта из process.json с наложенными overrides из localStorage. */

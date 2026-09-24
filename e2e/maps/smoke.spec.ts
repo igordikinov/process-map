@@ -24,7 +24,14 @@ test('обзор: шапка, четыре карточки этапов, дат
   // Здесь же ловится дефект относительных путей к ассетам (base: './'): при
   // нерабочем base бандл не загрузился бы и полотно осталось бы пустым.
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
-  await expect(page.getByText('4 этапа')).toBeVisible();
+  /*
+   * Бейдж, а НЕ любой текст «4 этапа» (process-map-0c5.10): с появлением
+   * переключателя версий в шапке живёт живая область скринридера со строкой
+   * «Карта: Основные этапы, 4 этапа». Она 1×1 px с clip-path, но bounding box
+   * у неё непустой, поэтому Playwright считает её видимой, и getByText без
+   * уточнения резолвился в два элемента.
+   */
+  await expect(page.getByText('4 этапа', { exact: true })).toBeVisible();
   await expect(page.getByText(/^Обновлено /)).toBeVisible();
   await expect(page.locator('.react-flow__node-stage')).toHaveCount(4);
 });
@@ -42,7 +49,8 @@ test('поток этапов обведён рамкой с подписью с
   await expect(frame).toHaveText(expectationsFor(testInfo.project.name).moduleLabel);
 });
 
-test('переход на уровень 2 и возврат кнопкой «Назад»', async ({ page }) => {
+test('переход на уровень 2 и возврат кнопкой «Назад»', async ({ page }, testInfo) => {
+  const expectations = expectationsFor(testInfo.project.name);
   const card = page.locator('.react-flow__node-stage button').first();
   await expect(card).toHaveAttribute('aria-label', /^Этап \d: /);
 
@@ -59,10 +67,17 @@ test('переход на уровень 2 и возврат кнопкой «Н
   await page.waitForSelector('.react-flow__node-step');
   await expect(page.locator('.react-flow__node-stage')).toHaveCount(0);
 
-  // Корень крошек — <span>, а не ссылка: назад ведёт отдельная кнопка слева
-  // (Breadcrumbs.tsx). Подпись корня одинакова для всех карт, поэтому её можно
-  // проверять литералом и здесь.
-  await expect(page.getByText('E2E-процесс')).toBeVisible();
+  /*
+   * Корень крошек — <span>, а не ссылка: назад ведёт отдельная кнопка слева
+   * (Breadcrumbs.tsx).
+   *
+   * И он РАЗНЫЙ У РАЗНЫХ КАРТ (process-map-0c5.12). Раньше здесь стоял литерал
+   * «E2E-процесс» с пометкой «подпись корня одинакова для всех карт» — она и
+   * была дефектом: на карте MRP эта строка врала, а тест её же и закреплял.
+   * Теперь ожидание берётся из таблицы карты, то есть в проекте mrp проверка
+   * требует «Модуль MRP» и мутация «вернуть константу» её краснит.
+   */
+  await expect(page.getByText(expectations.moduleLabel)).toBeVisible();
   await page.getByRole('button', { name: 'Назад к обзору процесса' }).click();
   await expect(page.locator('.react-flow__node-stage')).toHaveCount(4);
 });

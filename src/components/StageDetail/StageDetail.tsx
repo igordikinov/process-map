@@ -1,5 +1,5 @@
 // Экран «Детализация этапа, уровень 2» (SPEC §4.2, артборд A2).
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import {
   Background,
   BackgroundVariant,
@@ -72,6 +72,7 @@ const proOptions = { hideAttribution: true };
 
 export function StageDetail() {
   const currentStageId = useProcessStore((state) => state.currentStageId);
+  const back = useProcessStore((state) => state.back);
   const showIntegrations = useProcessStore((state) => state.showIntegrations);
   const selectedNodeId = useProcessStore((state) => state.selectedNodeId);
 
@@ -88,10 +89,29 @@ export function StageDetail() {
     [stage, showIntegrations],
   );
 
-  // Уровень выбирает App.tsx по currentStageId, поэтому сюда можно попасть
-  // только с существующим этапом. Рассинхрон (например, id из старого
-  // deep-link) не должен ронять приложение — показываем пустой экран, решение
-  // о возврате на уровень 1 принимает пользователь кнопкой «Назад» в крошках.
+  /*
+   * РАССИНХРОН УРОВНЯ И ДАННЫХ — сам возвращает на обзор (process-map-70e.8).
+   *
+   * Раньше здесь стоял голый `return null` с комментарием, что пользователь
+   * выйдет кнопкой «Назад» в крошках. Это было НЕВЕРНО: крошки рендерятся ниже
+   * этого return, и на экране не оставалось ничего — выйти можно было только
+   * перезагрузкой.
+   *
+   * Пока карта была одна, состояние почти недостижимо: id этапа попадает в
+   * store только из клика по карточке. С подменой карты (импорт BPMN) оно
+   * становится обычным — id этапа старой карты в новой не существует. Вторая
+   * защита стоит в applyImportedMap, здесь — та, что снимает класс тупиков
+   * целиком, включая причины, о которых мы ещё не знаем.
+   *
+   * Возврат делается эффектом, а не прямо в теле: смена состояния во время
+   * рендера — это рендер во время рендера, и React на этом ругается.
+   */
+  useEffect(() => {
+    if (stage === undefined) {
+      back();
+    }
+  }, [stage, back]);
+
   if (stage === undefined || graph === undefined) {
     return null;
   }
@@ -112,7 +132,7 @@ export function StageDetail() {
 
   return (
     <div className={compact ? `${styles.root} ${styles.compact}` : styles.root} ref={rootRef}>
-      <Breadcrumbs stages={map.stages} compact={compact} />
+      <Breadcrumbs stages={map.stages} rootLabel={map.moduleLabel} compact={compact} />
       {/* role="region", а не "application" — см. комментарий в Overview.tsx. */}
       <div className={styles.canvas} role="region" aria-label={ru.stageDetail.canvasLabel}>
         {/* key по этапу на самом провайдере (не только на <ReactFlow> ниже):

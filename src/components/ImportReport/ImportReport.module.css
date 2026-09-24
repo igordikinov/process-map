@@ -1,0 +1,174 @@
+/*
+ * Панель отчёта импорта (process-map-70e.9).
+ * Только var(...) из src/theme/tokens.css — CLAUDE.md «Кодовые правила».
+ *
+ * Ширина, отступы и крестик — те же токены, что у панели узла: две панели
+ * обязаны читаться как одна система, а не как две разные поделки.
+ * Позиционирование fixed, а не absolute: панель монтируется в App.tsx, выше
+ * обоих экранов, и обязана пережить переход на уровень 2.
+ */
+
+.panel {
+  position: fixed;
+  z-index: 6;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  width: var(--pm-drawer-width);
+  box-sizing: border-box;
+  flex-direction: column;
+  border-left: 1px solid var(--pm-node-border);
+  background: var(--scp-background-primary);
+  box-shadow: var(--pm-shadow-stage-active);
+}
+
+.header {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--scp-paddings-l);
+  border-bottom: 1px solid var(--pm-node-border);
+  gap: var(--pm-space-10);
+}
+
+.title {
+  margin: 0;
+  color: var(--scp-content-primary);
+  font-size: var(--pm-font-size-15);
+  font-weight: var(--scp-font-weight-semi-bold);
+}
+
+.close {
+  display: flex;
+  width: var(--pm-drawer-close-size);
+  height: var(--pm-drawer-close-size);
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: var(--scp-border-radius-sm);
+  background: transparent;
+  cursor: pointer;
+}
+
+.close:hover,
+.close:focus-visible {
+  background: var(--scp-color-neutral-50);
+}
+
+.closeIcon {
+  width: var(--scp-spacing-lg);
+}
+
+.content {
+  overflow-y: auto;
+  flex: 1;
+  padding: var(--scp-paddings-l);
+}
+
+.section {
+  margin-bottom: var(--scp-paddings-l);
+}
+
+.sectionTitle {
+  margin: 0 0 var(--pm-space-6);
+  color: var(--scp-content-secondary);
+  font-size: var(--pm-font-size-11);
+  font-weight: var(--scp-font-weight-semi-bold);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* Главная цифра отчёта: крупнее остального, потому что отвечает на вопрос,
+   ради которого отчёт и открывают. */
+.headline {
+  margin: 0;
+  color: var(--scp-content-primary);
+  font-size: var(--pm-font-size-15);
+  line-height: var(--pm-line-height-20);
+}
+
+.hint {
+  margin: var(--pm-space-6) 0 0;
+  color: var(--scp-content-secondary);
+  font-size: var(--pm-font-size-12-5);
+  line-height: var(--pm-line-height-15);
+}
+
+.list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.item {
+  display: flex;
+  flex-direction: column;
+  padding: var(--pm-space-6) 0;
+  border-bottom: 1px solid var(--scp-color-neutral-100);
+  color: var(--scp-content-primary);
+  font-size: var(--pm-font-size-12-5);
+  gap: var(--pm-space-3);
+  line-height: var(--pm-line-height-15);
+}
+
+.itemTitle {
+  color: var(--scp-content-primary);
+}
+
+.itemMeta {
+  color: var(--scp-content-secondary);
+  font-size: var(--pm-font-size-11);
+}
+
+/* Примеры внутри ведра потерь. Отступ слева и своя колонка — чтобы список
+   читался как «вот эти», а не как продолжение перечня причин. */
+.samples {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0 0 0 var(--pm-space-10);
+  gap: var(--pm-space-3);
+  list-style: none;
+}
+
+.sample {
+  display: flex;
+  flex-direction: column;
+  font-size: var(--pm-font-size-11);
+  gap: var(--pm-space-3);
+}
+
+.sampleName {
+  color: var(--scp-content-primary);
+}
+
+/* id элемента переносят в поиск Camunda Modeler, поэтому он не обрезается
+   многоточием, а переносится по любому символу: обрезанный id бесполезен. */
+.sampleMeta {
+  overflow-wrap: anywhere;
+  color: var(--scp-content-secondary);
+}
+
+.facts {
+  display: grid;
+  margin: 0;
+  gap: var(--pm-space-3) var(--pm-space-10);
+  grid-template-columns: auto 1fr;
+}
+
+.factName {
+  color: var(--scp-content-secondary);
+  font-size: var(--pm-font-size-11);
+}
+
+.factValue {
+  overflow: hidden;
+  margin: 0;
+  color: var(--scp-content-primary);
+  font-size: var(--pm-font-size-11);
+  text-overflow: ellipsis;
+}

@@ -8,7 +8,7 @@
 // Взять корневой план для детей модуля — самая вероятная ошибка реализации, и
 // она спрячется: `slidePositionOf` в раскладке молча откатится на `position`,
 // узлы разъедутся, но ничего не упадёт.
-import { BPMN_NS, nsAll, nsChildren, numAttr } from './xml';
+import { BPMN_NS, nsAll, nsChildren, numAttr } from './xml.ts';
 
 export interface Bounds {
   readonly x: number;

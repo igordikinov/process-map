@@ -141,7 +141,14 @@ test('обзор → этап 2 → шаг → Drawer → «Открыть в м
   await page.goto('/');
   await page.waitForSelector('.react-flow__node-stage');
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
-  await expect(page.getByText('4 этапа')).toBeVisible();
+  /*
+   * Бейдж, а НЕ любой текст «4 этапа» (process-map-0c5.10): с появлением
+   * переключателя версий в шапке живёт живая область скринридера со строкой
+   * «Карта: Основные этапы, 4 этапа». Она 1×1 px с clip-path, но bounding box
+   * у неё непустой, поэтому Playwright считает её видимой, и getByText без
+   * уточнения резолвился в два элемента.
+   */
+  await expect(page.getByText('4 этапа', { exact: true })).toBeVisible();
   await expect(page.locator('.react-flow__node-stage')).toHaveCount(4);
   await expect(page.getByRole('dialog')).toHaveCount(0);
 
@@ -151,7 +158,7 @@ test('обзор → этап 2 → шаг → Drawer → «Открыть в м
   await clickCenter(page, stageCard);
   await page.waitForSelector(STEP_CARD);
   await waitForStartViewport(page);
-  await expect(page.getByText('E2E-процесс')).toBeVisible();
+  await expect(page.getByText('Модуль SNP')).toBeVisible();
   await expect(page.getByText('Этап 2', { exact: true })).toBeVisible();
   await expect(page.locator('.react-flow__node-stage')).toHaveCount(0);
 

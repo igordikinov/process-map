@@ -120,22 +120,56 @@ export function deriveOverrides(base: ProcessMap, imported: ProcessMap): Overrid
  * валидирует (см. src/data/loader.ts), поэтому единственная гарантия, что в
  * localStorage попадёт разбираемая форма, — строгая проверка здесь.
  */
-export function parseImportedOverrides(text: string, base: ProcessMap): Overrides | null {
+/**
+ * Исход разбора импортируемого файла.
+ *
+ * Три значения, а не «overrides или null», потому что исходов у пользователя
+ * действительно три, и один из них появился вместе с версиями карты
+ * (process-map-0c5.9): файл может быть исправной картой процесса, но ДРУГОЙ.
+ * Сказать про него «это не файл карты процесса» — неправда, и пользователь
+ * пошёл бы искать поломку не там.
+ *
+ * Форма — та же, что у parseBpmnDocument: наружу отдаётся либо результат, либо
+ * причина отказа, промежуточных состояний нет.
+ */
+export type ImportedOverridesResult =
+  | { readonly status: 'ok'; readonly overrides: Overrides }
+  | { readonly status: 'rejected' }
+  | { readonly status: 'other-map'; readonly mapId: string };
+
+export function parseImportedOverrides(text: string, base: ProcessMap): ImportedOverridesResult {
   let raw: unknown;
   try {
     raw = JSON.parse(text);
   } catch {
-    return null;
+    return { status: 'rejected' };
   }
 
   const parsed = ProcessMapSchema.safeParse(raw);
   if (!parsed.success) {
-    return null;
+    return { status: 'rejected' };
+  }
+
+  /*
+   * ФАЙЛ ЧУЖОЙ КАРТЫ ОТВЕРГАЕТСЯ (process-map-0c5.9), и это не придирка.
+   *
+   * `deriveOverrides` считает разницу по id узлов и НАМЕРЕННО игнорирует те,
+   * которых нет в базе. Пока карты жили на разных адресах, это было безопасно:
+   * файл соседней карты туда просто не приносили. С двумя версиями на ОДНОМ
+   * адресе `process.snp.json`, поданный на карте из модели, даёт ноль
+   * совпадений — и пользователь получает «файл принят, расхождений нет», то
+   * есть ему говорят, что всё в порядке, хотя он подал файл другой версии.
+   *
+   * Отдельный исход, а не `null`: «это не файл карты процесса» о файле карты
+   * процесса было бы неправдой, и пользователь искал бы поломку не там.
+   */
+  if (parsed.data.id !== base.id) {
+    return { status: 'other-map', mapId: parsed.data.id };
   }
 
   try {
-    return parseOverrides(deriveOverrides(base, parsed.data));
+    return { status: 'ok', overrides: parseOverrides(deriveOverrides(base, parsed.data)) };
   } catch {
-    return null;
+    return { status: 'rejected' };
   }
 }

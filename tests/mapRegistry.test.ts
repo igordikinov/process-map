@@ -11,7 +11,7 @@
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_MAP, MAP_IDS } from '../scripts/mapTarget.ts';
+import { BPMN_MAP_IDS, DEFAULT_MAP, MAP_IDS } from '../scripts/mapTarget.ts';
 
 const IMPORTER_SOURCE = readFileSync(resolve(process.cwd(), 'scripts', 'import-pptx.py'), 'utf8');
 const DATA_ROOT = resolve(process.cwd(), 'src', 'data');
@@ -52,6 +52,46 @@ describe('реестры карт', () => {
         .filter((id) => (MAP_IDS as readonly string[]).includes(id))
         .sort(),
     );
+  });
+
+  /*
+   * КАРТЫ ИЗ МОДЕЛИ — второй реестр, и у них НЕТ записи в импортёре
+   * презентаций: презентации у них не существует. Поэтому проверка та же, но
+   * только против диска.
+   */
+  it('у каждой карты из модели есть данные на диске', () => {
+    expect([...BPMN_MAP_IDS].sort()).toEqual(
+      dataDirs()
+        .filter((id) => (BPMN_MAP_IDS as readonly string[]).includes(id))
+        .sort(),
+    );
+  });
+
+  it('карта из модели не объявлена целью сборки', () => {
+    // Своего адреса у неё нет: она живёт второй версией внутри чужой страницы.
+    // Попади она в MAP_IDS — первая же проверка этого файла потребовала бы
+    // записи в реестре импортёра презентаций, и реестр начал бы врать.
+    for (const id of BPMN_MAP_IDS) {
+      expect(MAP_IDS as readonly string[]).not.toContain(id);
+    }
+  });
+
+  /*
+   * ДЫРА, КОТОРУЮ ЗАКРЫВАЕТ ЭТА ПРОВЕРКА. Раньше обратное направление было
+   * ослаблено намеренно: «каталог может появиться раньше, чем импортёр научится
+   * собирать эту карту». С появлением второго генератора цена этого послабления
+   * выросла: каталог, который не производит НИ ОДИН генератор, — это ровно тот
+   * способ, которым протухшая карта осталась бы в репозитории незамеченной.
+   * Её бы никто не перегенерировал, и никто бы не покраснел.
+   */
+  it('каждый каталог с данными объявлен хотя бы в одном реестре', () => {
+    const declared = new Set<string>([...MAP_IDS, ...BPMN_MAP_IDS]);
+    const orphans = dataDirs().filter((id) => !declared.has(id));
+    expect(
+      orphans,
+      `в src/data/ лежат карты, которых нет ни в одном реестре: ${orphans.join(', ')}. ` +
+        `Такую карту не перегенерирует ни один конвейер, и её протухание никто не заметит.`,
+    ).toEqual([]);
   });
 
   it('карта по умолчанию объявлена в обоих реестрах', () => {

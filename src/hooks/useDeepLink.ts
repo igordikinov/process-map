@@ -33,6 +33,9 @@
 import { useEffect, useRef } from 'react';
 import type { ProcessMap, Stage } from '../data/schema';
 import { useProcessStore } from '../store/useProcessStore';
+import { loadProcessMap } from '../data/loader';
+import { DEFAULT_VERSION_ID, getSelectedVersionId } from '../data/versions';
+import { selectVersion } from '../data/versionSwitch';
 import { useProcessMap } from './useProcessMap';
 
 function findStageByNumber(map: ProcessMap, raw: string | null): Stage | undefined {
@@ -70,11 +73,33 @@ export function useDeepLink(): void {
       didParseInitialUrl.current = true;
 
       const initialParams = new URLSearchParams(window.location.search);
+      const versionParam = initialParams.get('version');
       const stageParam = initialParams.get('stage');
       const nodeParam = initialParams.get('node');
 
-      const nodeStage = findStageByNodeId(map, nodeParam);
-      const targetStage = nodeStage ?? findStageByNumber(map, stageParam);
+      /*
+       * ВЕРСИЯ РАЗБИРАЕТСЯ ПЕРВОЙ, И ЭТО НЕ ВОПРОС АККУРАТНОСТИ.
+       *
+       * Номера этапов у версий означают РАЗНОЕ: у карты из презентации их
+       * четыре, у карты из модели — десять. Разбери `stage` раньше версии, и
+       * `?version=inplan-model&stage=7` не нашёл бы этап (в карте по умолчанию
+       * его нет), а `?stage=2` открыл бы ДРУГОЙ этап. Экран при этом выглядел
+       * бы работающим — тихий неверный исход, худший из возможных.
+       *
+       * Неизвестное значение игнорируется, а не роняет и не откатывает на
+       * вторую версию: то же правило, что у `?stage=99`.
+       */
+      const versionApplied =
+        versionParam !== null && versionParam !== '' && selectVersion(versionParam);
+
+      /*
+       * Карта перечитывается ЗАНОВО, а не берётся из замыкания: `map` пришёл с
+       * рендера ДО подмены версии, и поиск этапа шёл бы по прежней карте.
+       */
+      const active = versionApplied ? loadProcessMap() : map;
+
+      const nodeStage = findStageByNodeId(active, nodeParam);
+      const targetStage = nodeStage ?? findStageByNumber(active, stageParam);
 
       if (targetStage !== undefined) {
         navigateToStage(targetStage.id);
@@ -101,6 +126,23 @@ export function useDeepLink(): void {
       state.currentStageId === null
         ? undefined
         : map.stages.find((candidate) => candidate.id === state.currentStageId);
+
+    /*
+     * Версия пишется в адрес, только если она НЕ по умолчанию. Тогда все уже
+     * разосланные по вики ссылки вида `?stage=3` остаются побайтово теми же и
+     * означают ровно то, что означали, — а параметр появляется только там, где
+     * без него смысл потерялся бы.
+     *
+     * Пишется по ВЫБРАННОЙ версии, даже когда поверх лежит загруженная схема:
+     * адрес описывает то, что получится после перезагрузки, а перезагрузка
+     * загруженную схему отбрасывает всегда.
+     */
+    const selectedVersion = getSelectedVersionId();
+    if (selectedVersion === DEFAULT_VERSION_ID) {
+      params.delete('version');
+    } else {
+      params.set('version', selectedVersion);
+    }
 
     if (stage === undefined) {
       // Либо уровень 1 (Обзор), либо currentStageId не резолвится в

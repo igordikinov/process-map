@@ -24,13 +24,13 @@ beforeEach(() => {
 
 describe('Breadcrumbs', () => {
   it('ничего не рендерит на уровне 1 (currentStageId === null)', () => {
-    const { container } = render(<Breadcrumbs stages={map.stages} />);
+    const { container } = render(<Breadcrumbs stages={map.stages} rootLabel={map.moduleLabel} />);
     expect(container).toBeEmptyDOMElement();
   });
 
   it('ничего не рендерит, если currentStageId не найден среди stages', () => {
     useProcessStore.getState().navigateToStage('несуществующий-этап');
-    const { container } = render(<Breadcrumbs stages={map.stages} />);
+    const { container } = render(<Breadcrumbs stages={map.stages} rootLabel={map.moduleLabel} />);
     expect(container).toBeEmptyDOMElement();
   });
 
@@ -38,17 +38,38 @@ describe('Breadcrumbs', () => {
     const stage = stageAt(1);
     useProcessStore.getState().navigateToStage(stage.id);
 
-    render(<Breadcrumbs stages={map.stages} />);
+    render(<Breadcrumbs stages={map.stages} rootLabel={map.moduleLabel} />);
 
-    expect(screen.getByText(ru.breadcrumbs.root)).toBeInTheDocument();
+    expect(screen.getByText(map.moduleLabel)).toBeInTheDocument();
     expect(screen.getByText(stage.title)).toBeInTheDocument();
     expect(screen.getByText(`Этап ${stage.number}`)).toBeInTheDocument();
   });
 
+  /*
+   * КОРЕНЬ КРОШЕК — ИМЯ КАРТЫ, А НЕ КОНСТАНТА (process-map-0c5.12).
+   *
+   * Проверять это на одной карте бесполезно: до правки крошки на ЛЮБОЙ карте
+   * давали одну и ту же строку, и тест против карты по умолчанию прошёл бы и
+   * при живом дефекте. Поэтому здесь две разные подписи, и вторая — та, что
+   * реально стоит у карты из модели.
+   */
+  it.each([['Модуль SNP'], ['Модуль MRP'], ['Все модули In.Plan']])(
+    'корень крошек берётся из карты: «%s»',
+    (rootLabel) => {
+      const stage = stageAt(1);
+      useProcessStore.getState().navigateToStage(stage.id);
+
+      render(<Breadcrumbs stages={map.stages} rootLabel={rootLabel} />);
+
+      expect(screen.getByText(rootLabel)).toBeInTheDocument();
+      expect(screen.queryByText('E2E-процесс')).toBeNull();
+    },
+  );
+
   it('считает счётчик «N шагов · M входов · K выходов» на реальных данных по всем этапам', () => {
     for (const stage of map.stages) {
       useProcessStore.getState().navigateToStage(stage.id);
-      const { unmount } = render(<Breadcrumbs stages={map.stages} />);
+      const { unmount } = render(<Breadcrumbs stages={map.stages} rootLabel={map.moduleLabel} />);
 
       // Независимый от countStageNodes пересчёт: тип узла напрямую из данных,
       // чтобы тест не был тавтологией с тестируемой функцией.
@@ -106,7 +127,7 @@ describe('Breadcrumbs', () => {
     for (const [stepsCount, expected] of cases) {
       const stage = makeStage(stepsCount);
       useProcessStore.getState().navigateToStage(stage.id);
-      const { unmount } = render(<Breadcrumbs stages={[stage]} />);
+      const { unmount } = render(<Breadcrumbs stages={[stage]} rootLabel={map.moduleLabel} />);
       expect(screen.getByText(expected)).toBeInTheDocument();
       unmount();
     }
@@ -115,7 +136,7 @@ describe('Breadcrumbs', () => {
   it('кнопка «Назад» вызывает back() и возвращает на уровень 1', () => {
     const stage = stageAt(0);
     useProcessStore.getState().navigateToStage(stage.id);
-    render(<Breadcrumbs stages={map.stages} />);
+    render(<Breadcrumbs stages={map.stages} rootLabel={map.moduleLabel} />);
 
     expect(useProcessStore.getState().currentStageId).toBe(stage.id);
     fireEvent.click(screen.getByRole('button', { name: ru.breadcrumbs.backAriaLabel }));

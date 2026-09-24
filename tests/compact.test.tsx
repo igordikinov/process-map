@@ -409,9 +409,9 @@ describe('Breadcrumbs: компактный режим', () => {
   it('крошки, бейдж и счётчик остаются — сжимается только высота', () => {
     const stage = stageAt(1);
     useProcessStore.getState().navigateToStage(stage.id);
-    render(<Breadcrumbs stages={map.stages} compact />);
+    render(<Breadcrumbs stages={map.stages} rootLabel={map.moduleLabel} compact />);
 
-    expect(screen.getByText(ru.breadcrumbs.root)).toBeInTheDocument();
+    expect(screen.getByText(loadBaseProcessMap().moduleLabel)).toBeInTheDocument();
     expect(screen.getByText(stage.title)).toBeInTheDocument();
     expect(screen.getByText(ru.breadcrumbs.stageBadge(stage.number))).toBeInTheDocument();
     expect(screen.getByRole('button', { name: ru.breadcrumbs.backAriaLabel })).toBeInTheDocument();

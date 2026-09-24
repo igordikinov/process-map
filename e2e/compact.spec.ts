@@ -121,7 +121,14 @@ test.describe('компактный режим 1024×600 (артборд A4)', (
     expect(header.h).toBe(HEADER_HEIGHT_COMPACT);
 
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
-    await expect(page.getByText('4 этапа')).toBeVisible();
+    /*
+     * Бейдж, а НЕ любой текст «4 этапа» (process-map-0c5.10): с появлением
+     * переключателя версий в шапке живёт живая область скринридера со строкой
+     * «Карта: Основные этапы, 4 этапа». Она 1×1 px с clip-path, но bounding box
+     * у неё непустой, поэтому Playwright считает её видимой, и getByText без
+     * уточнения резолвился в два элемента.
+     */
+    await expect(page.getByText('4 этапа', { exact: true })).toBeVisible();
     await expect(page.getByText(/^Обновлено /)).toHaveCount(0);
   });
 
@@ -189,7 +196,7 @@ test.describe('компактный режим 1024×600 (артборд A4)', (
   test('карточки этапов остаются кликабельными: клик уводит на детализацию', async ({ page }) => {
     await openStage(page, 1);
     await expect(page.locator('.react-flow__node-stage')).toHaveCount(0);
-    await expect(page.getByText('E2E-процесс')).toBeVisible();
+    await expect(page.getByText('Модуль SNP')).toBeVisible();
   });
 
   test('шапка уровня 2 тоже 44 px', async ({ page }) => {

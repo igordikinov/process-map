@@ -114,6 +114,22 @@ export function parseModuleName(rawName: string | null | undefined): ModuleName 
 }
 
 /**
+ * Текст `bpmn:textAnnotation` — из вложенного `bpmn:text`.
+ *
+ * Читается через прямых детей, а не `textContent` самой аннотации: у неё бывают
+ * и другие дочерние элементы, и их содержимое попало бы в подпись вперемешку.
+ */
+export function annotationTextOf(el: Element | undefined): string {
+  if (el === undefined) {
+    return '';
+  }
+  const text = Array.from(el.children).find(
+    (child) => child.localName === 'text' && child.namespaceURI === el.namespaceURI,
+  );
+  return normalizeText(text?.textContent ?? '');
+}
+
+/**
  * Ведущий код шага: `DP-010-010 Фоновая загрузка` → `DP-010-010`.
  *
  * Нужен, чтобы вывести подпись безымянной группы из диапазона кодов её

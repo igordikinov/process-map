@@ -12,6 +12,9 @@ import '@xyflow/react/dist/style.css';
 import { useFrameSize } from '../../hooks/useFrameSize';
 import { useProcessMap } from '../../hooks/useProcessMap';
 import { ru } from '../../i18n/ru';
+import { isImportedActive } from '../../data/activeMap';
+import { getSelectedVersionId, listVersions } from '../../data/versions';
+import { selectVersion } from '../../data/versionSwitch';
 import { useProcessStore } from '../../store/useProcessStore';
 import { EdgeMarkers, IntegrationEdge, ProcessEdge } from '../edges';
 import { Legend } from '../Legend';
@@ -84,6 +87,10 @@ export function Overview() {
     [map, showIntegrations, compact],
   );
 
+  // Признак читается на рендере: подмена карты идёт через refreshProcessMap,
+  // который сам вызывает рендер (тот же приём, что в EditorActions).
+  const imported = isImportedActive();
+
   return (
     <div className={compact ? `${styles.root} ${styles.compact}` : styles.root} ref={rootRef}>
       <OverviewHeader
@@ -91,6 +98,14 @@ export function Overview() {
         stagesCount={map.stages.length}
         updatedAt={map.updatedAt}
         compact={compact}
+        imported={imported}
+        /* При загруженной пользователем схеме версий не предлагаем: показана
+           вообще не версия, и «нажатый» сегмент утверждал бы обратное. Путь
+           назад у пользователя есть — кнопка «Вернуться к встроенной карте» в
+           тулбаре редактора, и она вернёт ту версию, с которой ушли. */
+        versions={imported ? [] : listVersions()}
+        selectedVersionId={getSelectedVersionId()}
+        onSelectVersion={selectVersion}
       />
       {/* role="region", а не "application": схема статична, а application
           переводит скринридер в режим прямого прохода клавиш и глушит
@@ -124,7 +139,10 @@ export function Overview() {
               <Background variant={BackgroundVariant.Dots} gap={GRID_GAP} size={GRID_DOT_SIZE} />
               {/* SPEC §4.5: при смене режима вид подгоняется заново — карточки
                   этапов меняют и размер, и координаты. */}
-              <RefitViewport compact={compact} fitViewOptions={fitViewOptions} />
+              <RefitViewport
+                fitKey={`${String(compact)}:${map.id}`}
+                fitViewOptions={fitViewOptions}
+              />
             </ReactFlow>
           </EdgeMarkers>
           {/* Тот же fitViewOptions, что и автозапуск fitView выше (SPEC §4.6):

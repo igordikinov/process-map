@@ -19,7 +19,7 @@ import {
   resetOverrides,
   setNodeOverride,
 } from '../src/data/loader';
-import type { ProcessMap, ScreenLink } from '../src/data/schema';
+import type { Overrides, ProcessMap, ScreenLink } from '../src/data/schema';
 import {
   exportFileName,
   deriveOverrides,
@@ -93,6 +93,20 @@ function baseWithScreen(nodeId: string, screen: ScreenLink): ProcessMap {
 beforeEach(() => {
   localStorage.clear();
 });
+
+/**
+ * Overrides из успешного разбора. Отдельный хелпер, потому что
+ * parseImportedOverrides теперь отдаёт исход, а не «overrides или null»
+ * (process-map-0c5.9): у пользователя их три, и один из них — «файл исправной,
+ * но ДРУГОЙ карты».
+ */
+function importedOverrides(text: string, base: ProcessMap): Overrides {
+  const result = parseImportedOverrides(text, base);
+  if (result.status !== 'ok') {
+    throw new Error(`ожидался успешный разбор, получено «${result.status}»`);
+  }
+  return result.overrides;
+}
 
 describe('экспорт: формат файла', () => {
   it('совпадает байт в байт с src/data/snp/process.json, когда правок нет', () => {
@@ -171,9 +185,7 @@ describe('импорт: round-trip экспорт → импорт', () => {
     localStorage.clear();
     expect(getMergedProcessMap()).toEqual(base);
 
-    const imported = parseImportedOverrides(exported, loadBaseProcessMap());
-    expect(imported).not.toBeNull();
-    replaceOverrides(imported ?? {});
+    replaceOverrides(importedOverrides(exported, loadBaseProcessMap()));
 
     // 1. Карта после импорта — та же самая.
     expect(serializeProcessMap(getMergedProcessMap())).toBe(exported);
@@ -191,9 +203,9 @@ describe('импорт: round-trip экспорт → импорт', () => {
     setNodeOverride(nodeId, LINK);
 
     const first = serializeProcessMap(getMergedProcessMap());
-    replaceOverrides(parseImportedOverrides(first, loadBaseProcessMap()) ?? {});
+    replaceOverrides(importedOverrides(first, loadBaseProcessMap()));
     const second = serializeProcessMap(getMergedProcessMap());
-    replaceOverrides(parseImportedOverrides(second, loadBaseProcessMap()) ?? {});
+    replaceOverrides(importedOverrides(second, loadBaseProcessMap()));
     const third = serializeProcessMap(getMergedProcessMap());
 
     expect(second).toBe(first);
@@ -206,7 +218,7 @@ describe('импорт: round-trip экспорт → импорт', () => {
     const pristine = serializeProcessMap(base);
     setNodeOverride(nodeId, LINK);
 
-    const imported = parseImportedOverrides(pristine, base);
+    const imported = importedOverrides(pristine, base);
     expect(imported).toEqual({});
     replaceOverrides(imported ?? {});
 
@@ -224,7 +236,7 @@ describe('импорт: удалённая ссылка (screen: null)', () => {
     // Файл, из которого пользователь ссылку убрал.
     const withoutLink = serializeProcessMap(mergeOverrides(base, { [nodeId]: { screen: null } }));
 
-    const imported = parseImportedOverrides(withoutLink, base);
+    const imported = importedOverrides(withoutLink, base);
 
     expect(imported).toEqual({ [nodeId]: { screen: null } });
     // Ключ должен присутствовать со значением null, а не отсутствовать:
@@ -242,7 +254,7 @@ describe('импорт: удалённая ссылка (screen: null)', () => {
     expect(exported).not.toContain(LINK.url);
 
     // Импорт → merge → снова экспорт.
-    const imported = parseImportedOverrides(exported, base);
+    const imported = importedOverrides(exported, base);
     const roundTripped = serializeProcessMap(mergeOverrides(base, imported ?? {}));
 
     expect(roundTripped).toBe(exported);
@@ -254,14 +266,14 @@ describe('импорт: удалённая ссылка (screen: null)', () => {
     const base = baseWithScreen(nodeId, LINK);
     const edited = serializeProcessMap(mergeOverrides(base, { [nodeId]: { screen: OTHER_LINK } }));
 
-    expect(parseImportedOverrides(edited, base)).toEqual({ [nodeId]: { screen: OTHER_LINK } });
+    expect(importedOverrides(edited, base)).toEqual({ [nodeId]: { screen: OTHER_LINK } });
   });
 
   it('нетронутая ссылка из JSON не порождает override', () => {
     const nodeId = firstNodeId(loadBaseProcessMap());
     const base = baseWithScreen(nodeId, LINK);
 
-    expect(parseImportedOverrides(serializeProcessMap(base), base)).toEqual({});
+    expect(importedOverrides(serializeProcessMap(base), base)).toEqual({});
   });
 });
 
@@ -272,9 +284,9 @@ describe('импорт: непригодные файлы', () => {
     setNodeOverride(nodeId, LINK);
     const before = readStoredOverrides();
 
-    expect(parseImportedOverrides('{ это не json', base)).toBeNull();
-    expect(parseImportedOverrides('', base)).toBeNull();
-    expect(parseImportedOverrides('<html></html>', base)).toBeNull();
+    expect(parseImportedOverrides('{ это не json', base).status).toBe('rejected');
+    expect(parseImportedOverrides('', base).status).toBe('rejected');
+    expect(parseImportedOverrides('<html></html>', base).status).toBe('rejected');
 
     expect(readStoredOverrides()).toEqual(before);
   });
@@ -282,14 +294,15 @@ describe('импорт: непригодные файлы', () => {
   it('чужая валидная JSON-форма отвергается', () => {
     const base = loadBaseProcessMap();
 
-    expect(parseImportedOverrides('{"foo":"bar"}', base)).toBeNull();
-    expect(parseImportedOverrides('[]', base)).toBeNull();
-    expect(parseImportedOverrides('null', base)).toBeNull();
-    expect(parseImportedOverrides('42', base)).toBeNull();
+    expect(parseImportedOverrides('{"foo":"bar"}', base).status).toBe('rejected');
+    expect(parseImportedOverrides('[]', base).status).toBe('rejected');
+    expect(parseImportedOverrides('null', base).status).toBe('rejected');
+    expect(parseImportedOverrides('42', base).status).toBe('rejected');
     // Карта без обязательного поля stages — тоже не карта.
     expect(
-      parseImportedOverrides('{"version":"1.0.0","updatedAt":"2026-08-24","title":"x"}', base),
-    ).toBeNull();
+      parseImportedOverrides('{"version":"1.0.0","updatedAt":"2026-08-24","title":"x"}', base)
+        .status,
+    ).toBe('rejected');
   });
 
   it('форма, похожая на карту, но не проходящая схему, отвергается zod, а не случайно', () => {
@@ -300,12 +313,12 @@ describe('импорт: непригодные файлы', () => {
     // сотрёт все правки пользователя. Отвергать его обязана именно схема.
     const base = loadBaseProcessMap();
 
-    expect(parseImportedOverrides('{"stages":[{"nodes":[]}]}', base)).toBeNull();
-    expect(parseImportedOverrides('{"stages":[]}', base)).toBeNull();
+    expect(parseImportedOverrides('{"stages":[{"nodes":[]}]}', base).status).toBe('rejected');
+    expect(parseImportedOverrides('{"stages":[]}', base).status).toBe('rejected');
     // …и карта, у которой отсутствует только overviewEdges.
     const almost = JSON.parse(serializeProcessMap(base)) as Partial<ProcessMap>;
     delete almost.overviewEdges;
-    expect(parseImportedOverrides(JSON.stringify(almost), base)).toBeNull();
+    expect(parseImportedOverrides(JSON.stringify(almost), base).status).toBe('rejected');
   });
 
   it('файл overrides импортом НЕ принимается: импорт ждёт полную карту', () => {
@@ -316,7 +329,9 @@ describe('импорт: непригодные файлы', () => {
     const base = loadBaseProcessMap();
     const nodeId = firstNodeId(base);
 
-    expect(parseImportedOverrides(JSON.stringify({ [nodeId]: { screen: LINK } }), base)).toBeNull();
+    expect(
+      parseImportedOverrides(JSON.stringify({ [nodeId]: { screen: LINK } }), base).status,
+    ).toBe('rejected');
   });
 
   it('узлы, которых нет в базовой карте, игнорируются', () => {
@@ -332,7 +347,40 @@ describe('импорт: непригодные файлы', () => {
       position: { x: 0, y: 0 },
     });
 
-    expect(parseImportedOverrides(JSON.stringify(alien), base)).toEqual({});
+    expect(importedOverrides(JSON.stringify(alien), base)).toEqual({});
+  });
+
+  /*
+   * ФАЙЛ ДРУГОЙ КАРТЫ (process-map-0c5.9). Это НЕ то же самое, что «чужие узлы
+   * игнорируются» в проверке выше: там карта та же, просто в файле появился
+   * лишний узел. Здесь карта другая целиком.
+   *
+   * Пока карты жили на разных адресах, такой файл сюда не приносили. С двумя
+   * версиями на одном адресе он приносится легко, и старое поведение выдавало
+   * ноль совпадений по id — то есть пользователю говорили «файл принят,
+   * расхождений нет», хотя он подал файл не той версии.
+   */
+  it('файл исправной, но ДРУГОЙ карты отвергается отдельным исходом', () => {
+    const base = loadBaseProcessMap();
+    const other = JSON.parse(serializeProcessMap(base)) as ProcessMap;
+    other.id = 'karta-drugoy-versii';
+
+    const result = parseImportedOverrides(JSON.stringify(other), base);
+
+    expect(result.status).toBe('other-map');
+    expect(result.status === 'other-map' ? result.mapId : '').toBe('karta-drugoy-versii');
+  });
+
+  /*
+   * И это НЕ «rejected»: сказать «это не файл карты процесса» про исправную
+   * карту процесса — неправда, пользователь пошёл бы искать битый файл.
+   */
+  it('файл другой карты не выдаётся за непригодный', () => {
+    const base = loadBaseProcessMap();
+    const other = JSON.parse(serializeProcessMap(base)) as ProcessMap;
+    other.id = 'karta-drugoy-versii';
+
+    expect(parseImportedOverrides(JSON.stringify(other), base).status).not.toBe('rejected');
   });
 });
 
@@ -373,7 +421,7 @@ describe('сброс правок', () => {
     const base = loadBaseProcessMap();
     const nodeId = firstNodeId(base);
     const exported = serializeProcessMap(mergeOverrides(base, { [nodeId]: { screen: LINK } }));
-    replaceOverrides(parseImportedOverrides(exported, base) ?? {});
+    replaceOverrides(importedOverrides(exported, base));
     expect(readStoredOverrides()).not.toEqual({});
 
     resetOverrides();

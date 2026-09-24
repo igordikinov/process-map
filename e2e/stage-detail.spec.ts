@@ -56,7 +56,7 @@ test('клик по карточке этапа открывает детали�
   await page.goto('/');
   await openStage(page, 0);
 
-  await expect(page.getByText('E2E-процесс')).toBeVisible();
+  await expect(page.getByText('Модуль SNP')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Назад к обзору процесса' })).toBeVisible();
   await expect(page.getByText(/ · .+ · /)).toBeVisible();
   // Обзорных карточек этапов на уровне 2 быть не должно.

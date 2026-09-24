@@ -234,8 +234,16 @@ test.describe('Тулбар и легенда, уровень 1 (обзор)', (
     await page.waitForSelector('.react-flow__node-stage');
     await page.locator('body').click({ position: { x: 2, y: 2 } });
 
-    // Первый Tab по-прежнему уходит на карточку этапа 1 (регрессия M1/M2,
-    // e2e/overview.spec.ts) — тулбар в DOM идёт ПОСЛЕ полотна.
+    /*
+     * Тулбар в DOM идёт ПОСЛЕ полотна, поэтому до карточек он обход не
+     * перехватывает — эта половина проверки прежняя (регрессия M1/M2).
+     * Изменилось другое: перед полотном теперь стоит переключатель версий в
+     * шапке (process-map-0c5.10), то есть карточка этапа 1 — третья остановка,
+     * а не первая. Поимённый порядок закреплён в e2e/overview.spec.ts; здесь
+     * важно лишь, что до карточек мы доходим НЕ через тулбар.
+     */
+    await page.keyboard.press('Tab');
+    await page.keyboard.press('Tab');
     await page.keyboard.press('Tab');
     const first = await page.evaluate(() => document.activeElement?.getAttribute('aria-label'));
     expect(first).toMatch(/^Этап 1: /);
