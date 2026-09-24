@@ -14,6 +14,12 @@ export default defineConfig({
     setupFiles: ['./tests/setup.ts'],
     // e2e/ гоняет Playwright отдельной командой (SPEC §7): его test.beforeEach
     // несовместим с раннером Vitest.
-    exclude: [...configDefaults.exclude, 'e2e/**'],
+    //
+    // .claude/worktrees/ — worktree сессионных агентов: полная копия репозитория,
+    // вложенная в репозиторий. Без этого исключения Vitest заходит внутрь и
+    // собирает оттуда и Playwright-спеки, и вторые копии собственных тестов —
+    // `npm run check` краснел 13 файлами у всякого, у кого worktree существует,
+    // причём по причине, не имеющей отношения к его правкам.
+    exclude: [...configDefaults.exclude, 'e2e/**', '.claude/worktrees/**'],
   },
 });

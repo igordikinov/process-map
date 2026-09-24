@@ -10,3 +10,6 @@ test-results/
 # Python
 __pycache__/
 *.py[cod]
+
+# Worktree сессионных агентов (локальные, в репозиторий не попадают)
+.claude/worktrees/
