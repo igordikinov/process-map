@@ -923,6 +923,20 @@ class SlideReport:
     # и строки реестра. Пусто — навигационных слайдов не читали: у презентаций
     # SNP и MRP их нет, реестр нужен только трёхуровневой карте.
     module_index: list[str] = field(default_factory=list)
+    # Слайд 1 трёхуровневой карты (process-map-9mn.14.3). Пусто — слайда модулей
+    # не читали: у презентаций SNP и MRP его нет, и блоки отчёта по этим полям
+    # печатаются, только если поля заполнены.
+    #   · module_columns — ряды автофигур, колонки ряда модулей и правило, по
+    #     которому опознана каждая коробка (chevron_columns);
+    #   · module_transfers — сторож стрелок и судьба каждой плашки над рядом
+    #     (check_transfer_arrows, classify_transfer);
+    #   · module_lanes — полосы под рядом (lanes_from_slide1);
+    #   · activity_check — сверка списков действий с шагами слайдов детализации
+    #     (reconcile_activity_lists). Только отчёт: в данные списки не идут.
+    module_columns: list[str] = field(default_factory=list)
+    module_transfers: list[str] = field(default_factory=list)
+    module_lanes: list[str] = field(default_factory=list)
+    activity_check: list[str] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         if self.role not in SLIDE_ROLES:
@@ -2111,6 +2125,784 @@ def read_module_index(
             f"слайд {module.nav_slide + 1}, детализация: слайд {module.detail_slide + 1}"
         )
     return modules
+
+
+# --------------------------------------------------------------------------------------
+# Слайд 1 трёхуровневой карты: коробки модулей, передачи, полосы (process-map-9mn.14.3)
+# --------------------------------------------------------------------------------------
+#
+# Слайд 1 колоды «In.Plan L2 Обзор и E2E demo» — это уровень 1 карты целиком:
+# ряд шевронов-модулей, над ним плашки того, что модули передают друг другу, под
+# ним списки действий и полоса FP&A во всю ширину. ЗАМЕР ПО КОЛОДЕ (дюймы,
+# 1in = 914400 EMU):
+#   · шевроны (prstGeom chevron) с текстом — одним рядом, верх 1.74in, слева
+#     направо TPM [41], DP [33], MEIO [23], SNP [24], PS [34], MRP [35]. Коробка
+#     MRP маленькая и сидит ниже соседей (верх 1.81in): разброс верхов в ряду
+#     66751 EMU. Соседние шевроны заходят друг на друга на 0.09–0.13in — так
+#     рисуется «ёлочка», и перекрытие соседей само по себе ничего не значит;
+#   · TPM модулем карты не является: владелец его исключил, и в реестре с
+#     навигационных слайдов его нет. Но колонкой он остаётся — над ним лежат
+#     плашки (см. ModuleColumn);
+#   · ещё два шеврона с текстом лежат НЕ в ряду: DRP/TLB [38] прямо под MRP
+#     (верх в 520222 EMU от верха ряда) и FP&A [44] внизу во всю ширину;
+#   · шесть текстбоксов с заливкой scheme:tx1 над рядом (верх 0.93–1.07in, низ
+#     не ниже 1.60in) — плашки-передачи;
+#   · пять линий со стрелкой на конце (tailEnd), все горизонтальны
+#     (y 1.22–1.24in) и соединяют плашки между собой, а не модули; привязок
+#     stCxn/endCxn нет ни у одной;
+#   · пять текстбоксов без заливки под рядом (верх 3.07in) — списки действий
+#     под TPM, DP, MEIO, SNP и PS; у MRP списка нет;
+#   · две автофигуры circularArrow [45]/[46] без текста между TPM и DP — значок
+#     цикла. В разборе не участвуют: текста у них нет, и линиями они не являются.
+#
+# Здесь только ЧТЕНИЕ слайда: колонки, передачи, полосы и строки отчёта. Узлы и
+# рёбра документа из них собирает построитель (подзадача process-map-9mn.14.6),
+# поэтому результат — простые dataclass'ы, а не куски JSON.
+
+# Для строк отчёта: геометрию слайда человек сверяет в PowerPoint, а тот
+# показывает дюймы, а не EMU.
+EMU_PER_INCH = 914_400
+
+# Правила опознания коробки модуля — по убыванию строгости (match_module_box).
+MODULE_MATCH_RULES = ("exact", "prefix", "code")
+
+# Полоса уровня 1 перекрывает по x не меньше стольких колонок ряда модулей
+# (lanes_from_slide1).
+LANE_MIN_COLUMNS = 3
+
+# Код полосы — в скобках в конце последнего абзаца: «Financial Planning and
+# Analysis (FP&A)». Шире NAV_CODE_RE намеренно: у FP&A в коде амперсанд, и
+# NAV_CODE_RE его не берёт — для модуля это правильно (код модуля становится id
+# как есть), а id полосы собирается из букв кода отдельно.
+LANE_CODE_RE = re.compile(r"\(([^()]+)\)$")
+
+# Русский ли абзац — есть ли в нём хоть одна буква кириллицы (lanes_from_slide1:
+# подпись полосы — «код · РУССКИЙ первый абзац», решение 9mn.31, п. 5).
+CYRILLIC_RE = re.compile(r"[А-Яа-яЁё]")
+
+
+@dataclass(frozen=True)
+class ModuleColumn:
+    """
+    Колонка слайда 1 — шеврон из ряда модулей и его полоса по x.
+
+    Колонкой становится КАЖДЫЙ шеврон ряда, а не только опознанный по реестру.
+    TPM [41] модулем карты не является, но над ним лежат плашки: без его колонки
+    «История продаж и план промо» [37] перекрывала бы одну колонку DP и
+    пропала бы как «плашка над одним модулем», а не стала бы входом DP (решение
+    владельца process-map-9mn.31, п. 8).
+    """
+
+    sid: int
+    # Как колонку назвать в отчёте: код модуля, у колонки вне реестра — код в
+    # скобках с её коробки (TPM) или первый абзац.
+    name: str
+    left: int
+    right: int
+    module: str | None   # id модуля реестра; None — колонка вне реестра (TPM)
+    rule: str | None     # каким правилом опознана (MODULE_MATCH_RULES); None — вне реестра
+
+
+@dataclass(frozen=True)
+class ChevronRow:
+    """Ряд модулей слайда 1: колонки слева направо и вертикальные границы ряда."""
+
+    columns: tuple[ModuleColumn, ...]
+    top: int      # самый высокий верх в ряду: плашки-передачи лежат НАД ним
+    bottom: int   # самый низкий низ в ряду: списки действий и полосы — ПОД ним
+
+    def module_ranges(self) -> dict[str, tuple[int, int]]:
+        """id модуля → (left, right) его колонки в EMU; колонок вне реестра здесь нет."""
+        return {c.module: (c.left, c.right) for c in self.columns if c.module is not None}
+
+
+@dataclass(frozen=True)
+class ModuleTransfer:
+    """
+    Передача со слайда 1: плашка над двумя соседними колонками, источник — левая.
+
+    Одна из сторон бывает None — колонка вне реестра (TPM). Тогда узел
+    создаётся только у модуля в охвате, а ребра между модулями нет: «История
+    продаж и план промо» — вход DP, и только (решение владельца
+    process-map-9mn.31, п. 8). Обе стороны None не бывает: такая плашка
+    пропускается с отчётом (classify_transfer).
+    """
+
+    source: str | None   # id модуля-источника (левая колонка)
+    target: str | None   # id модуля-приёмника (правая колонка)
+    label: str
+    # Коробка плашки на слайде 1 — её slidePosition (подзадача 14.6). КОПИЯ
+    # коробки фигуры, а не она сама (classify_transfer): правка одной не должна
+    # молча менять другую.
+    #
+    # ИЗ ХЕША ИСКЛЮЧЕНА (hash=False). Box — обычный изменяемый dataclass, а
+    # такие не хешируются; с коробкой в хеше hash() передачи — и ModulesSlide,
+    # который их держит, — падал бы TypeError'ом, хотя frozen-класс обязан
+    # хешироваться: построитель вправе класть передачи в множество или ключом
+    # словаря. В сравнении (==) коробка участвует по-прежнему, поэтому равные
+    # передачи имеют равный хеш — хеш просто считается по остальным полям.
+    box: Box = field(hash=False)
+    sid: int
+
+
+@dataclass(frozen=True)
+class ModuleLane:
+    """
+    Полоса уровня 1 (FP&A): не модуль, в цепочку модулей не входит и не
+    кликается (решение владельца process-map-9mn.31, п. 5).
+    """
+
+    id: str      # буквы кода строчными: «FP&A» → 'fpa'
+    title: str   # «код · первый абзац»: «FP&A · Финансовое планирование и анализ»
+    code: str
+    # Копия коробки полосы и вне хеша — по той же причине, что у ModuleTransfer.
+    box: Box = field(hash=False)
+    sid: int
+
+
+@dataclass(frozen=True)
+class ModulesSlide:
+    """
+    Всё, что построитель берёт со слайда 1.
+
+    СПИСКОВ ДЕЙСТВИЙ ЗДЕСЬ НЕТ НАМЕРЕННО: они только сверяются
+    (reconcile_activity_lists) и в данные не идут. У результата нет ни одного
+    поля, за которое их можно было бы взять данными по недосмотру.
+    """
+
+    row: ChevronRow
+    transfers: tuple[ModuleTransfer, ...]
+    lanes: tuple[ModuleLane, ...]
+
+
+def inches(value: float) -> str:
+    """Координата EMU в дюймах для отчёта — два знака, как в панели PowerPoint."""
+    return f"{value / EMU_PER_INCH:.2f}"
+
+
+def module_box_matches(rule: str, paragraphs: Sequence[str], module: ModuleRef) -> bool:
+    """Подходит ли коробка с (нормализованными, непустыми) абзацами к модулю по правилу."""
+    if rule == "exact":
+        return paragraphs[0] == module.title
+    if rule == "prefix":
+        # Граница слова обязательна: без неё «Планирование спроса» узнало бы
+        # себя в «Планирование спросами …» — в чужом названии, которое лишь
+        # начинается с тех же букв.
+        return re.match(re.escape(module.title) + r"(?!\w)", paragraphs[0]) is not None
+    if rule == "code":
+        for paragraph in paragraphs:
+            if paragraph == module.code:
+                return True
+            code = NAV_CODE_RE.search(paragraph)
+            if code is not None and code.group(1) == module.code:
+                return True
+        return False
+    raise ValueError(f"неизвестное правило опознания коробки модуля «{rule}»")
+
+
+def match_module_box(
+    shape: Shape, modules: Sequence[ModuleRef], slide_no: int
+) -> tuple[ModuleRef, str] | None:
+    """
+    Модуль реестра, которому принадлежит коробка слайда 1, и правило, по
+    которому она опознана. None — коробка не модуль реестра (TPM, DRP/TLB, FP&A);
+    что с ней делать, решает вызывающий (chevron_columns).
+
+    ПО ТЕКСТУ, А НЕ ПО ЗАЛИВКЕ. У DP [33] явной заливки нет вовсе: цвет приходит
+    из темы (p:style/a:fillRef idx=1, accent1), и read_fill отдаёт None. Правило,
+    которому нужна заливка, потеряло бы DP.
+
+    ТРИ ПРАВИЛА ПО УБЫВАНИЮ СТРОГОСТИ, первое сработавшее побеждает:
+      · 'exact'  — первый абзац равен названию модуля с навигационного слайда
+                   (так опознаются DP, MEIO и PS);
+      · 'prefix' — первый абзац начинается с названия на границе слова: SNP [24]
+                   подписан «Планирование сети поставок и производства», а
+                   навигация называет его «Планирование сети поставок»;
+      · 'code'   — абзац «(КОД)», абзац, кончающийся «(КОД)», или сам код: MRP
+                   [35] подписан просто «MRP».
+    Сработавшее правило идёт в отчёт: «SNP опознан по префиксу» — это сведение
+    о презентации (слайд 1 и навигация называют модуль по-разному), а не деталь
+    реализации.
+
+    Несколько модулей по ОДНОМУ правилу — остановка: какой из них, по слайду не
+    понять (так бывает, когда название одного модуля — начало названия другого).
+    Более слабые правила после этого не пробуются: разрешать ими
+    неоднозначность значило бы угадывать.
+    """
+    # Нормализация — как в nav_title: для фигур из презентации её уже сделал
+    # read_paragraphs, здесь — для фигур, собранных не из неё.
+    paragraphs = [p for p in (normalize_text(raw) for raw in shape.paragraphs) if p]
+    if not paragraphs:
+        return None
+    for rule in MODULE_MATCH_RULES:
+        found = [module for module in modules if module_box_matches(rule, paragraphs, module)]
+        if len(found) > 1:
+            listed = ", ".join(f"{module.code} «{module.title}»" for module in found)
+            raise SystemExit(
+                f"слайд {slide_no}: коробка [{shape.sid}] «{shape.text[:60]}» по правилу "
+                f"'{rule}' подходит сразу к нескольким модулям — {listed}. Какой из них, по "
+                f"слайду не понять."
+            )
+        if found:
+            return found[0], rule
+    return None
+
+
+def column_name(shape: Shape, module: ModuleRef | None) -> str:
+    """Имя колонки для отчёта: код модуля; вне реестра — код в скобках или первый абзац."""
+    if module is not None:
+        return module.code
+    paragraphs = [p for p in (normalize_text(raw) for raw in shape.paragraphs) if p]
+    for paragraph in reversed(paragraphs):
+        code = NAV_CODE_RE.search(paragraph)
+        if code is not None:
+            return code.group(1)
+    # Без текста колонок не бывает (chevron_columns), но имя для сообщения
+    # обязано найтись и тогда — иначе сломанный фильтр упал бы IndexError'ом,
+    # а не остановкой, называющей фигуру.
+    return f"«{paragraphs[0][:40]}»" if paragraphs else f"[{shape.sid}] без текста"
+
+
+def chevron_columns(
+    shapes: Sequence[Shape], modules: Sequence[ModuleRef], report: SlideReport
+) -> ChevronRow:
+    """
+    Ряд модулей слайда 1 и его колонки.
+
+    Ряды строит group_rows по автофигурам С ТЕКСТОМ, с тем же допуском
+    PHASE_ROW_TOLERANCE, что у полосы фаз, а рядом модулей считается тот, где
+    больше всего коробок опознано по реестру. Не «верхний ряд» и не «все
+    автофигуры»: DRP/TLB [38] — шеврон с текстом прямо под MRP, и стань он
+    колонкой, плашка «Детальный план операций» [32] перекрыла бы три колонки
+    (PS, MRP и DRP/TLB) вместо двух. Допуск на этом слайде: разброс верхов
+    внутри ряда — 66751 EMU (MRP [35] ниже соседей), до ряда DRP/TLB — 520222
+    EMU. Самопроверка зажимает PHASE_ROW_TOLERANCE и этими двумя числами, а не
+    только замерами слайдов 3/5/7/11.
+
+    Колонка — КАЖДАЯ коробка выбранного ряда, опознанная или нет (см.
+    ModuleColumn). Автофигура без текста колонкой не бывает: значок цикла
+    [45]/[46] лежит между TPM и DP в пределах высоты ряда. В колоде его верх на
+    171429 EMU ниже верха ряда, и в ряд он не попал бы и без фильтра, — но
+    держаться на этом совпадении фильтр не должен: стань значок колонкой,
+    плашка [37] перекрыла бы три колонки.
+
+    ОСТАНОВКИ, а не догадки:
+      · ни одна коробка не опознана — ряда модулей на слайде нет;
+      · два ряда с равным наибольшим числом опознанных — какой из них ряд
+        модулей, по слайду не понять;
+      · модуль реестра не нашёлся в ряду — у него не было бы колонки, и
+        передачи к нему пропали бы; нашёлся дважды — колонок было бы две.
+    """
+    slide_no = report.slide_no
+    boxes = [s for s in shapes if s.kind == "auto" and s.has_text]
+    scored = [
+        (row, [match_module_box(s, modules, slide_no) for s in row])
+        for row in group_rows(boxes, PHASE_ROW_TOLERANCE)
+    ]
+    counts = [sum(1 for match in matches if match is not None) for _, matches in scored]
+    # Верх ряда — самый высокий верх в нём, а не у первой фигуры: group_rows
+    # отдаёт ряд отсортированным по левой кромке.
+    tops = [min(s.box.top for s in row) for row, _ in scored]
+    best = max(counts, default=0)
+    if best == 0:
+        raise SystemExit(
+            f"слайд {slide_no}: ни одна автофигура с текстом не опознана как модуль реестра "
+            f"({', '.join(m.code for m in modules)}) — ряда модулей на слайде нет. Тот ли это "
+            f"слайд и тот ли реестр (MapSpec.nav_slides)?"
+        )
+    leaders = [index for index, count in enumerate(counts) if count == best]
+    if len(leaders) > 1:
+        listed = "; ".join(
+            f"верх {inches(tops[index])}in — "
+            + ", ".join(f"[{s.sid}]" for s in scored[index][0])
+            for index in leaders
+        )
+        raise SystemExit(
+            f"слайд {slide_no}: рядов с наибольшим числом опознанных модулей ({best}) "
+            f"несколько: {listed}. Какой из них ряд модулей, по слайду не понять."
+        )
+    chosen = leaders[0]
+    row, matches = scored[chosen]
+
+    found: dict[str, list[int]] = {}
+    for shape, match in zip(row, matches):
+        if match is not None:
+            found.setdefault(match[0].id, []).append(shape.sid)
+    problems = [
+        f"модуль {module.code} «{module.title}» — его коробки в ряду нет"
+        for module in modules
+        if module.id not in found
+    ]
+    problems += [
+        f"модуль {module.code} — коробки {', '.join(f'[{sid}]' for sid in found[module.id])}"
+        for module in modules
+        if len(found.get(module.id, ())) > 1
+    ]
+    if problems:
+        raise SystemExit(
+            f"слайд {slide_no}: ряд модулей (верх {inches(tops[chosen])}in) не сходится с "
+            f"реестром один к одному:\n"
+            + "\n".join(f"  · {item}" for item in problems)
+            + "\nКолонка модуля нужна передачам: без неё передачи к модулю пропали бы, а "
+            "с двумя колонками источник и приёмник зависели бы от того, какую взять."
+        )
+
+    columns = tuple(
+        ModuleColumn(
+            sid=shape.sid,
+            name=column_name(shape, None if match is None else match[0]),
+            left=shape.box.left,
+            right=shape.box.right,
+            module=None if match is None else match[0].id,
+            rule=None if match is None else match[1],
+        )
+        for shape, match in zip(row, matches)
+    )
+
+    for index, ((candidate, _), count) in enumerate(zip(scored, counts)):
+        report.module_columns.append(
+            f"слайд {slide_no}: ряд автофигур с текстом, верх {inches(tops[index])}in — "
+            f"коробок {len(candidate)}, опознано модулей {count}"
+            + (" — РЯД МОДУЛЕЙ" if index == chosen else "")
+        )
+    for column in columns:
+        where = f"[{column.sid}] {column.name}, x {inches(column.left)}–{inches(column.right)}in"
+        report.module_columns.append(
+            f"  {where}: модуль {column.module} по правилу '{column.rule}'"
+            if column.module is not None
+            else f"  {where}: вне реестра модулей — колонка есть, узлов у неё нет"
+        )
+    # Порядок колонок — второй, независимый от навигации свидетель порядка
+    # модулей (process-map-9mn.14): кнопки навигации и абсциссы шевронов
+    # обязаны дать одно и то же. Номер модуля всё равно берётся по кнопкам
+    # (решение 9mn.31, п. 2), поэтому расхождение печатается, а не
+    # останавливает импорт.
+    by_x = [column.name for column in columns if column.module is not None]
+    by_number = [module.code for module in sorted(modules, key=lambda module: module.number)]
+    report.module_columns.append(
+        f"порядок колонок слева направо: {', '.join(column.name for column in columns)}; "
+        f"модули в нём — {', '.join(by_x)}"
+        + (
+            " — совпадает с номерами модулей (кнопками навигации)"
+            if by_x == by_number
+            else f" — РАСХОДИТСЯ с номерами модулей ({', '.join(by_number)})"
+        )
+    )
+    return ChevronRow(
+        columns=columns,
+        top=tops[chosen],
+        bottom=max(shape.box.bottom for shape in row),
+    )
+
+
+def x_overlap(box: Box, left: int, right: int) -> int:
+    """Перекрытие коробки с отрезком [left, right] по x; ноль и меньше — не перекрываются."""
+    return min(box.right, right) - max(box.left, left)
+
+
+def columns_under(box: Box, row: ChevronRow) -> list[int]:
+    """
+    Номера колонок ряда (слева направо), которые коробка перекрывает по x.
+
+    ПОРОГА НЕТ — хватает любого положительного перекрытия, и это замер, а не
+    небрежность: каждая плашка слайда 1 перекрывает свои колонки не меньше чем
+    на 437320 EMU ([36] над PS), а до ближайшей чужой колонки ей не меньше
+    1026606 EMU ([42] до DP). Касание кромкой (перекрытие ровно 0) перекрытием
+    не считается.
+    """
+    return [
+        index
+        for index, column in enumerate(row.columns)
+        if x_overlap(box, column.left, column.right) > 0
+    ]
+
+
+def check_transfer_arrows(shapes: Sequence[Shape], report: SlideReport) -> None:
+    """
+    Сторож прочтения «левая колонка — источник»: КАЖДАЯ линия слайда со
+    стрелкой обязана вести слева направо, иначе остановка.
+
+    Линии слайда 1 концами передач НЕ служат: они соединяют плашки между собой,
+    а не модули, и привязок stCxn/endCxn у них нет ни одной. Источник и
+    приёмник передачи задаёт положение плашки над колонками (classify_transfer),
+    а линии лишь подтверждают, что поток нарисован слева направо. Поэтому здесь
+    сторож, а не разбор: развёрнутая стрелка значит, что прочтение по положению
+    разошлось с рисунком, и собирать передачи задом наперёд молча нельзя.
+
+    «Слева направо» — ровно то, что сказано в задаче (process-map-9mn.14.3):
+    стрелка указывает в сторону +x, то есть смещение от начала к концу по x
+    строго положительно. Наклон НЕ ограничен: диагональ вниз-вправо тоже ведёт
+    слева направо, и останавливать из-за неё весь импорт значило бы добавить
+    к задаче правило, которого в ней нет. Вертикальная линия (смещение по x
+    ноль) и линия справа налево — остановка: в сторону +x они не указывают.
+    На колоде все пять линий горизонтальны, так что граница здесь — не замер,
+    а формулировка задачи.
+
+    Стрелки на обоих концах — тоже остановка, и это не добавка к задаче, а она
+    же: у такой линии одна из двух стрелок указывает в сторону −x, и
+    направления, которое подтверждало бы прочтение, у неё нет. Начало и конец —
+    line_endpoints, с отражениями и поворотом, как везде в импортёре.
+    """
+    arrows = [s for s in shapes if s.kind == "line" and (s.head_arrow or s.tail_arrow)]
+    wrong: list[str] = []
+    for line in arrows:
+        start, end = line_endpoints(line)
+        where = (
+            f"[{line.sid}] из ({inches(start[0])}, {inches(start[1])})in "
+            f"в ({inches(end[0])}, {inches(end[1])})in"
+        )
+        if line.head_arrow and line.tail_arrow:
+            wrong.append(f"{where} — стрелки на обоих концах")
+        elif end[0] - start[0] <= 0:
+            wrong.append(f"{where} — ведёт не слева направо")
+    if wrong:
+        raise SystemExit(
+            f"слайд {report.slide_no}: линии со стрелкой обязаны вести слева направо — "
+            f"передача читается как «левая колонка — источник, правая — приёмник», и "
+            f"стрелки это прочтение подтверждают:\n"
+            + "\n".join(f"  · {item}" for item in wrong)
+            + "\nРисунок разошёлся с прочтением по положению плашек; собирать передачи "
+            "задом наперёд нельзя. Импорт остановлен."
+        )
+    if not arrows:
+        report.module_transfers.append(
+            f"слайд {report.slide_no}: линий со стрелкой нет — направление передач рисунком "
+            f"не подтверждено, передачи прочитаны только по положению плашек"
+        )
+        return
+    bound = sum(1 for s in arrows if s.start_sid is not None or s.end_sid is not None)
+    report.module_transfers.append(
+        f"слайд {report.slide_no}: линий со стрелкой {len(arrows)}, все ведут слева направо "
+        f"(с привязками stCxn/endCxn — {bound}). Концами передач линии не служат: "
+        f"источник и приёмник задаёт положение плашки над колонками, линии только "
+        f"подтверждают направление"
+    )
+
+
+def classify_transfer(shape: Shape, row: ChevronRow, report: SlideReport) -> ModuleTransfer | None:
+    """
+    Плашка над рядом модулей → передача между двумя СОСЕДНИМИ колонками:
+    источник — левая колонка, приёмник — правая.
+
+    ПОЧЕМУ «ЛЕВАЯ — ИСТОЧНИК». Так нарисовано: каждая плашка-передача сидит на
+    стыке двух шевронов, а все стрелки между плашками ведут слева направо. Это
+    прочтение держит сторож check_transfer_arrows: развернись хоть одна стрелка —
+    импорт остановится, а не прочитает передачу задом наперёд.
+
+    ИСХОДЫ:
+      · две соседние колонки, обе в реестре — передача модуль → модуль;
+      · две соседние, одна вне реестра (TPM) — передача с None на месте внешней
+        стороны: узел только у модуля в охвате, ребра модулей нет ([37]
+        «История продаж и план промо» → вход DP, решение 9mn.31, п. 8);
+      · обе вне реестра, одна колонка или ни одной — плашка не импортируется,
+        строка отчёта: [42] «История промо» лежит над одним TPM (решение 9mn.31,
+        п. 8: не импортируется);
+      · три колонки и больше или две несоседние — остановка: передача между
+        кем и кем, по слайду не понять. Несоседние — это когда между двумя
+        задетыми колонками стоит третья, которую плашка не задела (узкая
+        коробка ряда); на колоде такого нет, но молча выбрать «крайние» нельзя.
+    """
+    slide_no = report.slide_no
+    label = shape.text
+    where = f"слайд {slide_no}: [{shape.sid}] «{label}»"
+    hit = columns_under(shape.box, row)
+    names = ", ".join(row.columns[index].name for index in hit)
+    if len(hit) > 2:
+        raise SystemExit(
+            f"{where}: плашка над рядом модулей перекрывает колонок: {len(hit)} ({names}). "
+            f"Передача идёт между ДВУМЯ соседними модулями — между кем и кем эта, по слайду "
+            f"не понять."
+        )
+    if len(hit) == 2 and hit[1] - hit[0] != 1:
+        skipped = ", ".join(row.columns[index].name for index in range(hit[0] + 1, hit[1]))
+        raise SystemExit(
+            f"{where}: плашка перекрывает несоседние колонки {names} — между ними {skipped}, "
+            f"которую она не задевает. Передача идёт между соседними модулями; какую пару "
+            f"имел в виду рисунок, по слайду не понять."
+        )
+    if len(hit) < 2:
+        over = f"над одной колонкой {names}" if hit else "ни над одной колонкой"
+        report.module_transfers.append(
+            f"{where} — {over}: передачи между двумя модулями нет, не импортируется"
+        )
+        return None
+    left, right = row.columns[hit[0]], row.columns[hit[1]]
+    if left.module is None and right.module is None:
+        report.module_transfers.append(
+            f"{where} — над {left.name} и {right.name}, обе колонки вне реестра модулей: "
+            f"не импортируется"
+        )
+        return None
+    if left.module is not None and right.module is not None:
+        effect = "ребро модулей и два узла-передачи"
+    elif left.module is None:
+        effect = f"{left.name} вне реестра: только вход {right.name}, ребра модулей нет"
+    else:
+        effect = f"{right.name} вне реестра: только выход {left.name}, ребра модулей нет"
+    report.module_transfers.append(f"{where}: {left.name} → {right.name} — {effect}")
+    # replace() без полей — копия коробки: передача не делит Box с фигурой.
+    return ModuleTransfer(
+        source=left.module,
+        target=right.module,
+        label=label,
+        box=replace(shape.box),
+        sid=shape.sid,
+    )
+
+
+def lanes_from_slide1(
+    shapes: Sequence[Shape], row: ChevronRow, report: SlideReport
+) -> tuple[ModuleLane, ...]:
+    """
+    Полосы уровня 1: автофигура с текстом ПОД рядом модулей, перекрывающая по x
+    не меньше LANE_MIN_COLUMNS колонок. На колоде такая одна — FP&A [44]
+    (srgb 00B050, 1.14–12.65in по x, задевает все шесть колонок).
+
+    Порог «три колонки» отделяет полосу от коробки под одним модулем и от
+    плашки на стыке двух. Текстбоксы полосами не бывают: список действий SNP
+    [28] под рядом тоже задевает три колонки (MEIO, SNP, PS), но это список, а
+    не полоса.
+
+    id — буквы кода строчными («FP&A» → 'fpa'): амперсанд в id не годится, а
+    выбросить только его, оставив прочие знаки, значило бы выдумывать правило
+    по одному примеру. title — «код · первый абзац» (решение владельца
+    process-map-9mn.31, п. 5): «FP&A · Финансовое планирование и анализ».
+
+    ОСТАНОВКИ:
+      · в конце последнего абзаца нет кода в скобках — полосу не назвать;
+      · абзац один (код есть, а названия над ним нет) — так же, как у заголовка
+        модуля в nav_title;
+      · в первом абзаце нет ни одной кириллической буквы — он не русский.
+        Подпись полосы — «код · РУССКИЙ первый абзац» (решение 9mn.31, п. 5), и
+        английское название, поставленное первым, молча стало бы подписью
+        («FP&A · Financial Planning»). «Русский» здесь — «есть хоть одна буква
+        кириллицы», а не «нет латиницы»: в русских названиях латиница бывает
+        (коды систем, аббревиатуры), и запрещать её значило бы выдумывать
+        правило;
+      · в коде нет латинских букв — не из чего собрать id;
+      · id повторяется или совпадает с id модуля — два узла уровня 1 с одним id.
+    """
+    slide_no = report.slide_no
+    modules = row.module_ranges()
+    lanes: list[ModuleLane] = []
+    below = [s for s in shapes if s.kind == "auto" and s.has_text and s.box.top >= row.bottom]
+    for shape in sorted(below, key=lambda s: (s.box.top, s.box.left, s.sid)):
+        hit = columns_under(shape.box, row)
+        if len(hit) < LANE_MIN_COLUMNS:
+            continue
+        where = f"слайд {slide_no}: полоса [{shape.sid}] «{shape.text[:60]}»"
+        paragraphs = [p for p in (normalize_text(raw) for raw in shape.paragraphs) if p]
+        code = LANE_CODE_RE.search(paragraphs[-1]) if paragraphs else None
+        if code is None:
+            problem = "в конце последнего абзаца нет кода в скобках"
+        elif len(paragraphs) < 2:
+            problem = "абзац один — код есть, а названия над ним нет"
+        elif not CYRILLIC_RE.search(paragraphs[0]):
+            problem = f"первый абзац «{paragraphs[0][:40]}» не русский — кириллицы в нём нет"
+        else:
+            problem = None
+        if problem is not None:
+            raise SystemExit(
+                f"{where}: {problem}. Нужны русское название первым абзацем и код в скобках "
+                f"в конце последнего, например «Financial Planning and Analysis (FP&A)». "
+                f"Подпись полосы — «код · русское название» (решение владельца "
+                f"process-map-9mn.31, п. 5)."
+            )
+        assert code is not None  # problem is None только при найденном коде
+        lane_id = re.sub(r"[^A-Za-z]", "", code.group(1)).lower()
+        if not lane_id:
+            raise SystemExit(
+                f"{where}: в коде «{code.group(1)}» нет латинских букв — не из чего собрать id"
+            )
+        taken = {lane.id for lane in lanes} | set(modules)
+        if lane_id in taken:
+            raise SystemExit(
+                f"{where}: id «{lane_id}» уже занят "
+                + ("модулем" if lane_id in modules else "другой полосой")
+                + " — на уровне 1 было бы два узла с одним id"
+            )
+        lane = ModuleLane(
+            id=lane_id,
+            title=f"{code.group(1)} · {paragraphs[0]}",
+            code=code.group(1),
+            box=replace(shape.box),
+            sid=shape.sid,
+        )
+        lanes.append(lane)
+        report.module_lanes.append(
+            f"слайд {slide_no}: [{shape.sid}] → полоса {lane.id} «{lane.title}», "
+            f"x {inches(shape.box.left)}–{inches(shape.box.right)}in, задевает колонки: "
+            + ", ".join(row.columns[index].name for index in hit)
+        )
+    return tuple(lanes)
+
+
+def activity_lists(
+    shapes: Sequence[Shape], row: ChevronRow
+) -> list[tuple[Shape, ModuleColumn | None]]:
+    """
+    Списки действий слайда 1 — текстбоксы с текстом без заливки под рядом
+    модулей — и колонка, под которой лежит каждый.
+
+    Колонка — с НАИБОЛЬШИМ перекрытием по x, а не любая задетая: списки шире
+    шевронов и задевают соседей (SNP [28] — MEIO и PS на 0.30 и 0.09in при
+    2.42in под своим SNP). None — список не лежит ни под одной колонкой.
+    """
+    found: list[tuple[Shape, ModuleColumn | None]] = []
+    for shape in shapes:
+        if not (
+            shape.kind == "textbox"
+            and shape.has_text
+            and shape.fill in (None, "noFill")
+            and shape.box.top >= row.bottom
+        ):
+            continue
+        overlap, column = max(
+            ((x_overlap(shape.box, c.left, c.right), c) for c in row.columns),
+            key=lambda pair: pair[0],
+        )
+        found.append((shape, column if overlap > 0 else None))
+    return sorted(found, key=lambda pair: (pair[0].box.left, pair[0].sid))
+
+
+def activity_key(text: str) -> str:
+    """Ключ сверки строк: без регистра, ё = е («Расчёт» и «Расчет» в колоде вперемешку)."""
+    return normalize_text(text).casefold().replace("ё", "е")
+
+
+def reconcile_activity_lists(
+    shapes: Sequence[Shape],
+    row: ChevronRow,
+    steps: Mapping[str, Sequence[str]],
+    report: SlideReport,
+) -> None:
+    """
+    Сверка списков действий слайда 1 с подписями шагов слайдов детализации —
+    ТОЛЬКО В ОТЧЁТ. В данные не идёт ничего, и потому функция ничего не
+    возвращает.
+
+    Списки — третье описание того же содержания, и со слайдами детализации они
+    расходятся. Разовый зонд по колоде (шаги — split_tiers слайдов 3/5/7/11):
+    у MEIO нашлось 5 строк из 6, у SNP — 2 из 7, у DP — 1 из 7, у PS — ни
+    одной из 6. Взять списки данными значило бы молча выбрать одно из двух
+    расходящихся описаний. Строка, которой нет среди шагов своего модуля,
+    печатается — и только (process-map-9mn.14).
+
+    `steps` — id модуля → подписи шагов его слайда детализации. Их даёт разбор
+    слайдов детализации (подзадача 14.4), здесь они параметр. Модуль, которого
+    в `steps` нет, не сверяется, и это тоже строка отчёта, а не молчание.
+
+    Сравнение — activity_key: регистр и ё/е различиями не считаются, иначе
+    отчёт засорили бы ложные расхождения.
+    """
+    slide_no = report.slide_no
+    listed: set[str] = set()
+    for shape, column in activity_lists(shapes, row):
+        items = [p for p in (normalize_text(raw) for raw in shape.paragraphs) if p]
+        if column is None:
+            report.activity_check.append(
+                f"слайд {slide_no}: список [{shape.sid}] «{items[0][:40]}» не лежит ни под одной "
+                f"колонкой — не сверяется"
+            )
+            continue
+        head = f"слайд {slide_no}: список [{shape.sid}] под колонкой {column.name}"
+        if column.module is None:
+            report.activity_check.append(
+                f"{head} — колонка вне реестра модулей, не сверяется (строк: {len(items)})"
+            )
+            continue
+        listed.add(column.module)
+        labels = steps.get(column.module)
+        if labels is None:
+            report.activity_check.append(
+                f"{head} — шаги слайда детализации модуля не переданы, не сверяется"
+            )
+            continue
+        known = {activity_key(label) for label in labels}
+        found = sum(1 for item in items if activity_key(item) in known)
+        report.activity_check.append(
+            f"{head}: среди шагов слайда детализации нашлось строк {found} из {len(items)}"
+        )
+        for item in items:
+            report.activity_check.append(
+                f"  = {item}" if activity_key(item) in known else f"  ≠ {item} — среди шагов нет"
+            )
+        mentioned = {activity_key(item) for item in items}
+        unlisted = sum(1 for label in labels if activity_key(label) not in mentioned)
+        report.activity_check.append(
+            f"  шагов слайда детализации, которых в списке нет: {unlisted}"
+        )
+    for column in row.columns:
+        if column.module is not None and column.module not in listed:
+            report.activity_check.append(
+                f"слайд {slide_no}: {column.name} — списка действий под колонкой нет, "
+                f"сверять нечего"
+            )
+
+
+def read_modules_slide(
+    shapes: Sequence[Shape], modules: Sequence[ModuleRef], report: SlideReport
+) -> ModulesSlide:
+    """
+    Слайд 1 целиком: ряд модулей, сторож стрелок, передачи, полосы — и строка
+    отчёта о каждой фигуре с текстом, которая ни во что из этого не попала.
+
+    ПОКА НЕ ВЫЗЫВАЕТСЯ НИКАКИМ ПОСТРОИТЕЛЕМ, как и read_module_index: подключит
+    подзадача process-map-9mn.14.6. До тех пор её держит самопроверка (пункт
+    15), а на настоящей колоде она проверена разовым зондом.
+
+    Порядок шагов не произволен: колонки нужны всем остальным, а сторож стрелок
+    идёт ДО передач — прочтение «левая — источник» проверяется раньше, чем по
+    нему что-то собрано.
+
+    ПЛАШКА-ПЕРЕДАЧА — текстбокс с текстом и ЯВНОЙ заливкой, целиком выше ряда
+    (низ не ниже верха ряда). Заливка — признак плашки: текстбокс без неё над
+    рядом был бы подписью, а не артефактом. Цвет не сравнивается (на колоде у
+    всех шести scheme:tx1): перекрась презентация плашки — передачи не должны
+    пропасть молча. Плашки обходятся слева направо, чтобы отчёт шёл по цепочке.
+
+    Неопознанное (на колоде — DRP/TLB [38]) идёт в report.text_skipped: блок
+    «пропущенные фигуры с текстом» есть у каждого слайда в отчёте. Плейсхолдеры
+    (заголовок слайда, номер страницы) — служебный текст и пропуском не
+    считаются, как и на обзоре SNP (build_overview). Списки действий тоже не
+    пропуск: их сверяет reconcile_activity_lists, отдельно — ей нужны шаги
+    слайдов детализации.
+    """
+    row = chevron_columns(shapes, modules, report)
+    check_transfer_arrows(shapes, report)
+    plates = sorted(
+        (
+            s
+            for s in shapes
+            if s.kind == "textbox"
+            and s.has_text
+            and s.fill not in (None, "noFill")
+            and s.box.bottom <= row.top
+        ),
+        key=lambda s: (s.box.left, s.sid),
+    )
+    transfers = tuple(
+        transfer
+        for transfer in (classify_transfer(plate, row, report) for plate in plates)
+        if transfer is not None
+    )
+    lanes = lanes_from_slide1(shapes, row, report)
+
+    # Учёт — по sid: shape_id уникален в пределах слайда (cNvPr/@id), а колонки
+    # и полосы хранят именно его, а не сами фигуры.
+    accounted = (
+        {column.sid for column in row.columns}
+        | {plate.sid for plate in plates}
+        | {lane.sid for lane in lanes}
+        | {shape.sid for shape, _ in activity_lists(shapes, row)}
+    )
+    for shape in shapes:
+        if shape.kind != "placeholder" and shape.has_text and shape.sid not in accounted:
+            report.text_skipped.append(
+                f"слайд {report.slide_no}: [{shape.sid}] «{shape.text[:80]}» — не колонка ряда "
+                f"модулей, не передача, не полоса и не список действий"
+            )
+    return ModulesSlide(row=row, transfers=transfers, lanes=lanes)
 
 
 def rotate_point(point: tuple[float, float], cx: float, cy: float, degrees: float) -> tuple[float, float]:
@@ -3549,9 +4341,15 @@ def build_three_tier_map(
     понятным сообщением. Почему профиль всё же зарегистрирован, а не оставлен
     неизвестным, — см. PROFILE_BUILDERS.
 
-    Готово для него: реестр модулей с навигационных слайдов — read_module_index
-    (process-map-9mn.14.2). Отсюда он пока НЕ вызывается: заглушка
-    останавливает импорт раньше первого чтения презентации.
+    Готово для него:
+      · реестр модулей с навигационных слайдов — read_module_index
+        (process-map-9mn.14.2);
+      · слайд 1 — read_modules_slide: колонки ряда модулей, передачи между
+        модулями, полосы (FP&A); reconcile_activity_lists — сверка списков
+        действий слайда 1 с шагами детализации, только в отчёт
+        (process-map-9mn.14.3).
+    Отсюда они пока НЕ вызываются: заглушка останавливает импорт раньше первого
+    чтения презентации.
     """
     raise SystemExit(
         f"Профиль «three-tier» (карта «{spec.key}») объявлен, но его построитель ещё "
@@ -3826,6 +4624,28 @@ def isolated_nodes(stage: dict) -> list[dict]:
     return [n for n in stage["nodes"] if n["type"] != "data" and n["id"] not in connected]
 
 
+def print_report_block(title: str, intro: Sequence[str], items: Sequence[str]) -> None:
+    """
+    Блок отчёта, который печатается, ТОЛЬКО если есть что печатать
+    (process-map-9mn.14.3). Пустой список — блока нет вовсе, а не «пусто»:
+    блоки слайда модулей заполняет лишь трёхуровневая карта, и строка «не
+    читали» в отчётах SNP и MRP была бы шумом — к тому же меняющим их
+    побайтово.
+
+    Строка, начатая пробелом, — продолжение предыдущей (колонка ряда, строка
+    списка действий) и печатается с отступом без маркера; остальные — с «·».
+    """
+    if not items:
+        return
+    print("\n" + "=" * 78)
+    print(title)
+    print("=" * 78)
+    for line in intro:
+        print(f"  {line}")
+    for item in items:
+        print(f"      {item.lstrip()}" if item.startswith(" ") else f"    · {item}")
+
+
 def print_report(
     process_map: dict, reports: Sequence[SlideReport], questions: Sequence[str], spec: MapSpec
 ) -> None:
@@ -4039,6 +4859,48 @@ def print_report(
         print("  навигационного слайда (решение владельца process-map-9mn.6).")
         for item in modules:
             print(f"    · {item}")
+
+    # Слайд 1 трёхуровневой карты (process-map-9mn.14.3): четыре блока, и каждый
+    # печатается, только если его заполняли, — как два блока выше. У карт SNP и
+    # MRP слайда модулей нет, и их отчёты обязаны остаться побайтово прежними.
+    print_report_block(
+        "КОРОБКИ МОДУЛЕЙ НА СЛАЙДЕ 1 — КОЛОНКИ РЯДА ШЕВРОНОВ",
+        (
+            "Ряд модулей — ряд автофигур с текстом, где больше всего коробок опознано по",
+            "реестру. Правило опознания: 'exact' — первый абзац равен названию модуля с",
+            "навигационного слайда; 'prefix' — начинается с него на границе слова;",
+            "'code' — абзац «(КОД)», абзац, кончающийся «(КОД)», или сам код. Колонка",
+            "вне реестра (TPM) остаётся колонкой: над ней лежат плашки, но узлов она",
+            "не даёт.",
+        ),
+        [item for report in reports for item in report.module_columns],
+    )
+    print_report_block(
+        "ПЕРЕДАЧИ МЕЖДУ МОДУЛЯМИ — ПЛАШКИ НАД РЯДОМ, ЛЕВАЯ КОЛОНКА → ПРАВАЯ",
+        (
+            "Передача — плашка над двумя соседними колонками; источник — левая.",
+            "Сторона вне реестра не даёт ни узла, ни ребра модулей (решение",
+            "process-map-9mn.31, п. 8); плашка над одной колонкой не импортируется.",
+        ),
+        [item for report in reports for item in report.module_transfers],
+    )
+    print_report_block(
+        "ПОЛОСЫ УРОВНЯ 1 — ПОД РЯДОМ МОДУЛЕЙ, НЕ МОДУЛИ",
+        (
+            f"Полоса — автофигура с текстом под рядом, задевающая {LANE_MIN_COLUMNS} колонки и",
+            "больше. Подпись — «код · название» (решение process-map-9mn.31, п. 5).",
+        ),
+        [item for report in reports for item in report.module_lanes],
+    )
+    print_report_block(
+        "СПИСКИ ДЕЙСТВИЙ СЛАЙДА 1 ПРОТИВ ШАГОВ СЛАЙДОВ ДЕТАЛИЗАЦИИ — ТОЛЬКО СВЕРКА",
+        (
+            "В карту списки не идут: это третье описание того же содержания, и оно",
+            "расходится со слайдами детализации. '=' — строка нашлась среди шагов",
+            "своего модуля, '≠' — не нашлась (регистр и ё/е не различаются).",
+        ),
+        [item for report in reports for item in report.activity_check],
+    )
 
     # Узлы, ставшие интеграциями не по заливке, а по коду системы (7v1).
     promoted = [item for report in reports for item in report.promoted_integrations]
@@ -6069,6 +6931,767 @@ def run_self_test() -> int:
             stop is not None and expected in stop,
             f"nav_slides={nav_slides} не остановил импорт: {stop}",
         )
+
+    # 15. Слайд 1 трёхуровневой карты (read_modules_slide и соседи,
+    #     process-map-9mn.14.3). Фигуры — слайд 1 колоды L2 с ЗАМЕРЕННЫМИ
+    #     координатами в EMU, а не круглыми: на них держатся и допуск ряда
+    #     (разброс верхов 66751, до ряда DRP/TLB 520222), и перекрытия плашек с
+    #     колонками (не меньше 437320 EMU внутри, не меньше 1026606 до чужой).
+    #     Реестр — тот, что read_module_index прочитал в пункте 14 с
+    #     навигационной фикстуры: названия с навигационных слайдов, а не со
+    #     слайда 1, и потому SNP опознаётся только по префиксу.
+    #
+    #     Отступления от колоды — там, где она слишком удобна:
+    #       · значок цикла [46] (автофигура без текста) поставлен ровно на верх
+    #         ряда. В колоде он на 171429 EMU ниже и в ряд не попал бы и так;
+    #         здесь без фильтра has_text он стал бы колонкой между TPM и DP;
+    #       · списки действий укорочены: сверке нужны совпадение, расхождение,
+    #         регистр и ё/е, а не все 33 строки колоды.
+    def _s1(
+        sid: int,
+        kind: str,
+        box: tuple[int, int, int, int],
+        paragraphs: Sequence[str] = (),
+        fill_key: str | None = None,
+        *,
+        tail: bool = False,
+        head: bool = False,
+        flip_h: bool = False,
+    ) -> Shape:
+        return Shape(
+            sid=sid,
+            kind=kind,
+            box=Box(*box),
+            paragraphs=list(paragraphs),
+            fill=None if fill_key is None else fill_key.split("|")[0],
+            flip_h=flip_h,
+            flip_v=False,
+            rot=0.0,
+            head_arrow=head,
+            tail_arrow=tail,
+            fill_key=fill_key,
+        )
+
+    row_top = 1_589_441
+    plate_fill = "scheme:tx1"
+
+    def _slide1(
+        replaced: Mapping[int, Shape] | None = None, extra: Sequence[Shape] = ()
+    ) -> list[Shape]:
+        """Слайд 1 колоды L2; replaced подменяет фигуры по sid, extra добавляет свои."""
+        shapes = [
+            _s1(2, "placeholder", (263_524, 269_812, 11_668_215, 350_298), ["Типовой процесс"]),
+            # Плашки-передачи над рядом: текстбоксы с заливкой scheme:tx1.
+            _s1(
+                42, "textbox", (135_699, 977_218, 1_451_441, 261_610), ["История промо"], plate_fill
+            ),
+            _s1(
+                37,
+                "textbox",
+                (1_753_814, 884_886, 1_451_441, 430_887),
+                ["История продаж и план промо"],
+                plate_fill,
+            ),
+            _s1(
+                21,
+                "textbox",
+                (3_916_680, 848_469, 1_451_442, 577_081),
+                ["Итоговый неограниченный прогноз"],
+                plate_fill,
+            ),
+            _s1(
+                22,
+                "textbox",
+                (6_052_691, 925_127, 1_451_442, 430_887),
+                ["Страховые и целевые запасы"],
+                plate_fill,
+            ),
+            _s1(
+                36,
+                "textbox",
+                (8_214_221, 885_700, 1_400_893, 577_081),
+                ["Итоговый ограниченный прогноз"],
+                plate_fill,
+            ),
+            _s1(
+                32,
+                "textbox",
+                (10_435_079, 918_185, 1_325_252, 430_887),
+                ["Детальный план операций"],
+                plate_fill,
+            ),
+            # Линии между плашками: горизонтальные, стрелка на конце, без привязок.
+            _s1(43, "line", (1_417_945, 1_115_718, 386_184, 0), tail=True),
+            _s1(25, "line", (3_296_920, 1_115_718, 619_760, 0), tail=True),
+            _s1(27, "line", (5_368_122, 1_137_009, 682_158, 0), tail=True),
+            _s1(29, "line", (7_081_971, 1_115_718, 1_232_775, 0), tail=True),
+            _s1(31, "line", (9_483_628, 1_137_009, 1_038_068, 0), tail=True),
+            # Ряд шевронов. У DP заливки нет, как в колоде (цвет из темы), а
+            # абзацы с хвостовыми пробелами — нормализовать обязан сам разбор.
+            _s1(
+                41,
+                "auto",
+                (368_409, row_top, 2_330_154, 1_080_000),
+                ["Планирование промо", "Trade Promotion Management", "(TPM)"],
+                "scheme:accent4",
+            ),
+            _s1(
+                33,
+                "auto",
+                (2_613_746, row_top, 2_282_804, 1_080_000),
+                ["Планирование спроса ", "Demand Planning ", "(DP)"],
+            ),
+            _s1(
+                23,
+                "auto",
+                (4_811_733, row_top, 2_319_892, 1_080_000),
+                [
+                    "Мультиэшелонная оптимизация запасов",
+                    "Multi-Echelon Inventory Optimization",
+                    "(MEIO)",
+                ],
+                "scheme:accent2",
+            ),
+            _s1(
+                24,
+                "auto",
+                (7_046_808, row_top, 2_215_803, 1_080_000),
+                ["Планирование сети поставок и производства", "Supply Network Planning", "(SNP)"],
+                "scheme:accent3",
+            ),
+            _s1(
+                34,
+                "auto",
+                (9_177_794, row_top, 2_260_671, 1_080_000),
+                ["Производственное планирование и графикование", "Production Scheduling", "(PS)"],
+                "scheme:accent4",
+            ),
+            _s1(
+                35, "auto", (11_322_686, row_top + 66_751, 796_162, 343_390), ["MRP"], "srgb:0070C0"
+            ),
+            # Значок цикла — см. шапку пункта.
+            _s1(46, "auto", (2_412_418, row_top, 623_246, 761_545), [], "scheme:accent4"),
+            # DRP/TLB — шеврон с текстом прямо под MRP, следующим рядом.
+            _s1(
+                38,
+                "auto",
+                (11_322_687, row_top + 520_222, 796_162, 511_192),
+                ["DRP", "TLB"],
+                "srgb:0070C0",
+            ),
+            # Списки действий под рядом: текстбоксы без заливки.
+            _s1(
+                40,
+                "textbox",
+                (283_592, 2_808_658, 2_330_154, 2_554_545),
+                ["Формирование промо-планов по клиенту"],
+                "noFill",
+            ),
+            _s1(
+                19,
+                "textbox",
+                (2_559_989, 2_808_658, 2_064_262, 2_092_881),
+                ["Ведение новинки", "Сегментация", "Передача неограниченного прогноза"],
+                "noFill",
+            ),
+            _s1(
+                39,
+                "textbox",
+                (4_631_515, 2_808_658, 2_064_262, 2_400_657),
+                ["Расчёт рекомендаций по уровням запасов"],
+                "noFill",
+            ),
+            _s1(
+                28,
+                "textbox",
+                (6_861_178, 2_808_658, 2_401_433, 3_508_653),
+                ["Supply Review Meeting"],
+                "noFill",
+            ),
+            _s1(
+                30,
+                "textbox",
+                (9_141_509, 2_808_658, 2_401_433, 2_331_407),
+                ["Разузлование потребности"],
+                "noFill",
+            ),
+            # Полоса FP&A во всю ширину.
+            _s1(
+                44,
+                "auto",
+                (1_040_022, 6_067_093, 10_527_527, 500_435),
+                ["Финансовое планирование и анализ", "Financial Planning and Analysis (FP&A)"],
+                "srgb:00B050",
+            ),
+            _s1(26, "placeholder", (11_438_465, 6_419_690, 493_275, 177_960), ["1"]),
+        ]
+        shapes = [(replaced or {}).get(s.sid, s) for s in shapes] + list(extra)
+        return sorted(shapes, key=Shape.sort_key)
+
+    def _slide1_stop(
+        shapes: Sequence[Shape], registry: Sequence[ModuleRef] = modules
+    ) -> str | None:
+        """Сообщение остановки read_modules_slide или None, если она не остановилась."""
+        try:
+            read_modules_slide(shapes, registry, SlideReport(slide_no=1))
+        except SystemExit as error:
+            return str(error)
+        return None
+
+    # Допуск ряда зажат и замерами слайда 1: MRP [35] ниже соседей на 66751,
+    # DRP/TLB [38] — на 520222. Сообщение называет причину, а не последствие.
+    check(
+        66_751 <= PHASE_ROW_TOLERANCE < 520_222,
+        f"PHASE_ROW_TOLERANCE={PHASE_ROW_TOLERANCE} вне отрезка [66751, 520222), замеренного "
+        f"на слайде 1 колоды L2: меньше нижней границы — MRP [35] выпадает из ряда модулей, "
+        f"не меньше верхней — DRP/TLB [38] слипается с рядом и становится колонкой",
+    )
+    dp_fixture = next(s for s in _slide1() if s.sid == 33)
+    check(
+        dp_fixture.fill is None and dp_fixture.fill_key is None,
+        "фикстура: у DP [33] не должно быть заливки, как в колоде — иначе проверять нечего",
+    )
+
+    s1_report = SlideReport(slide_no=1)
+    # Фигуры — в переменной, а не прямо в вызове: ниже проверяется, что
+    # передачи и полосы держат КОПИИ их коробок, а не сами коробки.
+    slide1_shapes = _slide1()
+    try:
+        slide1 = read_modules_slide(slide1_shapes, modules, s1_report)
+    except SystemExit as error:
+        check(False, f"слайд 1 не прочитан с исправной фикстуры: {error}")
+        raise  # недостижимо: check(False, …) уже остановил самопроверку
+
+    # Колонки: TPM — колонка вне реестра; DP без заливки опознан; SNP — ТОЛЬКО
+    # по префиксу (с кодом «(SNP)» в коробке, как в колоде: без префиксного
+    # правила он прошёл бы по коду, и здесь это видно по имени правила); MRP —
+    # по коду; DRP/TLB и значок цикла колонками не стали.
+    check(
+        [(c.sid, c.name, c.module, c.rule) for c in slide1.row.columns]
+        == [
+            (41, "TPM", None, None),
+            (33, "DP", "dp", "exact"),
+            (23, "MEIO", "meio", "exact"),
+            (24, "SNP", "snp", "prefix"),
+            (34, "PS", "ps", "exact"),
+            (35, "MRP", "mrp", "code"),
+        ],
+        f"колонки ряда модулей: {[(c.sid, c.name, c.module, c.rule) for c in slide1.row.columns]}",
+    )
+    check(
+        slide1.row.module_ranges()
+        == {
+            "dp": (2_613_746, 4_896_550),
+            "meio": (4_811_733, 7_131_625),
+            "snp": (7_046_808, 9_262_611),
+            "ps": (9_177_794, 11_438_465),
+            "mrp": (11_322_686, 12_118_848),
+        },
+        f"полосы модулей по x: {slide1.row.module_ranges()}",
+    )
+    # Границы ряда по вертикали — то, по чему построитель и сам разбор отделяют
+    # «над рядом» (плашки) от «под рядом» (списки, полосы). Верх — САМЫЙ ВЫСОКИЙ
+    # верх в ряду (MRP [35] ниже соседей на 66751 — верх ряда не его), низ —
+    # САМЫЙ НИЗКИЙ низ (MRP короче соседей — низ ряда тоже не его). На колоде
+    # перепутанные min/max колонок, передач и полос не меняют, поэтому границы
+    # проверяются сами, и в отчёте тоже: человек сверяет их в PowerPoint.
+    check(
+        (slide1.row.top, slide1.row.bottom) == (row_top, row_top + 1_080_000),
+        f"границы ряда модулей по y: {slide1.row.top}–{slide1.row.bottom}, ждали "
+        f"{row_top}–{row_top + 1_080_000}",
+    )
+    check(
+        any(
+            "верх 1.74in — коробок 6, опознано модулей 5 — РЯД МОДУЛЕЙ" in line
+            for line in s1_report.module_columns
+        ),
+        f"отчёт о ряде модулей не называет его верх 1.74in: {s1_report.module_columns}",
+    )
+    # Передачи: источник — левая колонка. [37] над TPM и DP — ТОЛЬКО вход DP;
+    # [32] над PS и MRP, хотя под MRP ниже лежит DRP/TLB; [42] над одним TPM не
+    # импортируется.
+    check(
+        [(t.sid, t.source, t.target, t.label) for t in slide1.transfers]
+        == [
+            (37, None, "dp", "История продаж и план промо"),
+            (21, "dp", "meio", "Итоговый неограниченный прогноз"),
+            (22, "meio", "snp", "Страховые и целевые запасы"),
+            (36, "snp", "ps", "Итоговый ограниченный прогноз"),
+            (32, "ps", "mrp", "Детальный план операций"),
+        ],
+        f"передачи слайда 1: {[(t.sid, t.source, t.target, t.label) for t in slide1.transfers]}",
+    )
+    check(
+        slide1.transfers[0].box == Box(1_753_814, 884_886, 1_451_441, 430_887),
+        f"коробка передачи — не коробка плашки на слайде 1: {slide1.transfers[0].box}",
+    )
+    # Коробки передач и полос — копии: у фигуры и у результата не один Box на
+    # двоих. И результат хешируется — frozen-классы обязаны, а Box сам по себе
+    # не хешируется (см. ModuleTransfer.box). hash(ModulesSlide) задевает всё
+    # сразу: ряд, передачи, полосы.
+    shape_boxes = {id(s.box) for s in slide1_shapes}
+    check(
+        not any(id(t.box) in shape_boxes for t in slide1.transfers)
+        and not any(id(lane.box) in shape_boxes for lane in slide1.lanes),
+        "передача или полоса держит коробку фигуры, а не её копию",
+    )
+    try:
+        hash(slide1)
+    except TypeError as error:
+        check(False, f"результат слайда 1 не хешируется: {error}")
+    check(
+        "слайд 1: [42] «История промо» — над одной колонкой TPM: передачи между двумя модулями "
+        "нет, не импортируется" in s1_report.module_transfers,
+        f"пропуск [42] не попал в отчёт: {s1_report.module_transfers}",
+    )
+    check(
+        any(
+            "[37] «История продаж и план промо»: TPM → DP — TPM вне реестра: только вход DP" in line
+            for line in s1_report.module_transfers
+        ),
+        f"вход DP от колонки вне реестра не описан в отчёте: {s1_report.module_transfers}",
+    )
+    check(
+        any(
+            "линий со стрелкой 5, все ведут слева направо" in line
+            for line in s1_report.module_transfers
+        ),
+        f"сторож стрелок не отчитался: {s1_report.module_transfers}",
+    )
+    check(
+        [(lane.id, lane.title, lane.code, lane.sid) for lane in slide1.lanes]
+        == [("fpa", "FP&A · Финансовое планирование и анализ", "FP&A", 44)],
+        f"полосы слайда 1: {[(lane.id, lane.title, lane.sid) for lane in slide1.lanes]}",
+    )
+    # Неопознанное — ровно DRP/TLB, и оно на виду. Плейсхолдеры (заголовок,
+    # номер страницы) и списки действий пропуском не считаются.
+    check(
+        len(s1_report.text_skipped) == 1 and "[38] «DRP TLB»" in s1_report.text_skipped[0],
+        f"пропущенные фигуры слайда 1: {s1_report.text_skipped}",
+    )
+    columns_text = "\n".join(s1_report.module_columns)
+    check(
+        "модуль snp по правилу 'prefix'" in columns_text
+        and "опознано модулей 5 — РЯД МОДУЛЕЙ" in columns_text
+        and "совпадает с номерами модулей" in columns_text,
+        f"отчёт о колонках не называет правило, ряд или порядок: {s1_report.module_columns}",
+    )
+    # Ряд модулей — тот, где опознано больше всего, а не верхний; плашка — с
+    # заливкой, а не любой текстбокс над рядом, и ЦЕЛИКОМ ВЫШЕ ряда, а не любой
+    # текстбокс с заливкой. На колоде эти правила совпадают с более простыми
+    # (верхний ряд автофигур с текстом и есть ряд модулей, текстбоксов без
+    # заливки над рядом нет, текстбоксов с заливкой в ряду и под ним — тоже),
+    # поэтому различие видно только на добавленных фигурах:
+    #   · [95] шапка-автофигура над рядом;
+    #   · [96] подпись без заливки над рядом;
+    #   · [97] текстбокс С ЗАЛИВКОЙ под рядом над DP и MEIO — без условия «выше
+    #     ряда» он стал бы передачей DP → MEIO, выдуманной из подписи внизу;
+    #   · [98] текстбокс с заливкой, залезающий на ряд (верх выше верха ряда,
+    #     низ ниже) над MEIO и SNP — «целиком выше» значит по НИЖНЕЙ кромке, а
+    #     не по верхней: плашка, наползшая на шевроны, передачей не считается.
+    header = _s1(95, "auto", (0, 400_000, 3 * inch, 300_000), ["Шапка слайда"], "scheme:accent1")
+    caption = _s1(96, "textbox", (4_500_000, 1_300_000, 600_000, 200_000), ["Подпись"], "noFill")
+    filled_below = _s1(
+        97, "textbox", (4 * inch, 6 * inch, int(2.5 * inch), 300_000), ["Сноска внизу"], plate_fill
+    )
+    straddling = _s1(
+        98,
+        "textbox",
+        (int(6.5 * inch), row_top - 200_000, 2 * inch, 400_000),
+        ["На ряду"],
+        plate_fill,
+    )
+    extras_report = SlideReport(slide_no=1)
+    try:
+        with_extras = read_modules_slide(
+            _slide1(extra=[header, caption, filled_below, straddling]), modules, extras_report
+        )
+    except SystemExit as error:
+        check(False, f"фигуры вне правил плашки и ряда сломали разбор слайда 1: {error}")
+        raise  # недостижимо
+    check(
+        [c.sid for c in with_extras.row.columns] == [41, 33, 23, 24, 34, 35]
+        and [t.sid for t in with_extras.transfers] == [37, 21, 22, 36, 32],
+        f"шапка, подпись, плашка под рядом или на ряду изменили колонки или передачи: "
+        f"{[c.sid for c in with_extras.row.columns]}, {[t.sid for t in with_extras.transfers]}",
+    )
+    check(
+        sorted(line.split("]")[0] for line in extras_report.text_skipped)
+        == ["слайд 1: [38", "слайд 1: [95", "слайд 1: [96", "слайд 1: [97", "слайд 1: [98"],
+        f"шапка, подпись, плашки под рядом и на ряду не попали в пропущенные фигуры: "
+        f"{extras_report.text_skipped}",
+    )
+
+    # Списков действий у результата нет — ни одного поля, за которое их можно
+    # было бы взять данными.
+    check(
+        set(ModulesSlide.__dataclass_fields__) == {"row", "transfers", "lanes"},
+        f"у ModulesSlide появились поля: {set(ModulesSlide.__dataclass_fields__)}",
+    )
+
+    # match_module_box поодиночке. SNP БЕЗ абзаца с кодом: опознать его может
+    # только префикс. Граница слова: «Планирование спросами» — не DP.
+    def _box(*paragraphs: str) -> Shape:
+        return _s1(99, "auto", (0, 0, inch, inch), paragraphs)
+
+    by_prefix = match_module_box(_box("Планирование сети поставок и производства"), modules, 1)
+    check(
+        by_prefix is not None and (by_prefix[0].code, by_prefix[1]) == ("SNP", "prefix"),
+        f"SNP без кода не опознан по префиксу: {by_prefix}",
+    )
+    check(
+        match_module_box(_box("Планирование спросами клиентов"), modules, 1) is None,
+        "префикс опознан без границы слова: «Планирование спросами» принято за DP",
+    )
+    for text in ("MRP", "(MRP)", "Material Requirement Planning (MRP)"):
+        by_code = match_module_box(_box(text), modules, 1)
+        check(
+            by_code is not None and (by_code[0].code, by_code[1]) == ("MRP", "code"),
+            f"коробка «{text}» не опознана как MRP по коду: {by_code}",
+        )
+    check(
+        match_module_box(_box("Планирование промо", "(TPM)"), modules, 1) is None,
+        "TPM опознан модулем реестра",
+    )
+    # Несколько модулей по одному правилу — остановка, а не «первый попавшийся»:
+    # название «Планирование сети» — начало названия SNP.
+    def _extra_module(code: str, title: str) -> ModuleRef:
+        return ModuleRef(code=code, title=title, number=6, nav_slide=11, detail_slide=12)
+
+    try:
+        match_module_box(
+            _box("Планирование сети поставок и производства"),
+            (*modules, _extra_module("SN", "Планирование сети")),
+            1,
+        )
+    except SystemExit as error:
+        check(
+            "по правилу 'prefix' подходит сразу к нескольким модулям" in str(error)
+            and "SNP" in str(error)
+            and "SN «Планирование сети»" in str(error),
+            f"неоднозначное опознание остановило импорт не тем сообщением: {error}",
+        )
+    else:
+        check(False, "коробка, подходящая к двум модулям по префиксу, не остановила импорт")
+
+    # Сторож стрелок: любая стрелка, не ведущая слева направо, — остановка.
+    # Идёт через read_modules_slide целиком: сторож, которого перестали звать,
+    # краснеет здесь так же, как сломанное условие.
+    # «Слева направо» — смещение по x строго больше нуля, и только оно: у
+    # вертикальной линии оно ноль (остановка — граница «> 0», а не «≥ 0»), а
+    # крутая диагональ вниз-вправо проходит (наклон задача не ограничивает).
+    line_box = (3_296_920, 1_115_718, 619_760, 0)
+    steep_box = (3_296_920, 800_000, 100_000, 619_760)
+    vertical_box = (3_296_920, 800_000, 0, 619_760)
+    for variant, what in (
+        (_s1(25, "line", line_box, tail=True, flip_h=True), "отражённая линия (справа налево)"),
+        (_s1(25, "line", line_box, head=True), "стрелка на начале линии (справа налево)"),
+        (_s1(25, "line", line_box, head=True, tail=True), "стрелки на обоих концах"),
+        (_s1(25, "line", steep_box, tail=True, flip_h=True), "диагональ справа налево (вниз)"),
+        (_s1(25, "line", vertical_box, tail=True), "вертикальная линия"),
+    ):
+        stop = _slide1_stop(_slide1(replaced={25: variant}))
+        check(
+            stop is not None
+            and "линии со стрелкой обязаны вести слева направо" in stop
+            and "[25]" in stop,
+            f"{what} не остановила импорт: {stop}",
+        )
+    steep_report = SlideReport(slide_no=1)
+    stop = None
+    try:
+        read_modules_slide(
+            _slide1(replaced={25: _s1(25, "line", steep_box, tail=True)}), modules, steep_report
+        )
+    except SystemExit as error:
+        stop = str(error)
+    check(
+        stop is None
+        and any(
+            "линий со стрелкой 5, все ведут слева направо" in line
+            for line in steep_report.module_transfers
+        ),
+        f"крутая диагональ вниз-вправо (в сторону +x) остановила импорт или не попала в "
+        f"отчёт: {stop or steep_report.module_transfers}",
+    )
+    # Линий со стрелкой нет вовсе — не остановка, но и не молчание: направление
+    # передач рисунком не подтверждено, и отчёт обязан это сказать.
+    no_arrows_report = SlideReport(slide_no=1)
+    read_modules_slide([s for s in _slide1() if s.kind != "line"], modules, no_arrows_report)
+    check(
+        "слайд 1: линий со стрелкой нет — направление передач рисунком не подтверждено, "
+        "передачи прочитаны только по положению плашек" in no_arrows_report.module_transfers,
+        f"слайд без линий со стрелкой не описан в отчёте: {no_arrows_report.module_transfers}",
+    )
+
+    # Плашка над тремя колонками (DP, MEIO, SNP) — остановка.
+    wide_box = (3_916_680, 848_469, 3_500_000, 577_081)
+    wide = _s1(90, "textbox", wide_box, ["Широкая плашка"], plate_fill)
+    stop = _slide1_stop(_slide1(extra=[wide]))
+    check(
+        stop is not None and "[90]" in stop and "перекрывает колонок: 3 (DP, MEIO, SNP)" in stop,
+        f"плашка над тремя колонками не остановила импорт: {stop}",
+    )
+    # Плашка ни над одной колонкой — пропуск с отчётом, не остановка.
+    far_report = SlideReport(slide_no=1)
+    far = _s1(94, "textbox", (12_150_000, 900_000, 40_000, 400_000), ["Сбоку"], plate_fill)
+    read_modules_slide(_slide1(extra=[far]), modules, far_report)
+    check(
+        any("[94] «Сбоку» — ни над одной колонкой" in line for line in far_report.module_transfers),
+        f"плашка вне колонок не попала в отчёт: {far_report.module_transfers}",
+    )
+
+    # Несоседние колонки: узкая колонка X между DP и MEIO, которую плашка не
+    # задевает. На колоде так не бывает, поэтому ряд собран руками.
+    def _column(sid: int, name: str, left: float, right: float, module: str | None) -> ModuleColumn:
+        """Колонка по краям в дюймах."""
+        return ModuleColumn(
+            sid=sid,
+            name=name,
+            left=round(left * inch),
+            right=round(right * inch),
+            module=module,
+            rule=None if module is None else "exact",
+        )
+
+    def _row(*columns: ModuleColumn) -> ChevronRow:
+        return ChevronRow(columns=columns, top=inch, bottom=2 * inch)
+
+    def _plate(left: float, right: float) -> Shape:
+        """Плашка [91] по краям в дюймах."""
+        box = (round(left * inch), 0, round((right - left) * inch), inch // 2)
+        return _s1(91, "textbox", box, ["Плашка"], plate_fill)
+
+    gap_row = _row(
+        _column(1, "DP", 0, 3, "dp"),
+        _column(2, "X", 0.5, 1, None),
+        _column(3, "MEIO", 2.5, 6, "meio"),
+    )
+    try:
+        classify_transfer(_plate(2, 4), gap_row, SlideReport(slide_no=1))
+    except SystemExit as error:
+        check(
+            "[91]" in str(error) and "несоседние колонки DP, MEIO — между ними X" in str(error),
+            f"несоседние колонки остановили импорт не тем сообщением: {error}",
+        )
+    else:
+        check(False, "плашка над несоседними колонками не остановила импорт")
+    # Обе колонки вне реестра — пропуск; вне реестра правая — только выход.
+    outside_report = SlideReport(slide_no=1)
+    outside_row = _row(
+        _column(1, "TPM", 0, 2, None), _column(2, "XYZ", 2, 4, None), _column(3, "DP", 4, 6, "dp")
+    )
+    check(
+        classify_transfer(_plate(1, 3), outside_row, outside_report) is None
+        and any(
+            "обе колонки вне реестра модулей" in line for line in outside_report.module_transfers
+        ),
+        f"плашка над двумя колонками вне реестра не пропущена с отчётом: "
+        f"{outside_report.module_transfers}",
+    )
+    output_only = classify_transfer(
+        _plate(1, 3),
+        _row(_column(1, "DP", 0, 2, "dp"), _column(2, "XYZ", 2, 4, None)),
+        SlideReport(slide_no=1),
+    )
+    check(
+        output_only is not None and (output_only.source, output_only.target) == ("dp", None),
+        f"плашка над DP и колонкой вне реестра — не только выход DP: {output_only}",
+    )
+    # Касание кромкой — не перекрытие (columns_under). Фигуры, притянутые в
+    # PowerPoint к направляющим, встают кромка в кромку сплошь и рядом: с
+    # «≥ 0» плашка над DP и MEIO, коснувшаяся SNP, остановила бы импорт (три
+    # колонки), а плашка над одним MEIO, коснувшаяся SNP, стала бы передачей.
+    # Колонки DP и MEIO перекрываются, как шевроны на слайде; MEIO и SNP —
+    # кромка в кромку.
+    touch_row = _row(
+        _column(1, "DP", 0, 2, "dp"),
+        _column(2, "MEIO", 1.5, 4, "meio"),
+        _column(3, "SNP", 4, 6, "snp"),
+    )
+    try:
+        touching = classify_transfer(_plate(1, 4), touch_row, SlideReport(slide_no=1))
+    except SystemExit as error:
+        touching = None
+        check(False, f"плашка, коснувшаяся SNP кромкой, остановила импорт: {error}")
+    check(
+        touching is not None and (touching.source, touching.target) == ("dp", "meio"),
+        f"плашка над DP и MEIO, коснувшаяся SNP кромкой, — не передача DP → MEIO: {touching}",
+    )
+    touch_report = SlideReport(slide_no=1)
+    single = classify_transfer(_plate(2.5, 4), touch_row, touch_report)
+    check(
+        single is None
+        and touch_report.module_transfers
+        == [
+            "слайд 1: [91] «Плашка» — над одной колонкой MEIO: передачи между двумя модулями "
+            "нет, не импортируется"
+        ],
+        f"плашка над одним MEIO, коснувшаяся SNP кромкой, стала передачей или ушла в отчёт "
+        f"не так: {single}, {touch_report.module_transfers}",
+    )
+
+    # Ряд модулей не сходится с реестром: модуля нет в ряду; модуль в ряду
+    # дважды; не опознано ничего; два ряда поровну.
+    stop = _slide1_stop(_slide1(), (*modules, _extra_module("XX", "Нет такого модуля")))
+    check(
+        stop is not None and "модуль XX «Нет такого модуля» — его коробки в ряду нет" in stop,
+        f"модуль реестра без коробки в ряду не остановил импорт: {stop}",
+    )
+    second_dp = _s1(93, "auto", (12_200_000, row_top, 500_000, 500_000), ["(DP)"])
+    stop = _slide1_stop(_slide1(extra=[second_dp]))
+    check(
+        stop is not None and "модуль DP — коробки [33], [93]" in stop,
+        f"две коробки одного модуля не остановили импорт: {stop}",
+    )
+    stop = _slide1_stop([s for s in _slide1() if s.sid in (41, 38, 44)])
+    check(
+        stop is not None and "ни одна автофигура с текстом не опознана как модуль реестра" in stop,
+        f"слайд без коробок модулей не остановил импорт: {stop}",
+    )
+    stop = _slide1_stop(
+        [
+            _s1(1, "auto", (0, row_top, inch, inch), ["(DP)"]),
+            _s1(2, "auto", (0, row_top + 2 * inch, inch, inch), ["(MEIO)"]),
+        ],
+        modules[:2],
+    )
+    check(
+        stop is not None and "рядов с наибольшим числом опознанных модулей (1) несколько" in stop,
+        f"два ряда поровну не остановили импорт: {stop}",
+    )
+
+    # Полоса: без кода — остановка; над двумя колонками — не полоса, а пропуск
+    # с отчётом; id, занятый модулем, — остановка.
+    fpa_box = (1_040_022, 6_067_093, 10_527_527, 500_435)
+
+    def _lane(box: tuple[int, int, int, int], *paragraphs: str) -> dict[int, Shape]:
+        """Подмена полосы FP&A [44] для _slide1."""
+        return {44: _s1(44, "auto", box, paragraphs, "srgb:00B050")}
+
+    # Каждая остановка — своей причиной в сообщении: одна общая фраза «нужны
+    # название и код» пропустила бы подмену одного условия другим.
+    for lane_paragraphs, reason, what in (
+        (
+            ("Финансовое планирование и анализ",),
+            "в конце последнего абзаца нет кода в скобках",
+            "полоса без кода",
+        ),
+        (
+            ("Financial Planning and Analysis (FP&A)",),
+            "абзац один — код есть, а названия над ним нет",
+            "полоса одним абзацем с кодом",
+        ),
+        # Английское название первым: подписью стало бы «FP&A · Financial
+        # Planning», а подпись — код и РУССКОЕ название (решение 9mn.31, п. 5).
+        (
+            ("Financial Planning", "Financial Planning and Analysis (FP&A)"),
+            "первый абзац «Financial Planning» не русский",
+            "полоса с английским первым абзацем",
+        ),
+        (
+            ("Финансовое планирование и анализ", "Financial Planning and Analysis (1&2)"),
+            "в коде «1&2» нет латинских букв",
+            "полоса с кодом без букв",
+        ),
+    ):
+        stop = _slide1_stop(_slide1(replaced=_lane(fpa_box, *lane_paragraphs)))
+        check(
+            stop is not None and "полоса [44]" in stop and reason in stop,
+            f"{what} не остановила импорт или остановила не той причиной: {stop}",
+        )
+    narrow_report = SlideReport(slide_no=1)
+    narrow = read_modules_slide(
+        _slide1(
+            replaced=_lane(
+                (4_000_000, 6_067_093, 1_500_000, 500_435),
+                "Финансовое планирование и анализ",
+                "Financial Planning and Analysis (FP&A)",
+            )
+        ),
+        modules,
+        narrow_report,
+    )
+    check(
+        not narrow.lanes and any("[44]" in line for line in narrow_report.text_skipped),
+        f"автофигура под двумя колонками стала полосой или пропала молча: "
+        f"{narrow.lanes}, {narrow_report.text_skipped}",
+    )
+    stop = _slide1_stop(
+        _slide1(replaced=_lane(fpa_box, "Планирование спроса", "Demand Planning (DP)"))
+    )
+    check(
+        stop is not None and "id «dp» уже занят модулем" in stop,
+        f"полоса с id модуля не остановила импорт: {stop}",
+    )
+
+    # Сверка списков действий — только отчёт. Шаги MEIO записаны через «е», а
+    # список — через «ё»; шаги DP — заглавными: ни то, ни другое не расхождение.
+    # Шагов PS не передано: сверка обязана сказать это, а не промолчать. Список
+    # [92] правее MRP не лежит ни под одной колонкой: его нельзя приписать
+    # ближайшей колонке (MRP) — перекрытия с ней нет, есть только расстояние.
+    stray_list = _s1(92, "textbox", (12_140_000, 2_808_658, 50_000, 300_000), ["Заметка"], "noFill")
+    reconcile_activity_lists(
+        _slide1(extra=[stray_list]),
+        slide1.row,
+        {
+            "dp": ["Ведение новинки", "СЕГМЕНТАЦИЯ", "Обогащение прогноза"],
+            "meio": ["Расчет рекомендаций по уровням запасов"],
+            "snp": ["Первичный анализ спроса и выявление проблем"],
+        },
+        s1_report,
+    )
+    found_in_steps = "среди шагов слайда детализации нашлось строк"
+    unlisted_steps = "  шагов слайда детализации, которых в списке нет:"
+    check(
+        s1_report.activity_check
+        == [
+            "слайд 1: список [40] под колонкой TPM — колонка вне реестра модулей, "
+            "не сверяется (строк: 1)",
+            f"слайд 1: список [19] под колонкой DP: {found_in_steps} 2 из 3",
+            "  = Ведение новинки",
+            "  = Сегментация",
+            "  ≠ Передача неограниченного прогноза — среди шагов нет",
+            f"{unlisted_steps} 1",
+            f"слайд 1: список [39] под колонкой MEIO: {found_in_steps} 1 из 1",
+            "  = Расчёт рекомендаций по уровням запасов",
+            f"{unlisted_steps} 0",
+            f"слайд 1: список [28] под колонкой SNP: {found_in_steps} 0 из 1",
+            "  ≠ Supply Review Meeting — среди шагов нет",
+            f"{unlisted_steps} 1",
+            "слайд 1: список [30] под колонкой PS — шаги слайда детализации модуля не "
+            "переданы, не сверяется",
+            "слайд 1: список [92] «Заметка» не лежит ни под одной колонкой — не сверяется",
+            "слайд 1: MRP — списка действий под колонкой нет, сверять нечего",
+        ],
+        f"сверка списков действий: {s1_report.activity_check}",
+    )
+
+    # Печать: четыре блока слайда 1 есть в отчёте, где их заполняли, и нет в
+    # отчёте, где слайда модулей не читали (отчёты SNP и MRP — побайтово прежние).
+    slide1_headers = (
+        "КОРОБКИ МОДУЛЕЙ НА СЛАЙДЕ 1",
+        "ПЕРЕДАЧИ МЕЖДУ МОДУЛЯМИ",
+        "ПОЛОСЫ УРОВНЯ 1",
+        "СПИСКИ ДЕЙСТВИЙ СЛАЙДА 1",
+    )
+    slide1_text = _report_text(s1_report)
+    lines = (
+        s1_report.module_columns
+        + s1_report.module_transfers
+        + s1_report.module_lanes
+        + s1_report.activity_check
+    )
+    check(
+        all(header in slide1_text for header in slide1_headers)
+        and all(line.strip() in slide1_text for line in lines),
+        "print_report не напечатал блоки слайда 1",
+    )
+    empty_text = _report_text(SlideReport(slide_no=2))
+    check(
+        not any(header in empty_text for header in slide1_headers),
+        "блоки слайда 1 напечатаны в отчёте, где слайда модулей не читали",
+    )
 
     print(f"САМОПРОВЕРКА ПРОЙДЕНА: {checks} проверок")
     return 0
