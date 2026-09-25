@@ -15,6 +15,7 @@ import {
   START_ZOOM_MAX,
   START_ZOOM_MIN,
 } from '../src/components/StageDetail';
+import { STEP_HANDLE } from '../src/components/nodes/StepNode';
 import { loadBaseProcessMap } from '../src/data/loader';
 import type { ProcessNode, Stage } from '../src/data/schema';
 import { ru } from '../src/i18n/ru';
@@ -687,11 +688,84 @@ describe('buildStageGraph: подробность', () => {
     expect(flowNode?.data).toEqual({ node: detail });
   });
 
-  it('ребро «шаг → подробность» рисуется ребром данных', () => {
+  it('принимает события мыши, как остальные карточки (process-map-9mn.36)', () => {
+    // Подробность стала кнопкой выбора узла. Ловушка React Flow 12: обёртке
+    // узла с выключенными флагами интерактивности ставится pointer-events:
+    // none, и до кнопки не дошёл бы ни клик, ни hover. Проверка на реальных
+    // этапах выше подробности не видит — на snp их нет.
+    const flowNode = buildStageGraph(stage).nodes.find((node) => node.id === detail.id);
+    expect(flowNode?.style?.pointerEvents).toBe('all');
+    expect(flowNode?.draggable).toBe(false);
+    expect(flowNode?.connectable).toBe(false);
+  });
+
+  /*
+   * Выноска (process-map-9mn.36). До этой задачи ребро «шаг → подробность»
+   * рисовалось ребром данных — по kind: 'data' из модели — и получало хэндлы
+   * по общему правилу, то есть справа налево, как поток. Теперь тип и хэндлы
+   * решает ТИП ЦЕЛИ. Хэндлы проверяются на обоих концах связи: здесь — что
+   * ребро их просит, в tests/detailNode.test.tsx — что они у узлов в DOM есть.
+   */
+  it('ребро «шаг → подробность» — выноска снизу хоста к верху подробности', () => {
     const incoming = stage.edges.filter((edge) => edge.target === detail.id);
     expect(incoming).toHaveLength(1);
+    // Предпосылка: в модели это ребро данных, то есть тип выноски выбран НЕ
+    // по kind — иначе проверка ниже ничего бы не доказывала про правило.
+    expect(incoming[0]?.kind).toBe('data');
     const flowEdge = buildStageGraph(stage).edges.find((edge) => edge.id === incoming[0]?.id);
-    expect(flowEdge?.type).toBe('data');
+    expect(flowEdge?.type).toBe('detailLink');
+    expect(flowEdge?.sourceHandle).toBe(STEP_HANDLE.bottom);
+    expect(flowEdge?.targetHandle).toBe(STEP_HANDLE.top);
+  });
+
+  it('хэндлы выноски не зависят от того, где dagre поставил подробность', () => {
+    // Сегодня подробность стоит рангом правее шага (место под шагом —
+    // process-map-9mn.26). Общее правило выбирало хэндлы по положению концов:
+    // правее — right → left, левее — bottom → top. Выноска обязана идти снизу
+    // вверх при ЛЮБОМ положении: сдвиг подробности левее и правее хоста не
+    // меняет ничего.
+    const hostId = stage.edges.find((edge) => edge.target === detail.id)?.source;
+    const host = stage.nodes.find((node) => node.id === hostId);
+    if (host === undefined) {
+      throw new Error('у подробности фикстуры нет хоста');
+    }
+    for (const dx of [-400, 0, 400]) {
+      const moved: Stage = {
+        ...stage,
+        nodes: stage.nodes.map((node) =>
+          node.id === detail.id
+            ? { ...node, position: { x: host.position.x + dx, y: node.position.y } }
+            : node,
+        ),
+      };
+      const flowEdge = buildStageGraph(moved).edges.find((edge) => edge.target === detail.id);
+      expect(flowEdge?.sourceHandle, `сдвиг ${dx}`).toBe(STEP_HANDLE.bottom);
+      expect(flowEdge?.targetHandle, `сдвиг ${dx}`).toBe(STEP_HANDLE.top);
+    }
+  });
+
+  it('прочие рёбра данных выноской не становятся', () => {
+    // Правило — по типу ЦЕЛИ: ребро kind: 'data' к узлу, который не
+    // подробность, остаётся ребром данных (process-map-70e.6).
+    const { edges } = buildStageGraph(stage);
+    for (const edge of stage.edges) {
+      const target = stage.nodes.find((node) => node.id === edge.target);
+      const flowEdge = edges.find((candidate) => candidate.id === edge.id);
+      expect(flowEdge?.type === 'detailLink', edge.id).toBe(target?.type === 'detail');
+    }
+  });
+
+  it('габарит раскладки включает всю высоту подробности', () => {
+    // bounds считается по sizeOf: без своей ветки для подробности её
+    // прямоугольник был бы 318×52, и стартовый вид (initialViewport) срезал
+    // бы низ блока текста у края полотна.
+    const { bounds } = buildStageGraph(stage);
+    expect(bounds.y + bounds.height).toBeGreaterThanOrEqual(
+      detail.position.y + DETAIL_NODE_SIZE.height,
+    );
+    expect(bounds.x + bounds.width).toBeGreaterThanOrEqual(
+      detail.position.x + DETAIL_NODE_SIZE.width,
+    );
   });
 
   it('не попадает в колонки входов и выходов', () => {

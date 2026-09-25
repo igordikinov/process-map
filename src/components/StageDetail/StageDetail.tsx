@@ -14,7 +14,14 @@ import { useProcessMap } from '../../hooks/useProcessMap';
 import { ru } from '../../i18n/ru';
 import { useProcessStore } from '../../store/useProcessStore';
 import { Breadcrumbs } from '../Breadcrumbs';
-import { DataEdge, EdgeMarkers, IntegrationEdge, ProcessEdge, ProcessInnerEdge } from '../edges';
+import {
+  DataEdge,
+  DetailLinkEdge,
+  EdgeMarkers,
+  IntegrationEdge,
+  ProcessEdge,
+  ProcessInnerEdge,
+} from '../edges';
 import { Legend } from '../Legend';
 import { NodeDrawer } from '../NodeDrawer';
 import { DataNode } from '../nodes/DataNode';
@@ -30,6 +37,7 @@ import {
   MAX_ZOOM,
   MIN_ZOOM,
   TOOLBAR_FIT_VIEW_OPTIONS,
+  type StageEdgeType,
 } from './stageGraph';
 import { StartViewport } from './StartViewport';
 import styles from './StageDetail.module.css';
@@ -54,9 +62,9 @@ const nodeTypes = {
   gateway: StepNode,
   event: StepNode,
   subprocess: StepNode,
-  // Подробность под шагом (process-map-9mn.32): пока заглушка, оформление —
-  // process-map-9mn.36. Без регистрации React Flow нарисовал бы узел по
-  // умолчанию, и тип из схемы молча выглядел бы чужим.
+  // Подробность под шагом (process-map-9mn.32, оформление — process-map-9mn.36).
+  // Без регистрации React Flow нарисовал бы узел по умолчанию, и тип из схемы
+  // молча выглядел бы чужим (сторож — tests/detailNode.test.tsx).
   detail: DetailNode,
 } satisfies NodeTypes;
 
@@ -70,7 +78,13 @@ const edgeTypes = {
   // Ребро к артефакту данных (process-map-70e.6). Значение kind: 'data' было в
   // схеме с самого начала, но не отрисовывалось ничем.
   data: DataEdge,
-} satisfies EdgeTypes;
+  // Выноска «шаг → подробность» (process-map-9mn.36): тонкая линия без стрелки.
+  detailLink: DetailLinkEdge,
+  // Вторая половина `satisfies` — полнота: каждый тип, который выдаёт
+  // buildStageGraph (StageEdgeType), обязан иметь здесь компонент. Забытая
+  // регистрация роняет tsc, а не рисует ребро кривой React Flow по умолчанию
+  // (почему иначе это заметить нечем — у StageEdgeType в stageGraph.ts).
+} satisfies EdgeTypes & Record<StageEdgeType, EdgeTypes[string]>;
 
 /** Убирает ссылку-attribution React Flow — обоснование в Overview.tsx (4hv). */
 const proOptions = { hideAttribution: true };

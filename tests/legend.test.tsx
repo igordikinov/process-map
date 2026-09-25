@@ -7,6 +7,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { Legend } from '../src/components/Legend';
+import { loadBaseProcessMap } from '../src/data/loader';
 import { ru } from '../src/i18n/ru';
 import { createInitialState, useProcessStore } from '../src/store/useProcessStore';
 
@@ -73,6 +74,36 @@ describe('Legend: уровень 2 (детализация, currentStageId за�
     expect(screen.getByText(ru.legend.data)).toBeInTheDocument();
     expect(screen.getByText(ru.legend.warning)).toBeInTheDocument();
   });
+});
+
+/*
+ * Пункт «Подробность» условный (process-map-9mn.36): на настоящей странице
+ * юнит-тестов (snp) подробностей нет ни на одном этапе, и легенда не должна их
+ * обещать. Обратная сторона — пункт появляется там, где подробность есть, —
+ * проверяется на странице из фикстур в tests/detailNode.test.tsx: здесь
+ * данные не подменяются.
+ */
+describe('Legend: «Подробность» на настоящей странице', () => {
+  const map = loadBaseProcessMap();
+
+  it('предпосылка: на странице юнит-тестов подробностей нет', () => {
+    // Иначе зелёное ниже могло бы значить, что пункт просто не дошёл до
+    // рендера, а не что условие работает.
+    expect(map.stages.flatMap((stage) => stage.nodes).some((node) => node.type === 'detail')).toBe(
+      false,
+    );
+  });
+
+  it.each(map.stages.map((stage) => [stage.number, stage.id] as const))(
+    'этап %i: пункта «Подробность» нет',
+    (_number, stageId) => {
+      useProcessStore.getState().navigateToStage(stageId);
+      render(<Legend />);
+
+      expect(screen.getByText(ru.legend.step)).toBeInTheDocument();
+      expect(screen.queryByText(ru.legend.detail)).not.toBeInTheDocument();
+    },
+  );
 });
 
 describe('Legend: общее', () => {

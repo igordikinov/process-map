@@ -5,6 +5,7 @@ export {
   type ProcessInnerEdgeType,
 } from './ProcessEdge';
 export { DataEdge, type DataEdgeType } from './DataEdge';
+export { DetailLinkEdge, type DetailLinkEdgeType } from './DetailLinkEdge';
 export { IntegrationEdge, type IntegrationEdgeType } from './IntegrationEdge';
 export { EdgeMarkers, type EdgeMarkersProps } from './EdgeMarkers';
 export { useEdgeMarkers, type EdgeMarkerIds } from './edgeMarkerContext';
