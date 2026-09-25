@@ -10,6 +10,24 @@
 // Подсветка выбранного узла уже реализована в самих карточках
 // (StepCard.module.css/.selected, DataNode.module.css/.selected) — здесь
 // только затемнение полотна.
+//
+// ПОДРОБНОСТЬ (NodeType 'detail', process-map-9mn.37). Её подпись — не
+// название, а весь текст блока со слайда: до 7 абзацев, склеенных через \n
+// (SPEC §3). Заголовок панели клампится до двух строк, и пока в него шла вся
+// подпись, целиком подробность была видна только на полотне и во всплывающей
+// подсказке. Поэтому у подробности (и только у неё):
+//   · заголовок — ПЕРВЫЙ абзац, под тем же клампом. Он же имя диалога
+//     (aria-labelledby): короткое имя осмысленнее простыни из семи абзацев;
+//   · тело панели начинается с ПОЛНОГО текста — абзацами (white-space:
+//     pre-line), без клампа и без многоточия (.detailText);
+//   · правило «не повторять впустую»: полный текст в теле не показывается,
+//     только когда заголовок уже показывает его весь — абзац один И вёрстка
+//     доказала, что кламп его не срезал (useFitsWithoutClamp.ts). Абзацев
+//     больше одного — тело есть всегда: заголовок по построению не весь
+//     текст. Один абзац, но длинный — тело тоже есть, иначе хвост абзаца
+//     срезался бы клампом ровно так же, как до этой задачи.
+// У шага, данных и прочих типов заголовок — вся подпись, тела с текстом нет:
+// их панель не меняется ни DOM, ни стилями.
 import { useCallback, useEffect, useId, useMemo, useRef, type KeyboardEvent } from 'react';
 import { iconUrl } from '../../assets/icons';
 import type { ProcessNode } from '../../data/schema';
@@ -19,6 +37,7 @@ import { openScreen } from '../../utils/url';
 import { descriptionParagraphs } from './descriptionParagraphs';
 import { ScreenLinkSection } from './ScreenLinkSection';
 import { Section } from './Section';
+import { useFitsWithoutClamp } from './useFitsWithoutClamp';
 import styles from './NodeDrawer.module.css';
 
 const CLOSE_ICON = iconUrl('x-close');
@@ -61,7 +80,21 @@ interface NodeDrawerPanelProps {
 
 function NodeDrawerPanel({ node, onClose }: NodeDrawerPanelProps) {
   const panelRef = useRef<HTMLDivElement>(null);
+  const titleRef = useRef<HTMLHeadingElement>(null);
   const titleId = useId();
+
+  // Абзацы подписи — только у подробности (см. шапку файла); у остальных
+  // типов пустой список, и заголовок ниже — вся подпись, как было. Абзацы
+  // режет тот же descriptionParagraphs, что и описание: те же \n, та же
+  // обрезка пробелов и пустых строк.
+  const detailParagraphs = useMemo(
+    () => (node.type === 'detail' ? descriptionParagraphs(node.label) : []),
+    [node.type, node.label],
+  );
+  const heading = detailParagraphs[0] ?? node.label;
+  const headingIsWholeText = detailParagraphs.length === 1;
+  const headingFits = useFitsWithoutClamp(titleRef, headingIsWholeText, heading);
+  const showDetailText = detailParagraphs.length > 1 || (headingIsWholeText && !headingFits);
 
   const paragraphs = useMemo(() => descriptionParagraphs(node.description), [node.description]);
   const hasDescription = paragraphs.length > 0;
@@ -163,8 +196,11 @@ function NodeDrawerPanel({ node, onClose }: NodeDrawerPanelProps) {
         onKeyDown={handleKeyDown}
       >
         <header className={styles.header}>
-          <h2 className={styles.title} id={titleId} title={node.label}>
-            {node.label}
+          {/* title — полный текст ЗАГОЛОВКА, срезанного клампом. У подробности
+              это первый абзац, а не вся подпись: вся подпись и так стоит в
+              теле панели, когда заголовок её не вмещает. */}
+          <h2 ref={titleRef} className={styles.title} id={titleId} title={heading}>
+            {heading}
           </h2>
           <button
             type="button"
@@ -184,6 +220,17 @@ function NodeDrawerPanel({ node, onClose }: NodeDrawerPanelProps) {
             не сообщает, а только удлиняет панель. Исключение — «Экран в
             системе»: у неё есть осмысленное пустое состояние. */}
         <div className={styles.content}>
+          {/* Полный текст подробности — первым: это продолжение заголовка, а
+              не секция SPEC §4.3, и до описания узла (если оно у подробности
+              появится) читается раньше него. Подпись — дословно, с \n между
+              абзацами: ровно тот же текст, что на карточке полотна
+              (DetailNode.tsx), и та же модель пробелов (pre-line). */}
+          {showDetailText && (
+            <p className={styles.detailText} data-testid="drawer-detail-text">
+              {node.label}
+            </p>
+          )}
+
           {hasDescription && (
             <div className={styles.description}>
               {paragraphs.map((paragraph, index) => (

@@ -48,6 +48,8 @@ const DETAIL = vi.hoisted(() => ({
   // tests/data.test.ts вешает подробность туда же.
   stepId: 'stage-1-node-1',
   label: 'Первый абзац\nВторой абзац',
+  /** Заголовок панели подробности — первый абзац подписи (process-map-9mn.37). */
+  heading: 'Первый абзац',
 }));
 
 vi.mock('@map/process.json', async () => {
@@ -131,9 +133,15 @@ describe('DetailNode на полотне уровня 2', () => {
     fireEvent.click(screen.getByRole('button', { name: ru.detailNode.ariaLabel(DETAIL.label) }));
 
     expect(useProcessStore.getState().selectedNodeId).toBe(DETAIL.id);
-    // Панель — та же, что у любого узла (SPEC §4.3): заголовок — подпись узла.
-    const dialog = screen.getByRole('dialog');
-    expect(within(dialog).getByRole('heading', { level: 2 }).textContent).toBe(DETAIL.label);
+    // Панель — та же, что у любого узла (SPEC §4.3), но заголовок у
+    // подробности — первый абзац подписи, а вся подпись дословно, с \n, — в
+    // теле панели (process-map-9mn.37). Раньше здесь утверждалось «заголовок
+    // равен всей подписи», и это и был дефект: заголовок клампится до двух
+    // строк. Подробные проверки правила — tests/nodeDrawerDetail.test.tsx;
+    // здесь — что панель, открытая КЛИКОМ ПО КАРТОЧКЕ на полотне, та же.
+    const dialog = screen.getByRole('dialog', { name: DETAIL.heading });
+    expect(within(dialog).getByRole('heading', { level: 2 }).textContent).toBe(DETAIL.heading);
+    expect(within(dialog).getByTestId('drawer-detail-text').textContent).toBe(DETAIL.label);
     // Выбранная карточка помечена так же, как шаг и данные.
     expect(
       screen.getByRole('button', { name: ru.detailNode.ariaLabel(DETAIL.label) }),

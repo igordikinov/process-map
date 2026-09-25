@@ -50,7 +50,9 @@
   gap: var(--scp-spacing-sm);
 }
 
-/* Заголовок панели — label узла; подписи длинные, поэтому максимум 2 строки. */
+/* Заголовок панели — label узла; подписи длинные, поэтому максимум 2 строки.
+   У подробности (NodeType 'detail') — только первый абзац подписи, а весь
+   текст стоит в теле панели, .detailText ниже (process-map-9mn.37). */
 .title {
   overflow: hidden;
   margin: 0;
@@ -99,6 +101,36 @@
   flex-direction: column;
   padding: var(--scp-spacing-lg) var(--scp-spacing-2xl);
   gap: var(--pm-space-14);
+}
+
+/*
+ * Полный текст подробности (NodeType 'detail', process-map-9mn.37).
+ *
+ * ПРАВИЛО КЛАССА: НИ ОДНОГО СПОСОБА ОБРЕЗАТЬ ТЕКСТ — ни line-clamp, ни
+ * text-overflow, ни overflow: hidden/clip/auto, ни white-space: nowrap. Этот
+ * блок и есть то место, где подробность видна целиком: заголовок над ним
+ * клампится до двух строк. Длинному тексту хватает прокрутки самой панели
+ * (.content, overflow-y: auto) — она вне полотна, колесо мыши здесь не
+ * забирает React Flow. Сторож — tests/nodeDrawerDetail.test.tsx: он сверяет
+ * классы, реально стоящие на блоке, с правилами этого файла.
+ *
+ * pre-line — абзацы склеены через \n (SPEC §3), как на карточке полотна
+ * (DetailNode.module.css .text): переносы остаются строками, длинные строки
+ * переносятся по ширине. overflow-wrap: break-word — слово длиннее ширины
+ * панели (код, адрес) переносится, а не раздвигает панель вбок.
+ *
+ * Цвет — основной, а не --scp-content-sub-primary описания: это не пояснение
+ * к узлу, а его собственный текст, продолжение заголовка. Кегль и
+ * интерлиньяж — те же, что у абзацев описания (.paragraph): текст панели
+ * читается одним ритмом.
+ */
+.detailText {
+  margin: 0;
+  color: var(--scp-content-primary);
+  font-size: var(--pm-font-size-12-5);
+  line-height: var(--scp-line-height-18);
+  overflow-wrap: break-word;
+  white-space: pre-line;
 }
 
 .description {
