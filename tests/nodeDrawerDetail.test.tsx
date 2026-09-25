@@ -315,9 +315,18 @@ describe('Подробность из одного абзаца: тело не �
     const fontsLoaded = stubFonts();
     stubHeadingLayout({ scrollHeight: 48, clientHeight: 48 });
     openDrawer(nodeOfType('detail', SINGLE_PARAGRAPH));
+    // Микрозадачи после монтирования выполнены ДО смены раскладки: иначе
+    // перемер «когда-нибудь потом» (скажем, Promise.resolve().then вместо
+    // готовности шрифтов) застал бы уже новую раскладку и прошёл бы здесь.
+    await act(async () => {});
     expect(detailText()).toBeNull();
 
     stubHeadingLayout({ scrollHeight: 72, clientHeight: 48 });
+    // Контроль: вёрстка сменилась, но события нет — перемера нет. Значит,
+    // появление текста ниже вызвано именно готовностью шрифтов.
+    await act(async () => {});
+    expect(detailText()).toBeNull();
+
     await act(fontsLoaded);
     expect(detailText()?.textContent).toBe(SINGLE_PARAGRAPH);
   });
