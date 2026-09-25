@@ -21,6 +21,7 @@ import {
   SystemCodeSchema,
   validateIntegrity,
 } from '../src/data/schema.ts';
+import { fixtureAltVersion } from './fixtures/pageMocks.ts';
 import { buildSampleProcessMap } from './fixtures/sample-process.ts';
 import {
   buildThreeLevelProcessMap,
@@ -514,11 +515,17 @@ describe('LaneSchema и полосы уровня 1', () => {
     expect(() => ProcessMapSchema.parse(map)).toThrow();
   });
 
-  it('отвергает id полосы вне kebab-case: он живёт в одном пространстве с id модулей', () => {
-    const map = buildThreeLevelProcessMap();
-    map.lanes[0]!.id = 'FP&A';
-    expect(() => ProcessMapSchema.parse(map)).toThrow();
-  });
+  it.each(['FP&A', 'fp&a', 'fpa_1', 'fpa!'])(
+    'отвергает id полосы вне kebab-case (%s): он живёт в одном пространстве с id модулей',
+    (id) => {
+      // Строчные с недопустимым ХВОСТОМ — не для полноты: 'FP&A' отсекается
+      // уже первым символом, и без них регулярное выражение без якоря $
+      // проходило тест (проверено мутацией).
+      const map = buildThreeLevelProcessMap();
+      map.lanes[0]!.id = id;
+      expect(() => ProcessMapSchema.parse(map)).toThrow();
+    },
+  );
 
   it('находит полосы в карте без модулей', () => {
     // Полоса рисуется только на экране модулей, а у двухуровневой карты его
@@ -530,6 +537,17 @@ describe('LaneSchema и полосы уровня 1', () => {
     expect(validateIntegrity(map)).toEqual([
       'Полосы уровня 1 заданы, а модулей нет: полосы рисуются только на экране модулей ("fpa")',
     ]);
+  });
+
+  it('вторая версия страницы из фикстур, лишённая модулей, лишена и полос', () => {
+    // fixtureAltVersion — трёхуровневая фикстура, у которой убраны modules и
+    // moduleEdges. Полосы фикстура приносит всегда, и оставь их там, страница
+    // из фикстур (tests/deepLinkVersion.test.tsx, refitViewport.test.tsx)
+    // работала бы на документе, который проверка выше отвергает. Сами те тесты
+    // validateIntegrity не зовут, поэтому сторож здесь.
+    const map = ProcessMapSchema.parse(fixtureAltVersion());
+    expect('lanes' in map).toBe(false);
+    expect(validateIntegrity(map)).toEqual([]);
   });
 
   it('находит дублирующийся id полосы', () => {
@@ -637,6 +655,23 @@ describe('validateIntegrity: код системы, совпадающий с id
     ]);
   });
 
+  it('находит систему ExternalIO на стороне outputs, совпадающую с id модуля', () => {
+    // Отдельный тест на outputs — тот же урок 9mn.11: пока проверялись только
+    // inputs, проверка без stage.outputs проходила весь корпус (проверено
+    // мутацией), и выходной свимлейн 'MRP' рядом с модулем 'mrp' проезжал бы.
+    const map = parseThreeLevelProcessMap();
+    map.stages[1]!.outputs.push({
+      system: SYSTEM_COLLIDING_WITH_MODULE,
+      label: 'Согласованный прогноз в MRP',
+      stage: map.stages[1]!.number,
+      direction: 'out',
+    });
+    expect(validateIntegrity(map)).toEqual([
+      'Этап "stage-2": внешняя система "MRP" («Согласованный прогноз в MRP») совпадает ' +
+        'с id модуля "mrp" без учёта регистра',
+    ]);
+  });
+
   it('в карте без модулей тот же свимлейн законен', () => {
     // У snp и mrp свимлейны DP, PS, IO, MRP — настоящие соседние системы.
     // Проверка обязана включаться наличием модулей, иначе задача сломала бы
@@ -690,6 +725,20 @@ describe('validateIntegrity: этапы модуля — сплошной бло
       'Блоки этапов модулей идут не в порядке номеров модулей: модуль ' +
         `"${MODULE_SUPPLY}" (№1) доходит до этапа 5, ` +
         `а модуль "${MODULE_DEMAND}" (№2) начинается с этапа 1`,
+    ]);
+  });
+
+  it('чужой этап, заявленный вторым модулем, не входит в его блок', () => {
+    // Модуль mrp (№4, этапы 6–7) заявляет ещё и stage-5, которым уже владеет
+    // SNP. Это одна ошибка — «заявлен сразу двумя модулями», — и названа она
+    // поимённо. Пересчитай блок mrp с чужим этапом — {5, 6, 7}, — и к ней
+    // добавилась бы ложная строка «блоки не в порядке»: SNP доходит до 5, а mrp
+    // «начинается» с 5. Поэтому сравнивается ВЕСЬ список, а не наличие строки.
+    const map = parseThreeLevelProcessMap();
+    const production = map.modules.find((module) => module.id === MODULE_PRODUCTION)!;
+    production.stageIds = ['stage-5', ...production.stageIds];
+    expect(validateIntegrity(map)).toEqual([
+      `Этап "stage-5" заявлен сразу двумя модулями: "${MODULE_SUPPLY}" и "${MODULE_PRODUCTION}"`,
     ]);
   });
 

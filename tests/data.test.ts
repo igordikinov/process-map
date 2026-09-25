@@ -310,6 +310,26 @@ describe('validateIntegrity: подробность висит ровно на �
     );
   });
 
+  // Правило — «источник НЕ 'data' и НЕ 'detail'», а не «источник — 'step'».
+  // Опора выше вешает подробность только на шаг, и ужесточение до «только
+  // шаг» проходило весь корпус (проверено мутацией), хотя отвергло бы законные
+  // данные: на слайдах L2 подробность бывает и под интеграцией («Передача в
+  // NRM …»). Поэтому каждый прочий тип узла потока — своим случаем.
+  it.each(['integration', 'warning', 'gateway', 'event', 'subprocess'] as const)(
+    'подробность под узлом потока типа %s законна',
+    (type) => {
+      const { map, stage } = mapWithDetail();
+      const source = stage.nodes.find((node) => node.id === STEP_ID);
+      if (source === undefined) {
+        throw new Error('шаг пропал из фикстуры');
+      }
+      source.type = type;
+      // Через схему: перетипированный узел обязан остаться валидным узлом, иначе
+      // пустой список проблем ничего бы не доказывал.
+      expect(validateIntegrity(ProcessMapSchema.parse(map))).toEqual([]);
+    },
+  );
+
   it('находит подробность без входящего ребра', () => {
     const { map, stage } = mapWithDetail();
     stage.edges = stage.edges.filter((edge) => edge.id !== DETAIL_EDGE_ID);
