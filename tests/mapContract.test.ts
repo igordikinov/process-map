@@ -181,26 +181,39 @@ describe.each(maps)('контракт карты: $id', ({ id, source }) => {
     // process-map-9mn.16 и 9mn.17). Разойдись они с документом — экран потерял
     // бы этап молча, и ни одна проверка схемы этого бы не увидела.
     //
-    // На двухуровневой карте тест проходит вхолостую, и это здесь уже принятый
-    // приём: файл обязан оставаться верным для КАЖДОЙ карты, а не только для
-    // той, под которую написан. Сколько уровней у конкретной карты, этот файл
-    // НЕ утверждает: иначе каждая новая карта требовала бы правки здесь, вопреки
+    // НА ДВУХУРОВНЕВОЙ КАРТЕ ТЕСТ ПРОХОДИТ ВХОЛОСТУЮ, а сегодня двухуровневые
+    // все карты. Это решение задачи process-map-9mn.10, принятое сознательно, а
+    // не приём, унаследованный файлом: прецедента здесь не было, наоборот —
+    // файл от холостых прогонов активно защищается (тест «в src/data/ найдена
+    // хотя бы одна карта» выше). Принято потому, что файл обязан оставаться
+    // верным для КАЖДОЙ карты, а сколько уровней у конкретной карты, он НЕ
+    // утверждает: иначе каждая новая карта требовала бы правки здесь, вопреки
     // обещанию шапки. Факт «карта двухуровневая» записан в тестах содержания
     // самих карт (tests/snp/content.test.ts, tests/mrp/content.test.ts,
-    // tests/bpmnMapFile.test.ts).
+    // tests/bpmnMapFile.test.ts). Работать тест начнёт сам, без правок, на
+    // первой трёхуровневой карте (inplan, задача process-map-9mn.15).
     if (!hasModules(map)) {
       return;
     }
 
-    const covered = map.modules.flatMap((module) =>
-      stagesOfModule(map, module.id).map((stage) => stage.id),
+    // Владелец каждого этапа глазами уровня 2: модуль, в чьём stagesOfModule
+    // этап оказался.
+    const claims = map.modules.flatMap((module) =>
+      stagesOfModule(map, module.id).map((stage) => [stage.id, module.id] as const),
     );
-    expect(new Set(covered).size, 'этап попал сразу в два модуля').toBe(covered.length);
-    expect([...covered].sort(), 'модули покрывают не ровно map.stages').toEqual(
+    const ownerOf = new Map(claims);
+    expect(ownerOf.size, 'этап попал сразу в два модуля').toBe(claims.length);
+    expect([...ownerOf.keys()].sort(), 'модули покрывают не ровно map.stages').toEqual(
       map.stages.map((stage) => stage.id).sort(),
     );
     for (const stage of map.stages) {
-      expect(moduleOfStage(map, stage.id)?.id, `этап "${stage.id}" без владельца`).toBeDefined();
+      // ТОТ ЖЕ владелец, а не «хоть какой-то»: moduleOfStage, отдающий любой
+      // модуль (скажем, всегда первый), прошёл бы проверку на существование, а
+      // крошки уровня 3 повели бы в чужой модуль — туда, где этапа нет.
+      expect(
+        moduleOfStage(map, stage.id)?.id,
+        `этап "${stage.id}": moduleOfStage расходится со stagesOfModule`,
+      ).toBe(ownerOf.get(stage.id));
     }
   });
 });
