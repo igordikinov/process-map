@@ -19,10 +19,48 @@ import { ProcessMapSchema, type ProcessMap } from '../src/data/schema.ts';
 import { refreshProcessMap } from '../src/hooks/useProcessMap';
 import { createInitialState, useProcessStore } from '../src/store/useProcessStore';
 import { buildSampleProcessMap } from './fixtures/sample-process.ts';
+import {
+  MODULE_STAGE_IDS,
+  MODULE_SUPPLY,
+  parseThreeLevelProcessMap,
+} from './fixtures/three-level-process.ts';
 
 /** Карта, «пришедшая из файла»: свой id, свои узлы. */
 function importedMap(id = 'process-model-l0'): ProcessMap {
   return ProcessMapSchema.parse({ ...buildSampleProcessMap(), id, title: 'Загруженная модель' });
+}
+
+/**
+ * Встать на уровень шагов АКТИВНОЙ трёхуровневой карты так, как это сделал бы
+ * интерфейс: модуль → этап без второго аргумента → карточка узла.
+ *
+ * Предусловие проверяется здесь же: тест «после подмены модуль сброшен»
+ * ничего не доказывал бы, если бы модуль не был выбран и до неё.
+ */
+function enterStepsLevelOfThreeLevelMap(): void {
+  const stageId = MODULE_STAGE_IDS[MODULE_SUPPLY]?.[0] as string;
+  const nodeId = loadBaseProcessMap().stages.find((stage) => stage.id === stageId)?.nodes[0]?.id;
+  expect(nodeId, 'трёхуровневая карта не стала активной').toBeDefined();
+
+  const store = useProcessStore.getState();
+  store.navigateToModule(MODULE_SUPPLY);
+  store.navigateToStage(stageId);
+  store.selectNode(nodeId as string);
+
+  expect(useProcessStore.getState()).toMatchObject({
+    currentModuleId: MODULE_SUPPLY,
+    currentStageId: stageId,
+    selectedNodeId: nodeId,
+  });
+}
+
+/** Корень карты: ни модуля, ни этапа, ни открытой карточки. */
+function expectRoot(): void {
+  expect(useProcessStore.getState()).toMatchObject({
+    currentModuleId: null,
+    currentStageId: null,
+    selectedNodeId: null,
+  });
 }
 
 const IMPORTED_KEY = 'inplan-process-map:process-model-l0:overrides:v1';
@@ -143,6 +181,31 @@ describe('тупик уровня 2', () => {
   });
 
   /*
+   * ТО ЖЕ С УРОВНЯ 3 (process-map-9mn.12). Подмена начинается С УРОВНЯ ШАГОВ
+   * трёхуровневой карты намеренно: с уровня 2 (этапы модуля, этапа нет)
+   * оставленный в mapSwitch.ts back() снял бы модуль и тест зеленел бы.
+   * С уровня шагов back() снимает только этап, и currentModuleId остался бы
+   * указывать на модуль карты, которой на экране уже нет.
+   */
+  it('подмена карты с уровня шагов трёхуровневой карты сбрасывает и модуль', () => {
+    applyImportedMap(parseThreeLevelProcessMap());
+    enterStepsLevelOfThreeLevelMap();
+
+    applyImportedMap(importedMap());
+
+    expectRoot();
+  });
+
+  it('возврат к встроенной карте с уровня шагов сбрасывает и модуль', () => {
+    applyImportedMap(parseThreeLevelProcessMap());
+    enterStepsLevelOfThreeLevelMap();
+
+    revertToBuiltinMap();
+
+    expectRoot();
+  });
+
+  /*
    * Вторая защита, независимая от первой: даже если уровень остался с чужим id
    * (причины могут появиться те, о которых мы сегодня не знаем), экран сам
    * возвращается на обзор, а не оставляет пустоту.
@@ -155,5 +218,23 @@ describe('тупик уровня 2', () => {
     expect(useProcessStore.getState().currentStageId).toBeNull();
     // На экране обзор, а не пустота: заголовок карты на месте.
     expect(screen.getByText(loadBaseProcessMap().title)).toBeInTheDocument();
+  });
+
+  /*
+   * Вторая защита с УРОВНЯ ШАГОВ (process-map-9mn.12): этап неизвестен, и
+   * модуль при нём, скорее всего, от той же чужой карты. Защита уводит на
+   * корень одним прыжком (resetLevel), а не на уровень вверх: back() снял бы
+   * только этап и оставил бы экран этапов модуля, которого тоже нет.
+   */
+  it('неизвестный этап на уровне шагов уводит на корень, а не к этапам модуля', async () => {
+    useProcessStore.setState({
+      currentModuleId: 'модуль-которого-нет',
+      currentStageId: 'stage-которого-нет',
+    });
+    await act(async () => {
+      render(<App />);
+    });
+
+    expectRoot();
   });
 });
