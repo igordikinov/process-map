@@ -37,12 +37,14 @@ vi.mock('@map-alt/process.json', async () =>
 const { RefitViewport } = await import('../src/components/Overview/RefitViewport');
 const { ReactFlowProvider } = await import('@xyflow/react');
 const { default: App } = await import('../src/App');
-const { resetSelectedVersion } = await import('../src/data/versions');
+const { DEFAULT_VERSION_ID, listVersions, resetSelectedVersion } =
+  await import('../src/data/versions');
 const { loadBaseProcessMap } = await import('../src/data/loader');
 const { refreshProcessMap } = await import('../src/hooks/useProcessMap');
 const { createInitialState, useProcessStore } = await import('../src/store/useProcessStore');
 const { ru } = await import('../src/i18n/ru');
-const { FIXTURE_ALT_ID, fixtureAltVersion } = await import('./fixtures/pageMocks');
+const { FIXTURE_ALT_ID, FIXTURE_DEFAULT_ID, fixtureAltVersion } =
+  await import('./fixtures/pageMocks');
 
 const OPTIONS = { padding: 0.1 };
 
@@ -105,6 +107,21 @@ describe('обзор просит пересчитать вид при смен�
     resetSelectedVersion();
     refreshProcessMap();
     window.history.replaceState({}, '', '/');
+  });
+
+  /*
+   * Сторож страницы из фикстур. Тест ниже кликает по второй версии и ждёт
+   * FIXTURE_ALT_ID — то есть держится только на подмене @map-alt. Отвались
+   * подмена @map, первой версией встала бы настоящая snp, клик по фикстуре
+   * по-прежнему сменил бы версию, и тест остался бы зелёным на странице, которую
+   * этот файл не собирал. Здесь это видно одной строкой.
+   */
+  it('страница из фикстур собралась', () => {
+    expect(
+      listVersions().map((version) => version.id),
+      'страница из фикстур не собралась: проверьте оба vi.mock в начале файла',
+    ).toEqual([FIXTURE_DEFAULT_ID, FIXTURE_ALT_ID]);
+    expect(DEFAULT_VERSION_ID).toBe(FIXTURE_DEFAULT_ID);
   });
 
   it('клик по второй версии вызывает fitView', async () => {

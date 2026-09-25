@@ -18,12 +18,18 @@ import { loadBaseProcessMap } from '../src/data/loader';
 import {
   DEFAULT_VERSION_ID,
   getSelectedVersionId,
+  listVersions,
   resetSelectedVersion,
 } from '../src/data/versions';
 import { selectVersion } from '../src/data/versionSwitch';
 import { refreshProcessMap } from '../src/hooks/useProcessMap';
 import { createInitialState, useProcessStore } from '../src/store/useProcessStore';
-import { FIXTURE_ALT_ID, fixtureAltVersion, fixtureDefaultVersion } from './fixtures/pageMocks';
+import {
+  FIXTURE_ALT_ID,
+  FIXTURE_DEFAULT_ID,
+  fixtureAltVersion,
+  fixtureDefaultVersion,
+} from './fixtures/pageMocks';
 
 // Порядок и форма — дословно из шапки tests/fixtures/pageMocks.ts.
 vi.mock('@map/process.json', async () =>
@@ -73,6 +79,24 @@ afterEach(() => {
   resetSelectedVersion();
   refreshProcessMap();
   setUrl('');
+});
+
+/*
+ * СТОРОЖ САМОЙ СТРАНИЦЫ ИЗ ФИКСТУР. Предпосылки тестов ниже взяты из фикстур
+ * напрямую (fixtureDefaultVersion().stages.length, узел, которого нет в первой
+ * версии), а не из того, что реально собралось на странице. Отвались подмена
+ * @map — первой версией встанет настоящая snp, предпосылки перестанут быть
+ * правдой, а тесты останутся зелёными: у snp тоже четыре этапа, а id узлов
+ * второй фикстуры в ней нет. Этот тест называет причину одной строкой.
+ */
+describe('страница из фикстур', () => {
+  it('собралась: обе версии — фикстуры, первая — по умолчанию', () => {
+    expect(
+      listVersions().map((version) => version.id),
+      'страница из фикстур не собралась: проверьте оба vi.mock в начале файла',
+    ).toEqual([FIXTURE_DEFAULT_ID, FIXTURE_ALT_ID]);
+    expect(DEFAULT_VERSION_ID).toBe(FIXTURE_DEFAULT_ID);
+  });
 });
 
 describe('версия из адреса', () => {

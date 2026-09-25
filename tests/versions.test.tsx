@@ -33,6 +33,7 @@ import {
 } from '../src/data/versions';
 import { selectVersion } from '../src/data/versionSwitch';
 import { refreshProcessMap } from '../src/hooks/useProcessMap';
+import { ru } from '../src/i18n/ru';
 import { createInitialState, useProcessStore } from '../src/store/useProcessStore';
 import {
   FIXTURE_ALT_ID,
@@ -95,18 +96,63 @@ describe('реестр версий', () => {
   });
 
   /*
-   * Встроенная вторая версия — НЕ загруженный файл: у неё обычный ключ правок и
-   * нет бейджа подмены. Страница из фикстур этого различия не стирает — ради
-   * него она собрана подменой JSON, а не через applyImportedMap().
+   * Вторая версия страницы из фикстур — БЕЗ модулей, и это предпосылка, а не
+   * деталь фикстуры (почему — fixtureAltVersion в tests/fixtures/pageMocks.ts).
+   * Трёхуровневая фикстура, из которой она собрана, модули имеет; перестань
+   * pageMocks их вырезать — карта по мере эпика M8 начнёт открываться экраном
+   * модулей, и тесты обзора в этом и соседних файлах молча стали бы проверять
+   * другой экран. Проверка списка выше этого не видит: заголовок и число
+   * этапов от модулей не зависят.
    */
-  it('версии этой страницы — встроенные, а не загруженные', () => {
-    selectVersion(ALT);
+  it('вторая версия фикстур — без модулей', () => {
+    const why =
+      'pageMocks.fixtureAltVersion() обязан вырезать modules и moduleEdges: тесты механики ' +
+      'версий смотрят на обзор этапов, а карта с модулями открывается другим экраном.';
+    expect(fixtureAltVersion().modules, why).toBeUndefined();
+    expect(fixtureAltVersion().moduleEdges, why).toBeUndefined();
+  });
 
-    expect(loadBaseProcessMap().id).toBe(ALT);
-    setNodeOverride(loadBaseProcessMap().stages[0]?.nodes[0]?.id as string, {
-      title: 'Экран',
-      url: 'https://example.com/a',
+  /*
+   * Встроенная вторая версия — НЕ загруженный файл, и отличие видно в двух
+   * местах: на экране нет бейджа подмены, а правки ложатся в обычный ключ
+   * версии, а не в пространство имён загруженных файлов (`imported:`).
+   * Страница из фикстур этого различия не стирает — ради него она собрана
+   * подменой JSON, а не через applyImportedMap(), который показал бы фикстуру
+   * чужим файлом.
+   *
+   * Бейдж судится на настоящем App после переключения: выбор версии, который
+   * однажды пойдёт через подмену карты (или шапка, принявшая «не версию по
+   * умолчанию» за загруженный файл), сказал бы читателю вики «чужой файл»
+   * о карте проекта.
+   */
+  it('версии этой страницы — встроенные, а не загруженные', async () => {
+    await act(async () => {
+      render(<App />);
     });
+
+    await act(async () => {
+      selectVersion(ALT);
+    });
+
+    // Без этой строки отсутствие бейджа ничего бы не доказывало: переключение,
+    // которое не сработало вовсе, тоже оставило бы шапку без бейджа.
+    expect(screen.getByRole('heading', { name: fixtureAltVersion().title })).toBeInTheDocument();
+    expect(
+      screen.queryByText(ru.toolbar.importedBadge),
+      'встроенная версия показана с бейджем «Загруженная схема»',
+    ).toBeNull();
+
+    setNodeOverride(loadBaseProcessMap().stages[0]?.nodes[0]?.id as string, {
+      title: 'Экран модели',
+      url: 'https://example.com/b',
+    });
+    // Сначала — ключ загруженного файла: это и есть вопрос теста, и при
+    // дефекте падать надо на нём, с его сообщением, а не строкой ниже.
+    expect(
+      localStorage.getItem(`inplan-process-map:imported:${ALT}:overrides:v1`),
+      'правки встроенной версии легли в ключ загруженного файла',
+    ).toBeNull();
+    // И правка вообще записалась — иначе пустой ключ выше ничего не доказывал бы.
     expect(localStorage.getItem(overridesStorageKey(ALT))).not.toBeNull();
   });
 });
@@ -214,8 +260,9 @@ describe('изоляция правок между версиями', () => {
 
     expect(localStorage.getItem(OVERRIDES_KEY)).not.toBeNull();
     expect(localStorage.getItem(`inplan-process-map:${ALT}:overrides:v1`)).not.toBeNull();
-    // Ключ загруженного файла не задет: встроенная версия — не чужой файл.
-    expect(localStorage.getItem(`inplan-process-map:imported:${ALT}:overrides:v1`)).toBeNull();
+    // Что ключ загруженного файла при этом не задет, судит «версии этой
+    // страницы — встроенные, а не загруженные» выше: это вопрос «встроенная
+    // или чужой файл», а не «одна версия или другая».
   });
 
   it('«Сбросить правки» на одной версии не трогает ключ другой', () => {

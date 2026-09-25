@@ -10,6 +10,7 @@
 // Здесь же — сторож механизма, на котором стоит страница из фикстур
 // (tests/fixtures/pageMocks.ts): у алиасов данных в Vitest разные id модулей.
 import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mapJsonPath, UNIT_TEST_MAP } from '../scripts/mapTarget.ts';
 import { loadBaseProcessMap } from '../src/data/loader';
@@ -20,6 +21,21 @@ const WHY =
   'её содержание дословно. Страницу задаёт UNIT_TEST_MAP в scripts/mapTarget.ts — не ' +
   'DEFAULT_MAP и не переменная MAP (почему — в комментарии там же); vitest.config.ts ' +
   'обязан брать алиас из mapAlias(UNIT_TEST_MAP).';
+
+/**
+ * КОД vitest.config.ts — без комментариев. Сам конфиг в комментарии честно
+ * называет mapIdFromEnv() («карта здесь — UNIT_TEST_MAP, а не
+ * mapIdFromEnv()»), и проверка по сырому тексту краснела бы от объяснения,
+ * а не от кода. Вырезка грубая (регулярками, без разбора строк), и это
+ * безопасно в нужную сторону: `//` внутри строкового литерала отрезал бы
+ * хвост строки, и проверка «mapAlias(UNIT_TEST_MAP) на месте» покраснела бы
+ * ложно, а не позеленела. Сегодня таких литералов в конфиге нет.
+ */
+function vitestConfigCode(): string {
+  return readFileSync(resolve(process.cwd(), 'vitest.config.ts'), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/\/\/.*$/gm, '');
+}
 
 describe('страница юнит-тестов', () => {
   it('закреплена за snp', () => {
@@ -37,6 +53,27 @@ describe('страница юнит-тестов', () => {
 
     expect(DEFAULT_VERSION_ID, WHY).toBe(onDisk.id);
     expect(loadBaseProcessMap().id, WHY).toBe(onDisk.id);
+  });
+
+  /*
+   * ДЫРА, КОТОРУЮ НЕ ЗАКРЫВАЕТ ПРОВЕРКА ВЫШЕ. Пока переменная MAP пуста,
+   * mapIdFromEnv() отдаёт DEFAULT_MAP, а это сегодня тоже snp. Конфиг,
+   * вернувшийся к mapAlias(mapIdFromEnv()), собрал бы в тесты ту же страницу, и
+   * «в бандл тестов собрана именно она» осталась бы зелёной — до первого
+   * запуска с MAP=mrp в оболочке или до смены DEFAULT_MAP (process-map-9mn.20),
+   * то есть ровно тогда, когда искать причину будет труднее всего. Поэтому
+   * смотрится сам исходник конфига — тем же приёмом, что IMPORTER_SOURCE в
+   * tests/mapRegistry.test.ts.
+   */
+  it('vitest.config.ts берёт алиас из UNIT_TEST_MAP, а не из переменной MAP', () => {
+    const code = vitestConfigCode();
+
+    expect(code, WHY).toContain('mapAlias(UNIT_TEST_MAP)');
+    expect(
+      code,
+      `${WHY} В коде vitest.config.ts найден mapIdFromEnv: переменная MAP выбирает цель ` +
+        'СБОРКИ и, оставшись в оболочке после `npm run build:mrp`, подменила бы тестам страницу.',
+    ).not.toContain('mapIdFromEnv');
   });
 });
 
