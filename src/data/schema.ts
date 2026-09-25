@@ -235,7 +235,7 @@ export const ModuleSchema = z.object({
   number: z.number().int().min(1),
   title: z.string(),
   shortTitle: z.string(),
-  // Подпись рамки вокруг потока фаз на уровне 2. Поле здесь, а не одно на
+  // Подпись рамки вокруг потока этапов на уровне 2. Поле здесь, а не одно на
   // документ, потому что на трёхуровневой карте рамка меняется при переходе
   // между модулями.
   //
@@ -251,9 +251,9 @@ export const ModuleSchema = z.object({
   // выходного артефакта нет вовсе (process-map-9mn.5).
   keyOutputs: z.array(z.string()).max(4),
   screen: ScreenLinkSchema.optional(),
-  // Фазы модуля — ССЫЛКИ на записи плоского ProcessMap.stages, см. выше.
-  // Модуль без фаз невыразим: карточка уровня 1, из которой некуда провалиться,
-  // — это тупик на экране, а не данные.
+  // Этапы модуля — ССЫЛКИ на записи плоского ProcessMap.stages, см. выше.
+  // Модуль без этапов невыразим: карточка уровня 1, из которой некуда
+  // провалиться, — это тупик на экране, а не данные.
   stageIds: z.array(z.string()).min(1),
 });
 export type Module = z.infer<typeof ModuleSchema>;
