@@ -1,6 +1,10 @@
 // Сборка узлов и рёбер уровня 1 (SPEC §4.1). Чистая функция без React —
 // поэтому полностью покрывается unit-тестами без рендера полотна.
 //
+// «Уровень 1» — на двухуровневой карте. На трёхуровневой тот же граф рисует
+// уровень 2, этапы ОДНОГО модуля (process-map-9mn.17), поэтому на вход идёт
+// не карта, а вид — OverviewView ниже.
+//
 // Координаты здесь считаются, а не берутся из данных: поле `position` по схеме
 // (src/data/schema.ts) есть только у ProcessNode уровня 2, у Stage и ExternalIO
 // его нет, а схема в M1 заморожена. Поэтому геометрия обзора — ВРЕМЕННО
@@ -12,7 +16,7 @@
 // артборд A1 1280×720 (он задаёт расположение явно, поэтому dagre-числа из
 // process-map-350 здесь не используются).
 import type { Edge as FlowEdge, Node as FlowNode } from '@xyflow/react';
-import type { ExternalIO, ProcessMap, SystemCode } from '../../data/schema';
+import type { Edge, ExternalIO, Stage, SystemCode } from '../../data/schema';
 import { ru } from '../../i18n/ru';
 import { IO_NODE_SIZE, STAGE_NODE_SIZE, STAGE_NODE_SIZE_COMPACT } from '../../theme/sizes';
 import { STAGE_HANDLE, type StageNodeType } from '../nodes/StageNode';
@@ -344,11 +348,21 @@ function stageGridOf(stageCount: number, compact: boolean): StageGrid {
   };
 }
 
-/** Компактные узлы вместо свимлейнов: строка-бейдж + карточка систем этапа. */
-function pushCompactSystems(map: ProcessMap, nodes: OverviewNode[], grid: StageGrid): Set<string> {
+/**
+ * Компактные узлы вместо свимлейнов: строка-бейдж + карточка систем этапа.
+ *
+ * Вход — ПОКАЗАННЫЕ этапы (view.stages), а не этапы карты: строка-бейдж —
+ * это свимлейны, свёрнутые в строку, и довод у неё тот же, что у свимлейнов
+ * в buildOverviewGraph (process-map-9mn.17).
+ */
+function pushCompactSystems(
+  stages: readonly Stage[],
+  nodes: OverviewNode[],
+  grid: StageGrid,
+): Set<string> {
   // Порядок кодов — порядок появления в данных (collectSystems), а не
   // алфавит и не список из SPEC §4.5: состав систем задаёт process.json.
-  const all = collectSystems(map.stages.flatMap((stage) => [...stage.inputs, ...stage.outputs]));
+  const all = collectSystems(stages.flatMap((stage) => [...stage.inputs, ...stage.outputs]));
   if (all.length === 0) {
     return new Set();
   }
@@ -370,7 +384,7 @@ function pushCompactSystems(map: ProcessMap, nodes: OverviewNode[], grid: StageG
   // выход этапа в одну карточку, поэтому направления у неё нет: пунктир идёт
   // от этапа вниз к его системам — так же, как в артборде A4.
   const withSystems = new Set<string>();
-  map.stages.forEach((stage, index) => {
+  stages.forEach((stage, index) => {
     const items = collectSystems([...stage.inputs, ...stage.outputs]);
     if (items.length === 0) {
       return;
@@ -406,7 +420,35 @@ function pushCompactSystems(map: ProcessMap, nodes: OverviewNode[], grid: StageG
 }
 
 /**
- * @param map      слитая карта из loadProcessMap()
+ * Что показывает экран этапов — вход buildOverviewGraph (process-map-9mn.17).
+ *
+ * НЕ КАРТА ЦЕЛИКОМ. На трёхуровневой карте экран этапов показывает ОДИН
+ * модуль, и всё, что граф раньше брал из карты, теперь обязано браться из
+ * вида: этапы (карточки), рёбра (стрелки), подпись рамки потока — и, как
+ * следствие, системы в свимлейнах, которые собираются из входов и выходов
+ * этапов. Карта целиком на входе оставляла бы открытой дверь «взять
+ * map.stages по привычке»: на экране модуля DP появились бы системы модуля
+ * PS, и ни один тест на двухуровневой карте этого бы не заметил — там вид и
+ * карта совпадают.
+ *
+ * Значение строит levelTwoView() в src/data/modules.ts; ProcessMap сюда не
+ * подходит и не должен — у карты нет frameLabel, и вызов с картой не
+ * компилируется. Массивы readonly: без фильтра levelTwoView отдаёт массивы
+ * самого документа той же ссылкой (шапка src/data/modules.ts).
+ *
+ * Колонок входов и выходов, групп шагов, счётчика шагов здесь нет и не
+ * будет: это содержание уровня шагов (stageGraph.ts), а не этого экрана.
+ */
+export interface OverviewView {
+  readonly stages: readonly Stage[];
+  readonly overviewEdges: readonly Edge[];
+  /** Подпись рамки вокруг потока этапов: module.label либо map.moduleLabel. */
+  readonly frameLabel: string;
+}
+
+/**
+ * @param view     что показывает экран: этапы, рёбра, подпись рамки — см.
+ *                 OverviewView. Для двухуровневой карты — levelTwoView(map, null).
  * @param showIntegrations toggle из store (SPEC §4.6): false убирает свимлейны,
  *                         узлы систем и интеграционные рёбра.
  * @param compact  SPEC §4.5: высота контейнера < config.compactHeight. Свимлейны
@@ -416,13 +458,14 @@ function pushCompactSystems(map: ProcessMap, nodes: OverviewNode[], grid: StageG
  *                 всех существующих вызовов.
  */
 export function buildOverviewGraph(
-  map: ProcessMap,
+  view: OverviewView,
   showIntegrations: boolean,
   compact = false,
 ): OverviewGraph {
   const stageSize = compact ? STAGE_NODE_SIZE_COMPACT : STAGE_NODE_SIZE;
+  const { stages } = view;
 
-  const stageCount = map.stages.length;
+  const stageCount = stages.length;
   const grid = stageGridOf(stageCount, compact);
   // Ширину задаёт число КОЛОНОК, а не число этапов: с одиннадцатого этапа ряд
   // переносится, и рамка вслед за ним расти не должна.
@@ -435,12 +478,17 @@ export function buildOverviewGraph(
   let compactSystemStages: Set<string> = new Set();
 
   if (showIntegrations && compact) {
-    compactSystemStages = pushCompactSystems(map, nodes, grid);
+    compactSystemStages = pushCompactSystems(stages, nodes, grid);
   }
 
   if (showIntegrations && !compact) {
-    const inputs = collectSystems(map.stages.flatMap((stage) => stage.inputs));
-    const outputs = collectSystems(map.stages.flatMap((stage) => stage.outputs));
+    // Системы — из входов и выходов ПОКАЗАННЫХ этапов (process-map-9mn.17).
+    // Свимлейн говорит «с этим процессом обмениваются данными вот эти
+    // системы», и на экране модуля «этот процесс» — модуль, а не карта: из
+    // всех этапов карты экран модуля DP получил бы системы модуля PS, к
+    // которым от его карточек не ведёт ни одной стрелки.
+    const inputs = collectSystems(stages.flatMap((stage) => stage.inputs));
+    const outputs = collectSystems(stages.flatMap((stage) => stage.outputs));
 
     nodes.push(
       ...systemLaneNodes(
@@ -473,12 +521,17 @@ export function buildOverviewGraph(
   // там и свимлейны схлопнуты в строку-бейдж (SPEC §4.5), лишней вертикали нет.
   // Идёт в массиве раньше карточек этапов: React Flow рисует узлы в порядке
   // массива, и рамка обязана оказаться ПОД ними.
+  //
+  // Подпись — view.frameLabel: на двухуровневой карте это map.moduleLabel
+  // («Модуль SNP»), на экране модуля трёхуровневой — module.label («Модуль
+  // DP»). Подпись документа («Все процессы In.Plan») вокруг этапов одного
+  // модуля была бы неправдой (levelTwoView в src/data/modules.ts).
   if (!compact && stageCount > 0) {
     nodes.push({
       id: FLOW_LANE_ID,
       type: 'flowLane',
       position: { x: LANE_X, y: FLOW_LANE_Y },
-      data: { title: map.moduleLabel },
+      data: { title: view.frameLabel },
       style: { width: laneWidth, height: FLOW_LANE_HEIGHT + grid.extraHeight },
       draggable: false,
       selectable: false,
@@ -487,7 +540,9 @@ export function buildOverviewGraph(
     });
   }
 
-  map.stages.forEach((stage, index) => {
+  // Карточка встаёт по ИНДЕКСУ в показанном массиве. На экране модуля это
+  // порядок module.stageIds (stagesOfModule), а не порядок номеров.
+  stages.forEach((stage, index) => {
     nodes.push({
       id: stage.id,
       type: 'stage',
@@ -506,15 +561,29 @@ export function buildOverviewGraph(
   });
 
   const nodeIds = new Set(nodes.map((node) => node.id));
-  const stageIds = new Set(map.stages.map((stage) => stage.id));
+  const stageIds = new Set(stages.map((stage) => stage.id));
   const edges: FlowEdge[] = [];
 
-  // Номер этапа нужен, чтобы отличить обратную связь от прямого перехода:
-  // этапы стоят слева направо по номеру (process-map-3wh.17).
-  const stageNumber = new Map(map.stages.map((stage) => [stage.id, stage.number]));
-  const stageIndex = new Map(map.stages.map((stage, index) => [stage.id, index]));
+  // ИНДЕКС этапа в показанном массиве — единственное, по чему отличается
+  // обратная связь от прямого перехода (process-map-3wh.17) и строка от строки.
+  //
+  // ИМЕННО ИНДЕКС, А НЕ stage.number (баг process-map-wuv). Карточки стоят по
+  // индексу (grid.positionOf(index) выше), и вопрос «цель левее источника на
+  // экране?» — вопрос про индекс. Раньше обратная связь решалась по номеру, в
+  // расчёте на связку «этапы стоят слева направо по номеру», а инварианта
+  // «порядок массива = порядок номеров» нет нигде: tests/mapContract.test.ts
+  // сортирует номера перед сравнением, validateIntegrity требует сплошности
+  // МНОЖЕСТВА номеров модуля, а порядок module.stageIds оставляет авторитетом
+  // (модуль с stageIds {5, 4, 3} валиден, шапка stagesOfModule). На таком
+  // модуле ребро «этап 5 → этап 4» идёт по экрану слева направо, а по номерам
+  // выглядит обратным — и уходило бы вниз; зеркальное «этап 3 → этап 4»
+  // выходило бы из ПРАВОГО хэндла к карточке, стоящей левее, — стрелка через
+  // карточки, ровно тот дефект, от которого обратная связь и уведена вниз.
+  // На всех сегодняшних картах (snp, mrp, inplan-model) порядок массива
+  // совпадает с порядком номеров, и результат побайтово прежний.
+  const stageIndex = new Map(stages.map((stage, index) => [stage.id, index]));
 
-  for (const edge of map.overviewEdges) {
+  for (const edge of view.overviewEdges) {
     if (edge.kind === 'process') {
       if (!stageIds.has(edge.source) || !stageIds.has(edge.target)) {
         continue;
@@ -532,10 +601,13 @@ export function buildOverviewGraph(
       // стрелку, возвращающуюся назад через весь ряд. Поэтому справа выходим
       // только когда цель правее в ТОЙ ЖЕ строке. При N ≤ 4 строка одна, и
       // условие вырождается в прежнее.
-      const backward = (stageNumber.get(edge.source) ?? 0) > (stageNumber.get(edge.target) ?? 0);
-      const sameRow =
-        grid.rowOf(stageIndex.get(edge.source) ?? 0) ===
-        grid.rowOf(stageIndex.get(edge.target) ?? 0);
+      //
+      // `?? 0` здесь не срабатывает: оба конца проверены на stageIds выше, а
+      // stageIndex построен из того же массива. Он лишь сужает тип.
+      const sourceIndex = stageIndex.get(edge.source) ?? 0;
+      const targetIndex = stageIndex.get(edge.target) ?? 0;
+      const backward = sourceIndex > targetIndex;
+      const sameRow = grid.rowOf(sourceIndex) === grid.rowOf(targetIndex);
       edges.push({
         id: edge.id,
         type: 'process',
@@ -583,7 +655,7 @@ export function buildOverviewGraph(
   // «этап → его карточка систем» (макет A4). Направление здесь не про поток
   // данных — карточка объединяет и вход, и выход этапа, — а про принадлежность:
   // вот системы ЭТОГО этапа.
-  for (const stage of map.stages) {
+  for (const stage of stages) {
     if (!compactSystemStages.has(stage.id)) {
       continue;
     }

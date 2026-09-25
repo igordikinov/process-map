@@ -11,6 +11,7 @@
 import { describe, expect, it } from 'vitest';
 import { buildOverviewGraph, FLOW_LANE_ID } from '../src/components/Overview/overviewGraph';
 import { STAGE_HANDLE } from '../src/components/nodes/StageNode';
+import { levelTwoView } from '../src/data/modules';
 import { ProcessMapSchema, type ProcessMap, type Stage } from '../src/data/schema.ts';
 import { STAGE_NODE_SIZE } from '../src/theme/sizes.ts';
 import { buildSampleProcessMap } from './fixtures/sample-process.ts';
@@ -36,7 +37,7 @@ function mapWithStages(count: number): ProcessMap {
 }
 
 function stagePositions(map: ProcessMap, compact = false): { x: number; y: number }[] {
-  const { nodes } = buildOverviewGraph(map, false, compact);
+  const { nodes } = buildOverviewGraph(levelTwoView(map, null), false, compact);
   const byId = new Map(nodes.map((node) => [node.id, node]));
   return map.stages.map((stage) => {
     const node = byId.get(stage.id);
@@ -99,7 +100,7 @@ describe('обзор: пять и более этапов переносятся
 
   it('рамка потока растёт вниз вслед за строками, а не вширь', () => {
     const laneOf = (count: number) => {
-      const { nodes } = buildOverviewGraph(mapWithStages(count), false);
+      const { nodes } = buildOverviewGraph(levelTwoView(mapWithStages(count), null), false);
       const lane = nodes.find((node) => node.id === FLOW_LANE_ID);
       expect(lane, 'рамки потока нет').toBeTruthy();
       return lane!.style as { width: number; height: number };
@@ -131,7 +132,7 @@ describe('обзор: рёбра через перенос строки', () => 
   }
 
   const handleOf = (map: ProcessMap): string | null | undefined =>
-    buildOverviewGraph(map, false).edges[0]?.sourceHandle;
+    buildOverviewGraph(levelTwoView(map, null), false).edges[0]?.sourceHandle;
 
   it('внутри строки прямое ребро выходит справа — как было', () => {
     expect(handleOf(mapWithEdge(10, 1, 2))).toBe(STAGE_HANDLE.right);

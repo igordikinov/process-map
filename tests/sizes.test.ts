@@ -9,6 +9,7 @@ import { describe, expect, it } from 'vitest';
 import { NODE_SIZE, STAGE_NODE_SIZE as LAYOUT_STAGE_SIZE } from '../src/layout/stageLayout';
 import { buildOverviewGraph } from '../src/components/Overview/overviewGraph';
 import { loadBaseProcessMap } from '../src/data/loader';
+import { levelTwoView } from '../src/data/modules';
 import {
   DATA_NODE_SIZE,
   DETAIL_NODE_SIZE,
@@ -62,7 +63,7 @@ describe('размеры: sizes.ts ↔ раскладка', () => {
   });
 
   it('buildOverviewGraph ставит узлам размеры из sizes.ts', () => {
-    const { nodes } = buildOverviewGraph(loadBaseProcessMap(), true);
+    const { nodes } = buildOverviewGraph(levelTwoView(loadBaseProcessMap(), null), true);
 
     const stages = nodes.filter((node) => node.type === 'stage');
     expect(stages.length).toBeGreaterThan(0);

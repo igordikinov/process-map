@@ -9,6 +9,7 @@ import {
   type NodeTypes,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
+import { hasModules, moduleOfStage } from '../../data/modules';
 import { useFrameSize } from '../../hooks/useFrameSize';
 import { useProcessMap } from '../../hooks/useProcessMap';
 import { ru } from '../../i18n/ru';
@@ -160,9 +161,27 @@ export function StageDetail() {
 
   return (
     <div className={compact ? `${styles.root} ${styles.compact}` : styles.root} ref={rootRef}>
-      <Breadcrumbs stages={map.stages} rootLabel={map.moduleLabel} compact={compact} />
-      {/* role="region", а не "application" — см. комментарий в Overview.tsx. */}
-      <div className={styles.canvas} role="region" aria-label={ru.stageDetail.canvasLabel}>
+      {/* module — ВЛАДЕЛЕЦ этапа по документу (moduleOfStage), а не
+          currentModuleId из store: этап без модуля в store законен (deep-link
+          ?stage=N без ?module=), а документ владельца знает всегда. На
+          двухуровневой карте — undefined, и крошки побайтово прежние
+          (process-map-9mn.17). */}
+      <Breadcrumbs
+        stages={map.stages}
+        rootLabel={map.moduleLabel}
+        module={moduleOfStage(map, stage.id)}
+        compact={compact}
+      />
+      {/* role="region", а не "application" — см. комментарий в Overview.tsx.
+          Подпись — настоящий номер экрана на ЭТОЙ карте: на трёхуровневой
+          этап — уровень 3 (ru.stageDetail.moduleStageCanvasLabel). */}
+      <div
+        className={styles.canvas}
+        role="region"
+        aria-label={
+          hasModules(map) ? ru.stageDetail.moduleStageCanvasLabel : ru.stageDetail.canvasLabel
+        }
+      >
         {/* key по этапу на самом провайдере (не только на <ReactFlow> ниже):
             смена этапа обязана пересобрать ОБЩИЙ store React Flow целиком,
             иначе Toolbar (сиблинг <ReactFlow>, читает viewport из того же

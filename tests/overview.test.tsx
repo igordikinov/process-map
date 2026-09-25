@@ -17,6 +17,7 @@ import {
 } from '../src/components/Overview/overviewGraph';
 import { StageCard } from '../src/components/nodes/StageNode/StageCard';
 import { loadBaseProcessMap } from '../src/data/loader';
+import { levelTwoView } from '../src/data/modules';
 import { buildSampleProcessMap } from './fixtures/sample-process';
 import { formatIsoDate } from '../src/utils/format';
 import type { Stage } from '../src/data/schema';
@@ -206,7 +207,7 @@ describe('StageCard', () => {
 
 describe('buildOverviewGraph', () => {
   it('строит свимлейны, узлы систем и 4 карточки этапов', () => {
-    const { nodes } = buildOverviewGraph(map, true);
+    const { nodes } = buildOverviewGraph(levelTwoView(map, null), true);
 
     expect(nodes.filter((node) => node.type === 'lane')).toHaveLength(2);
     expect(nodes.filter((node) => node.type === 'stage')).toHaveLength(4);
@@ -223,7 +224,7 @@ describe('buildOverviewGraph', () => {
   });
 
   it('ни один узел не перетаскивается и не соединяется', () => {
-    const { nodes } = buildOverviewGraph(map, true);
+    const { nodes } = buildOverviewGraph(levelTwoView(map, null), true);
     for (const node of nodes) {
       expect(node.draggable).toBe(false);
       expect(node.connectable).toBe(false);
@@ -231,7 +232,7 @@ describe('buildOverviewGraph', () => {
   });
 
   it('переводит overviewEdges в process- и integration-рёбра с валидными концами', () => {
-    const { nodes, edges } = buildOverviewGraph(map, true);
+    const { nodes, edges } = buildOverviewGraph(levelTwoView(map, null), true);
     const ids = new Set(nodes.map((node) => node.id));
 
     expect(edges.filter((edge) => edge.type === 'process')).toHaveLength(3);
@@ -246,7 +247,7 @@ describe('buildOverviewGraph', () => {
   });
 
   it('при выключенных интеграциях остаются этапы, рамка потока и процессные рёбра', () => {
-    const { nodes, edges } = buildOverviewGraph(map, false);
+    const { nodes, edges } = buildOverviewGraph(levelTwoView(map, null), false);
 
     // Рамка потока (process-map-sni) не зависит от тумблера «Показать
     // интеграции»: она описывает сам процесс, а не интеграции. Свимлейнов и
@@ -261,7 +262,7 @@ describe('buildOverviewGraph', () => {
   });
 
   it('рамка потока лежит в массиве раньше карточек этапов и охватывает их', () => {
-    const { nodes } = buildOverviewGraph(map, true);
+    const { nodes } = buildOverviewGraph(levelTwoView(map, null), true);
 
     const frameIndex = nodes.findIndex((node) => node.id === FLOW_LANE_ID);
     const firstStageIndex = nodes.findIndex((node) => node.type === 'stage');
@@ -295,7 +296,7 @@ describe('buildOverviewGraph', () => {
   });
 
   it('в компактном режиме рамки потока нет (SPEC §4.5)', () => {
-    const { nodes } = buildOverviewGraph(map, true, true);
+    const { nodes } = buildOverviewGraph(levelTwoView(map, null), true, true);
 
     expect(nodes.filter((node) => node.type === 'flowLane')).toHaveLength(0);
     expect(nodes.some((node) => node.id === FLOW_LANE_ID)).toBe(false);
@@ -315,7 +316,7 @@ describe('buildOverviewGraph', () => {
       kind: 'process',
     });
 
-    const { edges } = buildOverviewGraph(withBackEdge, true);
+    const { edges } = buildOverviewGraph(levelTwoView(withBackEdge, null), true);
     const back = edges.find((edge) => edge.id === 'overview-edge-back');
     const forward = edges.find((edge) => edge.id === 'overview-edge-3');
 
@@ -330,7 +331,7 @@ describe('buildOverviewGraph', () => {
     // Подпись уехала из i18n в поле moduleLabel (process-map-3wh.4): у каждой
     // карты она своя. Ассерт сверяет с картой, а не с литералом, чтобы тест не
     // приходилось править при добавлении второй карты.
-    const { nodes } = buildOverviewGraph(map, true);
+    const { nodes } = buildOverviewGraph(levelTwoView(map, null), true);
     const frame = nodes.find((node) => node.id === FLOW_LANE_ID);
 
     expect(map.moduleLabel).not.toBe('');
@@ -338,7 +339,9 @@ describe('buildOverviewGraph', () => {
   });
 
   it('карточки этапов не накладываются друг на друга', () => {
-    const stages = buildOverviewGraph(map, true).nodes.filter((node) => node.type === 'stage');
+    const stages = buildOverviewGraph(levelTwoView(map, null), true).nodes.filter(
+      (node) => node.type === 'stage',
+    );
     for (let index = 1; index < stages.length; index += 1) {
       const previous = stages[index - 1];
       const current = stages[index];

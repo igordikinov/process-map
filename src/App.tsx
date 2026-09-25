@@ -12,15 +12,29 @@
 // Deep-link (?stage=&node=, SPEC §4.7) разбирается хуком useDeepLink: он
 // подставляет id в store сразу после монтирования и дальше синхронизирует URL
 // (replaceState) при любой навигации — см. src/hooks/useDeepLink.ts.
-import { useEffect, type ReactElement } from 'react';
+import { useEffect, useMemo, type ReactElement } from 'react';
 import { ImportReport } from './components/ImportReport';
 import { ModulesOverview } from './components/ModulesOverview';
-import { Overview } from './components/Overview';
+import { Overview, type OverviewHeaderKind } from './components/Overview';
 import { StageDetail } from './components/StageDetail';
-import { currentScreen, hasModules, moduleById, type MapScreen } from './data/modules';
+import {
+  currentScreen,
+  hasModules,
+  levelTwoView,
+  moduleById,
+  type LevelTwoView,
+  type MapScreen,
+} from './data/modules';
 import { useDeepLink } from './hooks/useDeepLink';
 import { useProcessMap } from './hooks/useProcessMap';
 import { useProcessStore } from './store/useProcessStore';
+
+interface ScreenViewProps {
+  screen: MapScreen;
+  /** Что показывает экран этапов — см. levelTwoView в src/data/modules.ts. */
+  view: LevelTwoView;
+  header: OverviewHeaderKind;
+}
 
 /**
  * Экран по его имени. switch по объединению без default: забытая ветка при
@@ -36,14 +50,23 @@ import { useProcessStore } from './store/useProcessStore';
  * из четырёх значений при трёх ветках без аннотации — tsc exit 0, с
  * аннотацией — TS2366. Поэтому аннотацию не снимать «для краткости».
  */
-function ScreenView({ screen }: { screen: MapScreen }): ReactElement {
+function ScreenView({ screen, view, header }: ScreenViewProps): ReactElement {
   switch (screen) {
     case 'modules':
       return <ModulesOverview />;
     case 'stages':
-      // На трёхуровневой карте Overview пока рисует ВСЮ карту, а не этапы
-      // выбранного модуля: параметризует его задача process-map-9mn.17.
-      return <Overview />;
+      // Этапы выбранного модуля на трёхуровневой карте, вся карта — на
+      // двухуровневой (process-map-9mn.17). Какие именно, решил levelTwoView
+      // в App; экран получает готовые значения.
+      return (
+        <Overview
+          stages={view.stages}
+          overviewEdges={view.overviewEdges}
+          frameLabel={view.frameLabel}
+          module={view.module}
+          header={header}
+        />
+      );
     case 'steps':
       return <StageDetail />;
   }
@@ -62,6 +85,26 @@ function App() {
   const currentStageId = useProcessStore((state) => state.currentStageId);
   const resetLevel = useProcessStore((state) => state.resetLevel);
   const screen = currentScreen(map, { currentModuleId, currentStageId });
+
+  /*
+   * ВИД ЭКРАНА ЭТАПОВ (process-map-9mn.17): этапы, рёбра, подпись рамки и
+   * модуль — одним вызовом, чтобы все четыре описывали один модуль.
+   *
+   * useMemo с зависимостями [map, currentModuleId], а не результат функции в
+   * зависимостях: у известного модуля levelTwoView возвращает НОВЫЕ массивы
+   * на каждый вызов (кеша нет намеренно, шапка src/data/modules.ts), и без
+   * useMemo граф обзора пересобирался бы на каждый рендер App. map в
+   * зависимостях приносит сюда бесплатно всё, что меняет карту: правку ссылки
+   * в редакторе, импорт BPMN, смену версии.
+   *
+   * Считается на любом экране, а не только на 'stages': хуки не бывают
+   * условными, а пять модулей и двадцать этапов — копейки.
+   */
+  const view = useMemo(() => levelTwoView(map, currentModuleId), [map, currentModuleId]);
+  // Шапка экрана этапов: корень двухуровневой карты — своя шапка с
+  // переключателем версий, экран модуля трёхуровневой — крошки (Overview.tsx).
+  // Признак — форма ДОКУМЕНТА, как и число уровней (шапка src/data/modules.ts).
+  const header: OverviewHeaderKind = hasModules(map) ? 'crumbs' : 'root';
 
   /*
    * ВТОРАЯ ЗАЩИТА: «модуль не найден → на корень» (process-map-9mn.16).
@@ -102,7 +145,7 @@ function App() {
 
   return (
     <>
-      <ScreenView screen={screen} />
+      <ScreenView screen={screen} view={view} header={header} />
       {/* Панель отчёта монтируется ВЫШЕ всех экранов: она обязана пережить
           переход между уровнями, а панель узла живёт внутри полотна и такого
           не умеет (process-map-70e.9). */}

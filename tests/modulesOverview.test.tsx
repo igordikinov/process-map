@@ -11,9 +11,8 @@
 //     fireEvent.click «сработал бы» и с мёртвой карточкой. Здесь проверяются
 //     обработчик и стиль обёртки (pointer-events), а клик мышью — e2e задачи
 //     process-map-9mn.21;
-//   · содержимое экрана модуля — Overview до задачи process-map-9mn.17 рисует
-//     на нём всю карту, и закреплять это промежуточное состояние незачем.
-//     Проверяется только, что экран сменился;
+//   · содержимое экрана модуля — его сторожит tests/levelTwo.test.tsx
+//     (process-map-9mn.17). Здесь проверяется только, что экран сменился;
 //   · рёбра и их подписи на полотне — в jsdom React Flow рёбер не рисует
 //     вовсе: хэндлы узлов не измерены (layout нет), и ребру не к чему
 //     крепиться. Подписи проверены на графе (tests/modulesGraph.test.ts), их
@@ -245,9 +244,10 @@ describe('корень трёхуровневой карты — экран мо
     });
 
     expect(useProcessStore.getState().currentModuleId).toBe(MODULE_SUPPLY);
-    // Экран сменился: полотна модулей больше нет, есть полотно этапов.
+    // Экран сменился: полотна модулей больше нет, есть полотно этапов модуля —
+    // «уровень 2», а не «уровень 1» двухуровневой карты (process-map-9mn.17).
     expect(screen.queryByRole('region', { name: ru.overview.allModulesCanvasLabel })).toBeNull();
-    expect(screen.getByRole('region', { name: ru.overview.canvasLabel })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: ru.overview.moduleCanvasLabel })).toBeInTheDocument();
   });
 });
 
@@ -265,7 +265,7 @@ describe('защита «модуль не найден»', () => {
     await act(async () => {
       useProcessStore.getState().navigateToModule(MODULE_SUPPLY);
     });
-    expect(screen.getByRole('region', { name: ru.overview.canvasLabel })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: ru.overview.moduleCanvasLabel })).toBeInTheDocument();
 
     await act(async () => {
       useProcessStore.setState({ currentModuleId: 'ghost' });
