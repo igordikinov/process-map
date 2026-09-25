@@ -47,6 +47,21 @@ function systemCodesInExternalIO(map: ThreeLevelProcessMap): Set<string> {
   );
 }
 
+/**
+ * Владелец каждого этапа — прямо из module.stageIds.
+ *
+ * Мимо src/data/modules.ts намеренно — мимо ЛЮБОЙ его функции, moduleOfStage
+ * в том числе. Сторожа, которые зовут этот помощник (цепочка этап → этап у
+ * каждого модуля, система концом обзорного ребра), охраняют различающую силу
+ * тестов overviewEdgesOf из того же модуля и не имеют права стоять на нём
+ * самом: ошибка в src/data/modules.ts ослепила бы и тесты, и их сторожа.
+ */
+function moduleIdByStageId(map: ThreeLevelProcessMap): Map<string, string> {
+  return new Map(
+    map.modules.flatMap((module) => module.stageIds.map((id) => [id, module.id] as const)),
+  );
+}
+
 describe('фикстура трёхуровневой карты', () => {
   // Свойства САМОЙ фикстуры. Они здесь не ради полноты: на каждом из них стоит
   // либо тест ниже, либо задача process-map-9mn.10, и молчаливая потеря любого
@@ -122,29 +137,127 @@ describe('фикстура трёхуровневой карты', () => {
     ).toBe(true);
   });
 
-  it('объявленный состав модулей совпадает с построенным', () => {
-    // MODULE_STAGE_IDS — то, с чем задача process-map-9mn.10 будет сверять
-    // stagesOfModule. Если объявление разойдётся с картой, сверять будет не с
-    // чем, а тест той задачи станет тавтологией.
+  it('состав модулей 2 / 3 / 2 — литералом, и его же говорят карта и MODULE_STAGE_IDS', () => {
+    // Сверка с ЛИТЕРАЛОМ, написанным руками. До process-map-9mn.29 тест сверял
+    // MODULE_STAGE_IDS с module.stageIds, а оба собраны из одного MODULE_LAYOUT
+    // одним и тем же выражением: источник сравнивался сам с собой, и
+    // расходиться там было нечему.
+    //
+    // На этом составе стоят тесты tests/modules.test.ts: stagesOfModule
+    // сверяется с MODULE_STAGE_IDS, вариант «обратный порядок» требует модуля
+    // из трёх этапов, вариант «переставленные номера» — модуля из stage-6 и
+    // stage-7. Литерал есть и там (moduleOfStage: владелец каждого этапа), но
+    // тот тест про функцию: покраснев, он указал бы на moduleOfStage, а не на
+    // фикстуру.
+    const declared: readonly (readonly [string, readonly string[]])[] = [
+      [MODULE_DEMAND, ['stage-1', 'stage-2']],
+      [MODULE_SUPPLY, ['stage-3', 'stage-4', 'stage-5']],
+      [MODULE_PRODUCTION, ['stage-6', 'stage-7']],
+    ];
     const map = parseThreeLevelProcessMap();
-    expect(map.modules.map((module) => module.id)).toEqual([...MODULE_IDS]);
-    for (const module of map.modules) {
-      expect(module.stageIds, module.id).toEqual([...(MODULE_STAGE_IDS[module.id] ?? [])]);
-    }
+    expect(
+      map.modules.map((module) => [module.id, module.stageIds]),
+      'карта',
+    ).toEqual(declared);
+    expect(Object.entries(MODULE_STAGE_IDS), 'MODULE_STAGE_IDS').toEqual(declared);
+    expect(MODULE_IDS, 'MODULE_IDS').toEqual(declared.map(([id]) => id));
   });
 
-  it('у каждого модуля есть собственные обзорные рёбра', () => {
-    // Иначе overviewEdgesOf(map, moduleId) нечем отличить от «вернул пусто».
+  it('у каждого модуля есть собственная цепочка этап → этап', () => {
+    // Засчитывается ребро с ОБОИМИ концами в модуле, а не любое, касающееся
+    // его: касаются модуля и рёбра систем, и пока тест засчитывал их (до
+    // process-map-9mn.29), цепочки DP и SNP можно было удалить целиком, не
+    // уронив его. На модуле без цепочки проверка overviewEdgesOf не отличает
+    // правильный фильтр от отбрасывающего рёбра с обоими своими концами — или
+    // оставляющего одни интеграционные.
     const map = parseThreeLevelProcessMap();
-    const moduleOfStage = new Map(
-      map.modules.flatMap((module) => module.stageIds.map((id) => [id, module.id] as const)),
+    const moduleByStage = moduleIdByStageId(map);
+    const withChain = new Set(
+      map.overviewEdges.flatMap((edge) => {
+        const sourceModule = moduleByStage.get(edge.source);
+        return sourceModule !== undefined && sourceModule === moduleByStage.get(edge.target)
+          ? [sourceModule]
+          : [];
+      }),
     );
-    const withEdges = new Set(
-      map.overviewEdges
-        .map((edge) => moduleOfStage.get(edge.source) ?? moduleOfStage.get(edge.target))
-        .filter((moduleId): moduleId is string => moduleId !== undefined),
-    );
-    expect([...withEdges].sort()).toEqual([...MODULE_IDS].sort());
+    expect(
+      map.modules.map((module) => module.id).filter((id) => !withChain.has(id)),
+      'модули без цепочки',
+    ).toEqual([]);
+  });
+
+  it('система стоит концом обзорного ребра и источником, и приёмником — по форме, не по id', () => {
+    // Различающая сила overviewEdgesOf (задача process-map-9mn.10) против
+    // односторонних фильтров. filter((e) => own.has(e.source)) выбрасывает
+    // рёбра, где система — ИСТОЧНИК, а свой этап только в target; зеркальный
+    // filter((e) => own.has(e.target)) — рёбра, где система — приёмник.
+    //
+    // Тесты tests/modules.test.ts ищут такие рёбра по id. Удаление рёбер они
+    // замечают, но диагноз ставят функции, а не фикстуре. А ребро, развёрнутое
+    // с сохранением id (stage-1 → DP вместо DP → stage-1, stage-4 → ERP вместо
+    // ERP → stage-4), пропускают — и вместе с ним односторонний мутант: на
+    // такой фикстуре весь корпус зеленел и с ним (проверено мутацией,
+    // process-map-9mn.29). Поэтому здесь сверяется ФОРМА: какой конец — код
+    // системы, какой — этап какого модуля.
+    //
+    // Перечислено то, на что опираются тесты overviewEdgesOf: у DP система
+    // источником (overview-edge-5), у SNP — и источником (overview-edge-7), и
+    // приёмником (overview-edge-6). kind в форму не входит: overviewEdgesOf на
+    // него не смотрит.
+    const map = parseThreeLevelProcessMap();
+    const moduleByStage = moduleIdByStageId(map);
+    const isSystem = (end: string): boolean => SystemCodeSchema.safeParse(end).success;
+    const hasSystemEdge = (moduleId: string, systemAt: 'source' | 'target'): boolean =>
+      map.overviewEdges.some((edge) => {
+        const [system, stage] =
+          systemAt === 'source' ? [edge.source, edge.target] : [edge.target, edge.source];
+        return isSystem(system) && moduleByStage.get(stage) === moduleId;
+      });
+
+    expect(hasSystemEdge(MODULE_DEMAND, 'source'), 'DP: система → этап модуля').toBe(true);
+    expect(hasSystemEdge(MODULE_SUPPLY, 'source'), 'SNP: система → этап модуля').toBe(true);
+    expect(hasSystemEdge(MODULE_SUPPLY, 'target'), 'SNP: этап модуля → система').toBe(true);
+  });
+
+  it('у этапа 6 нет ни одного внешнего входа и выхода', () => {
+    // Несущее свойство из шапки STAGE_LAYOUT: потребитель, молча
+    // предположивший «у каждого этапа есть свимлейн», обязан спотыкаться о
+    // фикстуру, а не о реальные данные. Больше его не требует ни один тест —
+    // вариант «переставленные номера» в tests/modules.test.ts лишь упоминает
+    // его в комментарии, — и свимлейн, дописанный этапу 6, проезжал бы молча.
+    const map = parseThreeLevelProcessMap();
+    const six = map.stages.find((stage) => stage.id === 'stage-6');
+    expect(six?.number, 'этап 6 на месте').toBe(6);
+    expect(six?.inputs, 'входы').toEqual([]);
+    expect(six?.outputs, 'выходы').toEqual([]);
+  });
+
+  it('у среднего модуля на уровне 1 есть и вход от модуля, и выход к модулю', () => {
+    // Середина цепочки — то, ради чего модулей три, а не два (шапка
+    // MODULE_LAYOUT): у неё есть и предшественник, и последователь. Середина —
+    // по module.number, а не по позиции в массиве: так упорядочены блоки
+    // этапов (validateIntegrity). Исходящее ребро SNP (module-edge-2) до
+    // process-map-9mn.29 не держал ни один тест: его удаление проходило весь
+    // корпус.
+    const map = parseThreeLevelProcessMap();
+    const byNumber = [...map.modules]
+      .sort((a, b) => a.number - b.number)
+      .map((module) => module.id);
+    expect(byNumber, 'SNP — посередине').toEqual([MODULE_DEMAND, MODULE_SUPPLY, MODULE_PRODUCTION]);
+
+    const otherModules = new Set(byNumber.filter((id) => id !== MODULE_SUPPLY));
+    expect(
+      map.moduleEdges.some(
+        (edge) => edge.target === MODULE_SUPPLY && otherModules.has(edge.source),
+      ),
+      'вход от модуля',
+    ).toBe(true);
+    expect(
+      map.moduleEdges.some(
+        (edge) => edge.source === MODULE_SUPPLY && otherModules.has(edge.target),
+      ),
+      'выход к модулю',
+    ).toBe(true);
   });
 });
 
@@ -348,9 +461,30 @@ describe('validateIntegrity: модули', () => {
     // Фикстура без модулей содержит ребро stage-2 → stage-3 — именно то, что в
     // трёхуровневой карте является ошибкой. Проверка обязана включаться
     // наличием modules, иначе задача сломала бы все существующие карты.
+    //
+    // Ребро ищется по ПАРЕ КОНЦОВ, а не по id: тест написан ради конфигурации,
+    // и id 'overview-edge-2', перенаправленный на другие концы, держал бы его
+    // зелёным вхолостую (так он и был устроен до process-map-9mn.29). «Ошибка
+    // в трёхуровневой карте» — тоже не на слово: то же ребро в трёхуровневой
+    // фикстуре соединяет этапы DP и SNP, и проверка на нём срабатывает.
+    //
+    // Эта вторая половина опирается на СОСТАВ модулей фикстуры: stage-2 — в DP,
+    // stage-3 — в SNP. Сдвинь границу — и тест покраснеет, свалив вину на
+    // validateIntegrity; настоящий диагноз даст тест «состав модулей 2 / 3 / 2
+    // — литералом…» выше, который краснеет в том же прогоне.
     const map = ProcessMapSchema.parse(buildSampleProcessMap());
-    expect(map.overviewEdges.some((edge) => edge.id === 'overview-edge-2')).toBe(true);
+    const edge = map.overviewEdges.find(
+      (candidate) => candidate.source === 'stage-2' && candidate.target === 'stage-3',
+    );
+    expect(edge, 'ребро stage-2 → stage-3').toBeDefined();
     expect(validateIntegrity(map)).toEqual([]);
+
+    const threeLevel = parseThreeLevelProcessMap();
+    threeLevel.overviewEdges.push({ ...edge!, id: 'two-level-edge' });
+    expect(validateIntegrity(threeLevel)).toEqual([
+      'Ребро обзора "two-level-edge" соединяет этапы разных модулей: ' +
+        `"stage-2" из "${MODULE_DEMAND}" и "stage-3" из "${MODULE_SUPPLY}"`,
+    ]);
   });
 
   // Оба конца ребра уровня 1 проверяются ОТДЕЛЬНЫМИ тестами, и это не
