@@ -4,7 +4,13 @@
 // задачи не изменились ни на строку — это и есть главное требование:
 // параметр версии не пишется, пока показана версия по умолчанию, поэтому все
 // уже разосланные по вики ссылки означают ровно то, что означали.
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+//
+// СТРАНИЦА ИЗ ФИКСТУР (process-map-9mn.34): обе версии подменены
+// (tests/fixtures/pageMocks.ts), чтобы механика адреса не зависела от того, у
+// какой карты в этой сборке есть вторая версия. useDeepLink, versions.ts,
+// loader.ts и App работают по-настоящему. Сценарии на НАСТОЯЩЕЙ карте snp
+// остаются в tests/useDeepLink.test.tsx.
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, render, screen } from '@testing-library/react';
 import App from '../src/App';
 import { clearImportedMap } from '../src/data/activeMap';
@@ -18,11 +24,32 @@ import {
 import { selectVersion } from '../src/data/versionSwitch';
 import { refreshProcessMap } from '../src/hooks/useProcessMap';
 import { createInitialState, useProcessStore } from '../src/store/useProcessStore';
+import {
+  FIXTURE_ALT_ID,
+  FIXTURE_DEFAULT_ID,
+  fixtureAltVersion,
+  fixtureDefaultVersion,
+} from './fixtures/pageMocks';
 
-const ALT = listVersions().find((version) => version.id !== DEFAULT_VERSION_ID);
-if (ALT === undefined) {
-  throw new Error('В бандле одна версия — проверять переключение нечем');
-}
+// Порядок и форма — дословно из шапки tests/fixtures/pageMocks.ts.
+vi.mock('@map/process.json', async () =>
+  (await import('./fixtures/pageMocks')).defaultVersionModule(),
+);
+vi.mock('@map-alt/process.json', async () =>
+  (await import('./fixtures/pageMocks')).altVersionModule(),
+);
+
+/*
+ * Вторая версия — известная тесту фикстура, а не «первая, не равная
+ * умолчанию» из listVersions(): отвались подмена @map-alt, поиск нашёл бы
+ * настоящую карту, и тесты зеленели бы на чужих данных. С константой
+ * `?version=fixture-alt` просто не найдётся, и покраснеет всё, что её ждёт.
+ */
+const ALT = {
+  id: FIXTURE_ALT_ID,
+  title: fixtureAltVersion().title,
+  stages: fixtureAltVersion().stages.length,
+};
 
 function setUrl(search: string): void {
   window.history.pushState({}, '', `/${search}`);
@@ -54,6 +81,24 @@ afterEach(() => {
   setUrl('');
 });
 
+/*
+ * СТОРОЖ САМОЙ СТРАНИЦЫ ИЗ ФИКСТУР. Предпосылки тестов ниже взяты из фикстур
+ * напрямую (fixtureDefaultVersion().stages.length, узел, которого нет в первой
+ * версии), а не из того, что реально собралось на странице. Отвались подмена
+ * @map — первой версией встанет настоящая snp, предпосылки перестанут быть
+ * правдой, а тесты останутся зелёными: у snp тоже четыре этапа, а id узлов
+ * второй фикстуры в ней нет. Этот тест называет причину одной строкой.
+ */
+describe('страница из фикстур', () => {
+  it('собралась: обе версии — фикстуры, первая — по умолчанию', () => {
+    expect(
+      listVersions().map((version) => version.id),
+      'страница из фикстур не собралась: проверьте оба vi.mock в начале файла',
+    ).toEqual([FIXTURE_DEFAULT_ID, FIXTURE_ALT_ID]);
+    expect(DEFAULT_VERSION_ID).toBe(FIXTURE_DEFAULT_ID);
+  });
+});
+
 describe('версия из адреса', () => {
   it('открывает названную версию', async () => {
     setUrl(`?version=${ALT.id}`);
@@ -65,21 +110,21 @@ describe('версия из адреса', () => {
   });
 
   /*
-   * ГЛАВНЫЙ ТЕСТ ЗАДАЧИ. Номера этапов у версий означают РАЗНОЕ: у карты по
-   * умолчанию их четыре, у второй — десять. Разбери `stage` раньше версии — и
-   * этап с номером, которого в первой карте нет, просто не найдётся, а
-   * существующий номер открыл бы ДРУГОЙ этап. Экран при этом выглядит рабочим.
+   * ГЛАВНЫЙ ТЕСТ ЗАДАЧИ. Номера этапов у версий означают РАЗНОЕ: у версии по
+   * умолчанию их четыре, у второй — семь (у настоящих карт — четыре и десять).
+   * Разбери `stage` раньше версии — и этап с номером, которого в первой карте
+   * нет, просто не найдётся, а существующий номер открыл бы ДРУГОЙ этап. Экран
+   * при этом выглядит рабочим.
    */
   it('этап ищется в той версии, которая названа в адресе', async () => {
-    const alt = ALT;
     // Номер, которого у карты по умолчанию нет вовсе.
-    const beyondDefault = loadBaseProcessMap().stages.length + 1;
-    expect(alt.stages).toBeGreaterThanOrEqual(beyondDefault);
-    setUrl(`?version=${alt.id}&stage=${beyondDefault}`);
+    const beyondDefault = fixtureDefaultVersion().stages.length + 1;
+    expect(ALT.stages).toBeGreaterThanOrEqual(beyondDefault);
+    setUrl(`?version=${ALT.id}&stage=${beyondDefault}`);
 
     await renderApp();
 
-    const stage = loadBaseProcessMap().stages.find(
+    const stage = fixtureAltVersion().stages.find(
       (candidate) => candidate.number === beyondDefault,
     );
     expect(stage).toBeDefined();
@@ -87,18 +132,21 @@ describe('версия из адреса', () => {
   });
 
   it('узел из второй версии открывает её этап', async () => {
-    const alt = ALT;
-    selectVersion(alt.id);
-    const node = loadBaseProcessMap().stages[1]?.nodes[0];
-    const stageId = loadBaseProcessMap().stages[1]?.id;
-    resetSelectedVersion();
-    refreshProcessMap();
+    const stage = fixtureAltVersion().stages[1];
+    const node = stage?.nodes[0];
     expect(node).toBeDefined();
-    setUrl(`?version=${alt.id}&node=${node?.id as string}`);
+    // Узел обязан быть ТОЛЬКО во второй версии: найдись он и в первой, тест
+    // прошёл бы и при разборе `node` раньше версии.
+    expect(
+      fixtureDefaultVersion().stages.some((candidate) =>
+        candidate.nodes.some((other) => other.id === node?.id),
+      ),
+    ).toBe(false);
+    setUrl(`?version=${ALT.id}&node=${node?.id as string}`);
 
     await renderApp();
 
-    expect(useProcessStore.getState().currentStageId).toBe(stageId);
+    expect(useProcessStore.getState().currentStageId).toBe(stage?.id);
     expect(useProcessStore.getState().selectedNodeId).toBe(node?.id);
   });
 

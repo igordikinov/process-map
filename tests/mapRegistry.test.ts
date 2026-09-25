@@ -11,7 +11,7 @@
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { BPMN_MAP_IDS, DEFAULT_MAP, MAP_IDS } from '../scripts/mapTarget.ts';
+import { BPMN_MAP_IDS, DEFAULT_MAP, MAP_IDS, mapAlias } from '../scripts/mapTarget.ts';
 
 const IMPORTER_SOURCE = readFileSync(resolve(process.cwd(), 'scripts', 'import-pptx.py'), 'utf8');
 const DATA_ROOT = resolve(process.cwd(), 'src', 'data');
@@ -98,6 +98,35 @@ describe('реестры карт', () => {
     expect(MAP_IDS).toContain(DEFAULT_MAP);
     expect(importerMapKeys()).toContain(DEFAULT_MAP);
     expect(IMPORTER_SOURCE).toContain(`DEFAULT_MAP = "${DEFAULT_MAP}"`);
+  });
+
+  /*
+   * ВТОРАЯ ВЕРСИЯ СТРАНИЦЫ ПО УМОЛЧАНИЮ РЕАЛЬНО ПОПАДАЕТ В БАНДЛ.
+   *
+   * Сторож против тихой деградации: откатись алиас `@map-alt` на карту по
+   * умолчанию — список версий схлопнется до одной записи, переключатель исчезнет
+   * с экрана, и ни один юнит-тест механики этого не заметит: они идут на
+   * странице из фикстур (tests/fixtures/pageMocks.ts), где обе версии подменены.
+   *
+   * Раньше эта проверка жила в tests/versions.test.tsx и смотрела на список
+   * версий собранной в тесты страницы. Но это вопрос КОНФИГУРАЦИИ сборки, а не
+   * механики: страница юнит-тестов закреплена за snp (process-map-9mn.34) и
+   * после process-map-9mn.20 второй версии иметь не будет, а страница из корня
+   * сайта — будет. Проверяется поэтому сама конфигурация. Что переключатель при
+   * этом виден и работает в настоящем бандле, проверяет e2e/version-switch.spec.ts.
+   */
+  it('у страницы по умолчанию вторая версия ведёт в другой каталог', () => {
+    const alias = mapAlias(DEFAULT_MAP);
+    // Без этого переименованный ключ дал бы «undefined не равно каталогу» —
+    // зелёную проверку ни о чём.
+    expect(alias['@map']).toBeDefined();
+    expect(alias['@map-alt']).toBeDefined();
+
+    expect(
+      alias['@map-alt'],
+      `у страницы по умолчанию (${DEFAULT_MAP}) нет второй версии: @map-alt откатился на @map. ` +
+        'Проверьте MAP_ALT_VERSION в scripts/mapTarget.ts.',
+    ).not.toBe(alias['@map']);
   });
 
   it('у объявленной карты профиль разбора из известного набора', () => {

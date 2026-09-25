@@ -2,18 +2,41 @@
 //
 // Механика переключения проверена в tests/versions.test.tsx. Здесь — интерфейс:
 // что видит читатель, что слышит скринридер и когда переключателя нет вовсе.
+//
+// Два describe — две разные страницы (process-map-9mn.34):
+//  · «разметка» рендерит OverviewHeader с версиями из пропсов — страница ему не
+//    нужна, и подписи владельца (snp, inplan-model) проверяются именно там;
+//  · «на экране» рендерит App на СТРАНИЦЕ ИЗ ФИКСТУР (tests/fixtures/pageMocks.ts):
+//    переключатель рисуется только при двух версиях, а есть ли вторая версия у
+//    настоящей страницы юнит-тестов (snp), решает сборка — после
+//    process-map-9mn.20 её не будет, и тесты экрана остались бы без предмета.
+//    Подмена касается только данных; App, versions.ts и loader.ts настоящие.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import App from '../src/App';
 import { clearImportedMap, setImportedMap } from '../src/data/activeMap';
 import { loadBaseProcessMap } from '../src/data/loader';
 import { ProcessMapSchema } from '../src/data/schema';
-import { DEFAULT_VERSION_ID, listVersions, resetSelectedVersion } from '../src/data/versions';
+import { resetSelectedVersion } from '../src/data/versions';
 import { OverviewHeader } from '../src/components/Overview/OverviewHeader';
 import { refreshProcessMap } from '../src/hooks/useProcessMap';
 import { ru } from '../src/i18n/ru';
 import { createInitialState, useProcessStore } from '../src/store/useProcessStore';
+import {
+  FIXTURE_ALT_ID,
+  FIXTURE_DEFAULT_ID,
+  fixtureAltVersion,
+  fixtureDefaultVersion,
+} from './fixtures/pageMocks';
 import { buildSampleProcessMap } from './fixtures/sample-process';
+
+// Порядок и форма — дословно из шапки tests/fixtures/pageMocks.ts.
+vi.mock('@map/process.json', async () =>
+  (await import('./fixtures/pageMocks')).defaultVersionModule(),
+);
+vi.mock('@map-alt/process.json', async () =>
+  (await import('./fixtures/pageMocks')).altVersionModule(),
+);
 
 const VERSIONS = [
   { id: 'snp', title: 'E2E-процесс планирования поставок', stages: 4 },
@@ -144,36 +167,44 @@ describe('переключатель версий: разметка', () => {
 });
 
 describe('переключатель версий на экране', () => {
+  /*
+   * ПОДПИСИ — ЗАГОЛОВКИ ФИКСТУР. Подписи владельца в i18n заведены для id
+   * настоящих версий; у фикстур их нет, и кнопка подписывается заголовком карты
+   * (тот же откат проверен в «разметке»: «версия без подписи в i18n…»). Первая
+   * проверка ниже закрепляет это явно: появись у id фикстуры подпись владельца,
+   * тесты этого блока искали бы кнопку не по тому тексту.
+   */
+  const DEFAULT_LABEL = fixtureDefaultVersion().title;
+  const ALT_LABEL = fixtureAltVersion().title;
+
   it('в обзоре есть обе версии, нажата версия по умолчанию', async () => {
+    expect(ru.overview.versionLabels[FIXTURE_DEFAULT_ID]).toBeUndefined();
+    expect(ru.overview.versionLabels[FIXTURE_ALT_ID]).toBeUndefined();
     await act(async () => {
       render(<App />);
     });
 
     const buttons = within(group()).getAllByRole('button');
-    expect(buttons).toHaveLength(listVersions().length);
+    expect(buttons.map((button) => button.textContent)).toEqual([DEFAULT_LABEL, ALT_LABEL]);
     expect(
       buttons.find((button) => button.getAttribute('aria-pressed') === 'true')?.textContent,
-    ).toBe(ru.overview.versionLabels[DEFAULT_VERSION_ID]);
+    ).toBe(DEFAULT_LABEL);
   });
 
   it('клик по второй версии меняет карту на экране', async () => {
-    const alt = listVersions().find((version) => version.id !== DEFAULT_VERSION_ID);
-    expect(alt).toBeDefined();
     await act(async () => {
       render(<App />);
     });
 
     await act(async () => {
-      fireEvent.click(
-        within(group()).getByRole('button', {
-          name: ru.overview.versionLabels[(alt as { id: string }).id] as string,
-        }),
-      );
+      fireEvent.click(within(group()).getByRole('button', { name: ALT_LABEL }));
     });
 
-    expect(loadBaseProcessMap().id).toBe(alt?.id);
-    expect(screen.getByRole('heading', { name: alt?.title as string })).toBeInTheDocument();
-    expect(screen.getByText(ru.overview.stagesBadge(alt?.stages as number))).toBeInTheDocument();
+    expect(loadBaseProcessMap().id).toBe(FIXTURE_ALT_ID);
+    expect(screen.getByRole('heading', { name: fixtureAltVersion().title })).toBeInTheDocument();
+    expect(
+      screen.getByText(ru.overview.stagesBadge(fixtureAltVersion().stages.length)),
+    ).toBeInTheDocument();
   });
 
   /*

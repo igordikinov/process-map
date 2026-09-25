@@ -5,7 +5,15 @@
 // «Сбросить правки» на одной не стирает черновик другой. Это тот же инвариант,
 // ради которого SPEC §3 когда-то развёл ключи по картам, — только теперь карты
 // живут на одном адресе, и проверить его стало важнее.
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+//
+// СТРАНИЦА ИЗ ФИКСТУР (process-map-9mn.34). Механика версий не должна зависеть
+// от того, у какой карты в этой сборке есть вторая версия: у страницы юнит-тестов
+// (snp) она сегодня есть, после process-map-9mn.20 её не будет. Поэтому данные
+// обеих версий подменены фикстурами (tests/fixtures/pageMocks.ts), а versions.ts,
+// loader.ts, store и App работают по-настоящему. Что вторая версия реально
+// попадает в бандл страницы по умолчанию, сторожит tests/mapRegistry.test.ts —
+// это вопрос конфигурации сборки, а не механики.
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, render, screen } from '@testing-library/react';
 import App from '../src/App';
 import { clearImportedMap, setImportedMap } from '../src/data/activeMap';
@@ -15,7 +23,7 @@ import {
   resetOverrides,
   setNodeOverride,
 } from '../src/data/loader';
-import { ProcessMapSchema } from '../src/data/schema';
+import { overridesStorageKey, ProcessMapSchema } from '../src/data/schema';
 import {
   DEFAULT_VERSION_ID,
   getSelectedVersionId,
@@ -25,13 +33,31 @@ import {
 } from '../src/data/versions';
 import { selectVersion } from '../src/data/versionSwitch';
 import { refreshProcessMap } from '../src/hooks/useProcessMap';
+import { ru } from '../src/i18n/ru';
 import { createInitialState, useProcessStore } from '../src/store/useProcessStore';
+import {
+  FIXTURE_ALT_ID,
+  FIXTURE_DEFAULT_ID,
+  fixtureAltVersion,
+  fixtureDefaultVersion,
+} from './fixtures/pageMocks';
 import { buildSampleProcessMap } from './fixtures/sample-process';
 
-/** Вторая версия этой сборки, если она есть. */
-function altVersionId(): string | undefined {
-  return listVersions().find((version) => version.id !== DEFAULT_VERSION_ID)?.id;
-}
+// Порядок и форма — дословно из шапки tests/fixtures/pageMocks.ts.
+vi.mock('@map/process.json', async () =>
+  (await import('./fixtures/pageMocks')).defaultVersionModule(),
+);
+vi.mock('@map-alt/process.json', async () =>
+  (await import('./fixtures/pageMocks')).altVersionModule(),
+);
+
+/*
+ * Вторая версия называется КОНСТАНТОЙ, а не ищется в listVersions(). Поиск
+ * «первой версии, не равной умолчанию» нашёл бы что угодно — в том числе
+ * настоящую карту, если подмена @map-alt однажды отвалится, — и тесты
+ * продолжили бы зеленеть на чужих данных.
+ */
+const ALT = FIXTURE_ALT_ID;
 
 beforeEach(() => {
   localStorage.clear();
@@ -49,42 +75,95 @@ afterEach(() => {
 
 describe('реестр версий', () => {
   /*
-   * Сторож против тихой деградации. Откатись алиас `@map-alt` на карту по
-   * умолчанию — список схлопнется до одной записи, переключатель исчезнет с
-   * экрана, и НИ ОДИН другой тест этого не заметит: приложение продолжит
-   * показывать версию по умолчанию как ни в чём не бывало.
+   * Сторож самой страницы из фикстур. Отвались любая из двух подмен — список
+   * перестанет совпадать: без @map первой встанет настоящая карта, без @map-alt
+   * второй — настоящая вторая версия (или её не будет вовсе). Сравнивается
+   * СОСТАВ, а не длина: у настоящей страницы тоже бывает две версии.
+   *
+   * Заголовок и число этапов считает versions.ts из данных версии — они же
+   * стоят в шапке, и разъехаться им негде.
    */
-  it('в этой сборке две версии, и первая — по умолчанию', () => {
-    const versions = listVersions();
+  it('на странице ровно две версии фикстур, первая — по умолчанию', () => {
     expect(
-      versions.length,
-      'вторая версия не попала в бандл: проверьте MAP_ALT_VERSION и алиас @map-alt',
-    ).toBe(2);
-    expect(versions[0]?.id).toBe(DEFAULT_VERSION_ID);
-    expect(getSelectedVersionId()).toBe(DEFAULT_VERSION_ID);
+      listVersions(),
+      'страница из фикстур не собралась: проверьте оба vi.mock в начале файла',
+    ).toEqual([
+      { id: FIXTURE_DEFAULT_ID, title: fixtureDefaultVersion().title, stages: 4 },
+      { id: FIXTURE_ALT_ID, title: fixtureAltVersion().title, stages: 7 },
+    ]);
+    expect(DEFAULT_VERSION_ID).toBe(FIXTURE_DEFAULT_ID);
+    expect(getSelectedVersionId()).toBe(FIXTURE_DEFAULT_ID);
   });
 
-  it('у каждой версии непустой заголовок и хотя бы один этап', () => {
-    for (const version of listVersions()) {
-      expect(version.title.trim(), `версия ${version.id}`).not.toBe('');
-      expect(version.stages, `версия ${version.id}`).toBeGreaterThan(0);
-    }
+  /*
+   * Вторая версия страницы из фикстур — БЕЗ модулей, и это предпосылка, а не
+   * деталь фикстуры (почему — fixtureAltVersion в tests/fixtures/pageMocks.ts).
+   * Трёхуровневая фикстура, из которой она собрана, модули имеет; перестань
+   * pageMocks их вырезать — карта по мере эпика M8 начнёт открываться экраном
+   * модулей, и тесты обзора в этом и соседних файлах молча стали бы проверять
+   * другой экран. Проверка списка выше этого не видит: заголовок и число
+   * этапов от модулей не зависят.
+   */
+  it('вторая версия фикстур — без модулей', () => {
+    const why =
+      'pageMocks.fixtureAltVersion() обязан вырезать modules и moduleEdges: тесты механики ' +
+      'версий смотрят на обзор этапов, а карта с модулями открывается другим экраном.';
+    expect(fixtureAltVersion().modules, why).toBeUndefined();
+    expect(fixtureAltVersion().moduleEdges, why).toBeUndefined();
   });
 
-  it('версии различаются по id, иначе переключать нечего', () => {
-    const ids = listVersions().map((version) => version.id);
-    expect(new Set(ids).size).toBe(ids.length);
+  /*
+   * Встроенная вторая версия — НЕ загруженный файл, и отличие видно в двух
+   * местах: на экране нет бейджа подмены, а правки ложатся в обычный ключ
+   * версии, а не в пространство имён загруженных файлов (`imported:`).
+   * Страница из фикстур этого различия не стирает — ради него она собрана
+   * подменой JSON, а не через applyImportedMap(), который показал бы фикстуру
+   * чужим файлом.
+   *
+   * Бейдж судится на настоящем App после переключения: выбор версии, который
+   * однажды пойдёт через подмену карты (или шапка, принявшая «не версию по
+   * умолчанию» за загруженный файл), сказал бы читателю вики «чужой файл»
+   * о карте проекта.
+   */
+  it('версии этой страницы — встроенные, а не загруженные', async () => {
+    await act(async () => {
+      render(<App />);
+    });
+
+    await act(async () => {
+      selectVersion(ALT);
+    });
+
+    // Без этой строки отсутствие бейджа ничего бы не доказывало: переключение,
+    // которое не сработало вовсе, тоже оставило бы шапку без бейджа.
+    expect(screen.getByRole('heading', { name: fixtureAltVersion().title })).toBeInTheDocument();
+    expect(
+      screen.queryByText(ru.toolbar.importedBadge),
+      'встроенная версия показана с бейджем «Загруженная схема»',
+    ).toBeNull();
+
+    setNodeOverride(loadBaseProcessMap().stages[0]?.nodes[0]?.id as string, {
+      title: 'Экран модели',
+      url: 'https://example.com/b',
+    });
+    // Сначала — ключ загруженного файла: это и есть вопрос теста, и при
+    // дефекте падать надо на нём, с его сообщением, а не строкой ниже.
+    expect(
+      localStorage.getItem(`inplan-process-map:imported:${ALT}:overrides:v1`),
+      'правки встроенной версии легли в ключ загруженного файла',
+    ).toBeNull();
+    // И правка вообще записалась — иначе пустой ключ выше ничего не доказывал бы.
+    expect(localStorage.getItem(overridesStorageKey(ALT))).not.toBeNull();
   });
 });
 
 describe('переключение версии', () => {
   it('отдаёт карту выбранной версии, а возврат — прежнюю', () => {
-    const alt = altVersionId();
-    expect(alt).toBeDefined();
     const defaultStages = loadBaseProcessMap().stages.length;
 
-    expect(selectVersion(alt as string)).toBe(true);
-    expect(loadBaseProcessMap().id).toBe(alt);
+    expect(selectVersion(ALT)).toBe(true);
+    expect(loadBaseProcessMap().id).toBe(ALT);
+    expect(loadBaseProcessMap().stages.length).not.toBe(defaultStages);
 
     expect(selectVersion(DEFAULT_VERSION_ID)).toBe(true);
     expect(loadBaseProcessMap().id).toBe(DEFAULT_VERSION_ID);
@@ -105,16 +184,21 @@ describe('переключение версии', () => {
 
   /*
    * РЕГРЕССИЯ, РАДИ КОТОРОЙ ПОРЯДОК В selectVersion ИМЕННО ТАКОЙ.
-   * `currentStageId` — id этапа ТЕКУЩЕЙ версии; в другой такого этапа нет, и
-   * StageDetail вернул бы пустой экран, из которого не выйти: крошки с кнопкой
-   * «Назад» рендерятся ниже этого return.
+   * `currentStageId` — id этапа ТЕКУЩЕЙ версии; в настоящей другой версии
+   * такого этапа нет, и StageDetail вернул бы пустой экран, из которого не
+   * выйти: крошки с кнопкой «Назад» рендерятся ниже этого return.
+   *
+   * У фикстур id этапов совпадают (`stage-2` есть в обеих), и это не ослабляет
+   * проверку: судится сброс уровня, а не то, нашёлся ли этап. Наоборот, без
+   * сброса здесь открылся бы ЧУЖОЙ этап 2 — дефект, который на экране выглядел
+   * бы рабочим.
    */
   it('переключение с уровня 2 возвращает на обзор', () => {
     const stageId = loadBaseProcessMap().stages[1]?.id;
     expect(stageId).toBeDefined();
     useProcessStore.setState({ currentStageId: stageId as string });
 
-    selectVersion(altVersionId() as string);
+    selectVersion(ALT);
 
     expect(useProcessStore.getState().currentStageId).toBeNull();
   });
@@ -129,9 +213,12 @@ describe('переключение версии', () => {
    * чужим currentStageId в jsdom не наблюдается, и мутация «поменять строки
    * местами» его переживает. Порядок остаётся защитой в глубину — ровно как в
    * mapSwitch.ts, где рядом стоит вторая защита в самом StageDetail.
+   *
+   * Зато САМО отсутствие back() на странице из фикстур этот тест ловит (мутация
+   * проверена): `stage-2` есть и во второй версии, вторая защита StageDetail не
+   * срабатывает, и на экране остаётся этап 2 чужой версии без заголовка карты.
    */
   it('после переключения с уровня 2 на экране обзор новой версии, а не пустота', async () => {
-    const alt = altVersionId() as string;
     const stageId = loadBaseProcessMap().stages[1]?.id as string;
     useProcessStore.setState({ currentStageId: stageId });
     await act(async () => {
@@ -139,11 +226,10 @@ describe('переключение версии', () => {
     });
 
     await act(async () => {
-      selectVersion(alt);
+      selectVersion(ALT);
     });
 
-    const altTitle = listVersions().find((version) => version.id === alt)?.title as string;
-    expect(screen.getByRole('heading', { name: altTitle })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: fixtureAltVersion().title })).toBeInTheDocument();
   });
 
   it('переключение снимает загруженную пользователем схему', () => {
@@ -151,9 +237,9 @@ describe('переключение версии', () => {
     refreshProcessMap();
     expect(loadBaseProcessMap().id).toBe('files-map');
 
-    selectVersion(altVersionId() as string);
+    selectVersion(ALT);
 
-    expect(loadBaseProcessMap().id).toBe(altVersionId());
+    expect(loadBaseProcessMap().id).toBe(ALT);
   });
 });
 
@@ -165,22 +251,21 @@ describe('изоляция правок между версиями', () => {
    * случайно совпала бы.
    */
   it('правки версий лежат в разных ключах', () => {
-    const alt = altVersionId() as string;
     const defaultNode = loadBaseProcessMap().stages[0]?.nodes[0]?.id as string;
     setNodeOverride(defaultNode, { title: 'Экран умолчания', url: 'https://example.com/a' });
 
-    selectVersion(alt);
+    selectVersion(ALT);
     const altNode = loadBaseProcessMap().stages[0]?.nodes[0]?.id as string;
     setNodeOverride(altNode, { title: 'Экран модели', url: 'https://example.com/b' });
 
     expect(localStorage.getItem(OVERRIDES_KEY)).not.toBeNull();
-    expect(localStorage.getItem(`inplan-process-map:${alt}:overrides:v1`)).not.toBeNull();
-    // Ключ загруженного файла не задет: встроенная версия — не чужой файл.
-    expect(localStorage.getItem(`inplan-process-map:imported:${alt}:overrides:v1`)).toBeNull();
+    expect(localStorage.getItem(`inplan-process-map:${ALT}:overrides:v1`)).not.toBeNull();
+    // Что ключ загруженного файла при этом не задет, судит «версии этой
+    // страницы — встроенные, а не загруженные» выше: это вопрос «встроенная
+    // или чужой файл», а не «одна версия или другая».
   });
 
   it('«Сбросить правки» на одной версии не трогает ключ другой', () => {
-    const alt = altVersionId() as string;
     setNodeOverride(loadBaseProcessMap().stages[0]?.nodes[0]?.id as string, {
       title: 'Экран умолчания',
       url: 'https://example.com/a',
@@ -188,27 +273,26 @@ describe('изоляция правок между версиями', () => {
     const before = localStorage.getItem(OVERRIDES_KEY);
     expect(before).not.toBeNull();
 
-    selectVersion(alt);
+    selectVersion(ALT);
     setNodeOverride(loadBaseProcessMap().stages[0]?.nodes[0]?.id as string, {
       title: 'Экран модели',
       url: 'https://example.com/b',
     });
     resetOverrides();
 
-    expect(localStorage.getItem(`inplan-process-map:${alt}:overrides:v1`)).toBeNull();
+    expect(localStorage.getItem(`inplan-process-map:${ALT}:overrides:v1`)).toBeNull();
     expect(localStorage.getItem(OVERRIDES_KEY)).toBe(before);
   });
 
   it('правки версии переживают уход на другую и возврат', () => {
-    const alt = altVersionId() as string;
-    selectVersion(alt);
+    selectVersion(ALT);
     const nodeId = loadBaseProcessMap().stages[0]?.nodes[0]?.id as string;
     setNodeOverride(nodeId, { title: 'Экран модели', url: 'https://example.com/b' });
 
     selectVersion(DEFAULT_VERSION_ID);
-    selectVersion(alt);
+    selectVersion(ALT);
 
     expect(loadBaseProcessMap().stages[0]?.nodes[0]?.id).toBe(nodeId);
-    expect(localStorage.getItem(`inplan-process-map:${alt}:overrides:v1`)).not.toBeNull();
+    expect(localStorage.getItem(`inplan-process-map:${ALT}:overrides:v1`)).not.toBeNull();
   });
 });

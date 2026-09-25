@@ -3,10 +3,14 @@ import react from '@vitejs/plugin-react';
 import { mapAlias, mapIdFromEnv, mapOutDir, mapTitle } from './scripts/mapTarget.ts';
 
 // Какую карту собираем — из переменной MAP (scripts/mapTarget.ts).
-// ЭТОТ ЖЕ АЛИАС ОБЯЗАН СТОЯТЬ В vitest.config.ts: Vitest при наличии своего
+// АЛИАС ДАННЫХ ОБЯЗАН БЫТЬ И В vitest.config.ts: Vitest при наличии своего
 // конфига vite.config.ts не читает вовсе, и алиас только здесь дал бы зелёный
-// `npm run build` и красный `vitest run`. Инлайнить путь нельзя — только
-// mapAlias() из общего модуля.
+// `npm run build` и красный `vitest run`. Инлайнить путь нельзя ни там, ни
+// здесь — оба берут его из mapAlias() в scripts/mapTarget.ts. Но карта у них
+// РАЗНАЯ: здесь — цель сборки из переменной MAP, в vitest.config.ts —
+// закреплённая страница юнит-тестов UNIT_TEST_MAP, а не MAP (process-map-9mn.34).
+// Почему так и зачем там алиасы с суффиксом — комментарий над testAlias в
+// vitest.config.ts.
 const mapId = mapIdFromEnv();
 
 const TITLE_TAG = /<title>[^<]*<\/title>/;
