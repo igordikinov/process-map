@@ -589,9 +589,11 @@ describe('scripts/import-pptx.py разбирается целиком', () => {
   // профилем разбора, что и SNP, и тогда запись без ключа либо остановит её
   // сборку («этапа 3 нет в презентации»), либо — хуже — применится к ней молча,
   // совпав номером этапа. Первым — потому что так же требует самопроверка
-  // импортёра, а она в CI не запускается. Раньше вместо разбора сравнивалось
-  // число вхождений "map": и "task":; теперь запись разбирается целиком
-  // (process-map-n6h).
+  // импортёра, а она идёт только в CI и в npm run data, но не в npm run check:
+  // он обходится без Python (решение владельца по process-map-ngw), и перед
+  // коммитом это правило проверяет только разбор. Раньше вместо разбора
+  // сравнивалось число вхождений "map": и "task":; теперь запись разбирается
+  // целиком (process-map-n6h).
   //
   // Правила касаются ВСЕХ записей ВСЕХ карт, поэтому живут здесь, а не в тестах
   // одной карты: tests/snp/ сверяет с данными только записи SNP. Проверяет их
@@ -611,5 +613,54 @@ describe('scripts/import-pptx.py разбирается целиком', () => {
     expect(readPythonString(source, 'MAP_ID')).toBe('snp');
     expect(readPythonString(source, 'MAP_ID_MRP')).toBe('mrp');
     expect(readPythonString(source, 'MAP_DATA_FINGERPRINT')).toMatch(/^[0-9a-f]{64}$/);
+  });
+});
+
+/**
+ * Тело функции верхнего уровня из исходника импортёра: от `def <name>(` до
+ * следующей строки, начатой в первой колонке. Сигнатура на нескольких строках
+ * кончается строкой `) -> …:` в первой колонке — концом функции она не считается.
+ */
+function pythonFunctionBody(source: string, name: string): string {
+  const start = source.search(new RegExp(String.raw`^def ${name}\(`, 'm'));
+  if (start < 0) {
+    throw new Error(`в scripts/import-pptx.py не найдена функция ${name}`);
+  }
+  const rest = source.slice(start);
+  const end = rest.slice(1).search(/\n[^\s)]/);
+  return end < 0 ? rest : rest.slice(0, end + 1);
+}
+
+/*
+ * РОЛЬ СЛАЙДА В ОТЧЁТЕ ИМПОРТЁРА (SlideReport.role, process-map-9mn.14.1).
+ * print_report печатает шапку обзора («этапов (контейнеров)», «обзорных рёбер»)
+ * по роли слайда, а не по его номеру; роль ставит построитель. Забудь
+ * build_process_map отдать слайду 2 роль overview — отчёт SNP молча сменит
+ * блок обзора на счётчики узлов, а данные останутся побайтово теми же.
+ *
+ * Почему сторож здесь, по исходнику. Самопроверка импортёра проверяет саму
+ * печать по роли (пункт 13), но на отчётах, собранных руками: презентации она
+ * не читает, и что РЕАЛЬНЫЙ построитель ставит роль, ей не видно. Сверка карт
+ * после npm run data сравнивает файлы, а не отчёт. Единственным, кто это ловил,
+ * оставалось сравнение stdout до и после правки — вручную и один раз.
+ */
+describe('роль слайда в отчёте импортёра задаёт построитель', () => {
+  const source = readImporterSource();
+
+  it('build_process_map отдаёт роль overview ровно одному слайду — второму, обзору SNP', () => {
+    const body = pythonFunctionBody(source, 'build_process_map');
+    // Тело вырезано целиком: иначе проверки ниже смотрели бы на его обрывок.
+    expect(body).toContain('return process_map, reports, questions, ids.counts');
+    expect(body).toContain('SlideReport(slide_no=2, role="overview")');
+    // Ровно одна роль overview: слайды детализации, получив её, напечатались бы
+    // шапкой обзора вместо счётчиков узлов.
+    expect(body.match(/role="overview"/g)).toHaveLength(1);
+  });
+
+  it('build_single_slide_map роль overview не ставит: его слайд — единственный слайд этапа', () => {
+    const body = pythonFunctionBody(source, 'build_single_slide_map');
+    expect(body).toContain('return process_map, [report], questions, ids.counts');
+    expect(body).toContain('SlideReport(slide_no=slide_no)');
+    expect(body).not.toContain('role="overview"');
   });
 });
