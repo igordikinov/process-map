@@ -13,6 +13,15 @@
 //
 // Из-за этого компонент больше не «чистый»: ему нужен store — level решает
 // currentStageId (null → обзор), state toggle решает showIntegrations.
+//
+// У ТРЁХУРОВНЕВОЙ карты экранов три (process-map-9mn.16), и currentStageId
+// === null их уже не различает: он null и на экране модулей, и на экране
+// этапов модуля. Экран модулей узнаётся currentScreen() из src/data/modules.ts
+// — по форме документа и паре (currentModuleId, currentStageId), поэтому
+// легенда читает ещё и саму карту. Состав его пунктов — modulesItems() ниже:
+// «Процесс», «Интеграция», «Система», каждый лишь при том, что он объясняет.
+// На двухуровневой карте экрана модулей нет, и легенда там прежняя.
+//
 // React Flow ему не нужен вовсе — и именно поэтому она НЕ монтируется внутри
 // .canvas/<ReactFlowProvider> (см. Overview.tsx/StageDetail.tsx): раньше она
 // плавала там поверх полотна абсолютным позиционированием, но перекрывала
@@ -33,7 +42,8 @@
 // элемента хрома, которое ничего не должно переживать.
 import { useMemo, useState } from 'react';
 import { iconUrl } from '../../assets/icons';
-import type { NodeType } from '../../data/schema';
+import { currentScreen } from '../../data/modules';
+import type { NodeType, ProcessMap } from '../../data/schema';
 import { useProcessMap } from '../../hooks/useProcessMap';
 import { ru } from '../../i18n/ru';
 import { useProcessStore } from '../../store/useProcessStore';
@@ -98,6 +108,35 @@ const BPMN_ITEMS: readonly (LegendItem & { readonly nodeType: NodeType })[] = [
 const HIDDEN_WITHOUT_INTEGRATIONS = new Set(['integration', 'system']);
 
 /**
+ * Уровень 1 ТРЁХУРОВНЕВОЙ карты — экран модулей (process-map-9mn.16).
+ *
+ * Пункты те же, что у обзора этапов, но каждый — только если на полотне есть
+ * то, что он объясняет (довод шапки файла):
+ *   · «Процесс» — если есть связь модуль → модуль. Карта из одного модуля
+ *     законна (hasModules) и рисует одну карточку без единой линии;
+ *   · «Интеграция» и «Система» — если у связей уровня 1 есть конец-система.
+ *     У настоящей карты inplan таких концов нет вовсе, свимлейнов на её
+ *     уровне 1 не будет, и обещать их легенда не должна. Что второй конец
+ *     такой связи — именно код системы, гарантирует validateIntegrity («хотя
+ *     бы один конец — модуль», и каждый конец — модуль или код системы).
+ *
+ * Пункта «Модуль» НЕТ намеренно: карточка модуля подписана сама, словом
+ * «Модуль» рядом с номером, — ровно как карточка этапа, для которой пункта
+ * «Этап» на обзоре тоже нет (решение записано у ru.legend.detail).
+ *
+ * Тумблер интеграций применяется ниже общим фильтром, как на других экранах.
+ */
+function modulesItems(map: ProcessMap): readonly LegendItem[] {
+  const moduleIds = new Set((map.modules ?? []).map((module) => module.id));
+  const edges = map.moduleEdges ?? [];
+  const hasFlow = edges.some((edge) => moduleIds.has(edge.source) && moduleIds.has(edge.target));
+  const hasSystems = edges.some(
+    (edge) => !moduleIds.has(edge.source) || !moduleIds.has(edge.target),
+  );
+  return OVERVIEW_ITEMS.filter((item) => (item.key === 'process' ? hasFlow : hasSystems));
+}
+
+/**
  * Типы BPMN, реально присутствующие на открытом этапе.
  *
  * Читает карту, а не данные React Flow: легенда живёт ВНЕ <ReactFlowProvider>
@@ -125,12 +164,19 @@ export function Legend({ compact = false }: LegendProps) {
   const isOverview = useProcessStore((state) => state.currentStageId === null);
   const showIntegrations = useProcessStore((state) => state.showIntegrations);
   const [expanded, setExpanded] = useState(false);
+  // Экран модулей нельзя узнать по isOverview: currentStageId === null и там.
+  // Какой экран на самом деле, решает currentScreen() по форме документа — два
+  // скалярных селектора, а не объект (zustand v5, см. App.tsx).
+  const map = useProcessMap();
+  const currentModuleId = useProcessStore((state) => state.currentModuleId);
+  const currentStageId = useProcessStore((state) => state.currentStageId);
+  const isModulesScreen = currentScreen(map, { currentModuleId, currentStageId }) === 'modules';
 
   // Типы BPMN добавляются только если такой узел на текущем этапе есть.
   // Для карт, собранных из презентаций, множество всегда пусто, и легенда
   // выглядит ровно как раньше.
   const present = usePresentBpmnTypes(isOverview);
-  const base = isOverview ? OVERVIEW_ITEMS : STAGE_ITEMS;
+  const base = isModulesScreen ? modulesItems(map) : isOverview ? OVERVIEW_ITEMS : STAGE_ITEMS;
   const extra = isOverview ? [] : BPMN_ITEMS.filter((item) => present.has(item.nodeType));
   const items = [...base, ...extra].filter(
     (item) => showIntegrations || !HIDDEN_WITHOUT_INTEGRATIONS.has(item.key),

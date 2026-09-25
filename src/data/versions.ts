@@ -28,6 +28,7 @@
 // заново каждый раз незачем. Кэш заодно даёт стабильную ссылку на объект.
 import builtinRaw from '@map/process.json';
 import altRaw from '@map-alt/process.json';
+import { hasModules } from './modules';
 import { ProcessMapSchema, type ProcessMap } from './schema';
 
 /** Что показать в переключателе: id и заголовок версии. */
@@ -35,6 +36,21 @@ export interface MapVersion {
   readonly id: string;
   readonly title: string;
   readonly stages: number;
+  /**
+   * Число модулей — ТОЛЬКО у версии с модулями (process-map-9mn.16).
+   *
+   * Подсказка и объявление версии считают то, что читатель увидит на её
+   * корне: у трёхуровневой карты это карточки модулей, и «Процессы — 20
+   * этапов» называло бы не тот экран. Поэтому у такой версии счёт идёт по
+   * модулям, у двухуровневой — по этапам, как прежде.
+   *
+   * Отсутствие поля, а не 0 или null: «модулей нет» документ выражает
+   * отсутствием modules (schema.ts), и здесь тот же единственный способ
+   * сказать это. Ответ «есть ли модули» — hasModules(), а не своя проверка.
+   * stages остаётся и у трёхуровневой версии: число этапов у неё тоже
+   * настоящее, меняется лишь то, какое из двух показывать.
+   */
+  readonly modules?: number;
 }
 
 interface RawVersion {
@@ -79,7 +95,12 @@ function parseVersion(entry: RawVersion): ProcessMap {
 export function listVersions(): readonly MapVersion[] {
   return RAW.map((entry) => {
     const map = parseVersion(entry);
-    return { id: entry.id, title: map.title, stages: map.stages.length };
+    return {
+      id: entry.id,
+      title: map.title,
+      stages: map.stages.length,
+      ...(hasModules(map) ? { modules: map.modules.length } : {}),
+    };
   });
 }
 

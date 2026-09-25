@@ -111,7 +111,7 @@ describe('переключатель версий: разметка', () => {
 
     expect(within(group()).getByRole('button', { name: 'Полная модель' })).toHaveAttribute(
       'title',
-      ru.overview.versionHint('Полная модель', 10),
+      ru.overview.versionHint('Полная модель', ru.overview.stagesCount(10)),
     );
   });
 
@@ -132,7 +132,7 @@ describe('переключатель версий: разметка', () => {
     renderHeader({ selectedVersionId: 'inplan-model' });
 
     expect(screen.getByRole('status')).toHaveTextContent(
-      ru.overview.versionAnnouncement('Полная модель', 10),
+      ru.overview.versionAnnouncement('Полная модель', ru.overview.stagesCount(10)),
     );
   });
 

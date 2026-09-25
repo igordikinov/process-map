@@ -66,28 +66,38 @@ describe('склонения новых счётчиков', () => {
 
 describe('фразы счёта для подсказки и объявления версии', () => {
   /*
-   * process-map-9mn.16 переводит versionHint/versionAnnouncement с числа
-   * этапов на готовую фразу счёта (см. комментарий в ru.ts). Тест закрепляет
-   * предпосылку этого перехода: stagesCount — РОВНО хвост, который обе функции
-   * печатают сегодня. Разойдись они хоть пробелом, подсказка и объявление у
-   * двухуровневых версий после 9mn.16 поменялись бы молча: тесты переключателя
-   * (tests/versionSwitcher.test.tsx) сверяют их с вызовом ru.overview.*, то
-   * есть с новой формой той же функции, и расхождения со старым текстом не
-   * заметят.
-   *
-   * Сменив сигнатуру, 9mn.16 перепишет и этот блок: versionHint(label,
-   * stagesCount(n)) сверяется тогда с литералом `${label} — ${expected}` из
-   * таблицы STAGES — тем самым текстом, который печатается сегодня.
+   * process-map-9mn.16 перевела versionHint/versionAnnouncement с числа этапов
+   * на готовую фразу счёта (см. комментарий в ru.ts). Этот блок закрепляет,
+   * что у ДВУХУРОВНЕВЫХ версий текст остался побайтово прежним: до перехода
+   * versionHint('Полная модель', n) печатала `Полная модель — ${n} этап(а/ов)`,
+   * и ровно этот литерал из таблицы STAGES ожидается теперь от
+   * versionHint('Полная модель', stagesCount(n)). Тесты переключателя
+   * (tests/versionSwitcher.test.tsx) сверяют подсказку с вызовом ru.overview.*,
+   * то есть с той же функцией, и дрейфа текста не заметили бы — заметит этот.
    */
   it.each(STAGES)(
-    'versionHint/versionAnnouncement(…, %i) кончаются фразой stagesCount',
+    'versionHint/versionAnnouncement(…, stagesCount(%i)) — прежний текст',
     (count, expected) => {
       // Ожидание — литерал таблицы, а не вызов stagesCount: так тест ловит и
       // дрейф фразы, и дрейф самих функций, не сверяя код с ним же.
       expect(ru.overview.stagesCount(count)).toBe(expected);
-      expect(ru.overview.versionHint('Полная модель', count)).toBe(`Полная модель — ${expected}`);
-      expect(ru.overview.versionAnnouncement('Полная модель', count)).toBe(
+      expect(ru.overview.versionHint('Полная модель', ru.overview.stagesCount(count))).toBe(
+        `Полная модель — ${expected}`,
+      );
+      expect(ru.overview.versionAnnouncement('Полная модель', ru.overview.stagesCount(count))).toBe(
         `Карта: Полная модель, ${expected}`,
+      );
+    },
+  );
+
+  it.each(MODULES)(
+    'versionHint/versionAnnouncement(…, modulesCount(%i)) считают модули',
+    (count, expected) => {
+      expect(ru.overview.versionHint('Процессы', ru.overview.modulesCount(count))).toBe(
+        `Процессы — ${expected}`,
+      );
+      expect(ru.overview.versionAnnouncement('Процессы', ru.overview.modulesCount(count))).toBe(
+        `Карта: Процессы, ${expected}`,
       );
     },
   );

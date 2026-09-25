@@ -415,6 +415,13 @@
   --pm-stage-node-width-compact: 228px;
   --pm-stage-node-height-compact: 200px;
 
+  /* Карточка модуля, уровень 1 трёхуровневой карты (process-map-9mn.16).
+     Макета нет: размеры карточки этапа, см. MODULE_NODE_SIZE в sizes.ts. */
+  --pm-module-node-width: 274px;
+  --pm-module-node-height: 232px;
+  --pm-module-node-width-compact: 228px;
+  --pm-module-node-height-compact: 200px;
+
   /* StepNode (A2), SPEC §4.2 */
   --pm-step-node-width: 318px;
   --pm-step-node-height: 52px;
@@ -517,6 +524,11 @@
   --pm-edge-label-padding-x: 4px;
   --pm-edge-label-radius: var(--scp-border-radius-sm);
   --pm-edge-label-max-width: 120px;
+  /* Переносимая подпись — артефакт между модулями уровня 1 (process-map-9mn.16).
+     Обрезать его многоточием нельзя: «Итоговый неограниченный прогноз» и есть
+     содержание связи. Ширина — src/theme/sizes.ts (EDGE_LABEL_WRAP_MAX_WIDTH):
+     от неё считается зазор между карточками модулей. */
+  --pm-edge-label-wrap-max-width: 104px;
 
   /* Список «Ключевые выходы»: карточка 274×232, в неё помещается ровно
      4 однострочных пункта (keyOutputs по схеме ≤ 4).

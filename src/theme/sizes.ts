@@ -37,6 +37,54 @@ export const STAGE_NODE_SIZE: NodeSize = { width: 274, height: 232 };
 /** StageNode в компактном режиме, высота контейнера < config.compactHeight (SPEC §4.5). */
 export const STAGE_NODE_SIZE_COMPACT: NodeSize = { width: 228, height: 200 };
 
+/**
+ * Карточка модуля — уровень 1 ТРЁХУРОВНЕВОЙ карты (узел 'module', задача
+ * process-map-9mn.16).
+ *
+ * ВЫВЕДЕНА из STAGE_NODE_SIZE, а не переписана числами. Артборда уровня 1 в
+ * design/ нет, а ModuleSchema прямо говорит «карточка уровня 1 устроена как
+ * карточка этапа»: те же блоки (номер, подпись, название, до четырёх ключевых
+ * выходов) требуют той же площади. Литералы 274×232 здесь молча разошлись бы
+ * с этапом при первой же правке его размера (прецедент — DETAIL_NODE_SIZE ниже).
+ *
+ * Своя константа всё-таки нужна: из неё считают раскладку modulesGraph.ts и
+ * вёрстка ModuleCard (токены --pm-module-node-*), и когда у уровня 1 появится
+ * свой макет, правка коснётся одной строки здесь, а не карточки этапа.
+ */
+export const MODULE_NODE_SIZE: NodeSize = {
+  width: STAGE_NODE_SIZE.width,
+  height: STAGE_NODE_SIZE.height,
+};
+
+/**
+ * Карточка модуля в компактном режиме (SPEC §4.5). Тот же довод: 228×200, как у
+ * компактной карточки этапа. Доводку компактного уровня 1 (строка-бейдж,
+ * тонкая полоса) делает задача process-map-9mn.19.
+ */
+export const MODULE_NODE_SIZE_COMPACT: NodeSize = {
+  width: STAGE_NODE_SIZE_COMPACT.width,
+  height: STAGE_NODE_SIZE_COMPACT.height,
+};
+
+/**
+ * Наибольшая ширина ПЕРЕНОСИМОЙ подписи ребра — артефакта между модулями
+ * уровня 1 («Итоговый неограниченный прогноз», process-map-9mn.16).
+ *
+ * Число здесь, а не только в токене, потому что от него зависит раскладка:
+ * зазор между карточками модулей (modulesGraph.ts) обязан вмещать подпись,
+ * иначе она легла бы на соседние карточки. Подпись этапов («Да»/«Нет») своей
+ * ширины в раскладке не имеет и остаётся токеном --pm-edge-label-max-width.
+ *
+ * 104 — ОЦЕНКА, а не замер макета (макета уровня 1 нет): самое длинное слово
+ * известных артефактов, «неограниченный», — 14 знаков кегля 11 px, около 6 px
+ * на знак, плюс подложка по 4 px с каждой стороны и запас. box-sizing в
+ * проекте border-box (global.css), поэтому подложка входит в эту ширину. Слово
+ * длиннее ширины не вылезает за подложку, а рвётся посреди слова
+ * (overflow-wrap в EdgeLabel.module.css). Замер на реальной карте — задача
+ * process-map-9mn.19 (визуальная доводка уровня 1).
+ */
+export const EDGE_LABEL_WRAP_MAX_WIDTH = 104;
+
 /** Карточка внешней системы в свимлейне уровня 1 (макет A1). */
 export const IO_NODE_SIZE: NodeSize = { width: 200, height: 40 };
 
@@ -83,6 +131,11 @@ export const SIZE_TOKENS: Readonly<Record<string, number>> = {
   '--pm-stage-node-height': STAGE_NODE_SIZE.height,
   '--pm-stage-node-width-compact': STAGE_NODE_SIZE_COMPACT.width,
   '--pm-stage-node-height-compact': STAGE_NODE_SIZE_COMPACT.height,
+  '--pm-module-node-width': MODULE_NODE_SIZE.width,
+  '--pm-module-node-height': MODULE_NODE_SIZE.height,
+  '--pm-module-node-width-compact': MODULE_NODE_SIZE_COMPACT.width,
+  '--pm-module-node-height-compact': MODULE_NODE_SIZE_COMPACT.height,
+  '--pm-edge-label-wrap-max-width': EDGE_LABEL_WRAP_MAX_WIDTH,
   '--pm-io-node-width': IO_NODE_SIZE.width,
   '--pm-io-node-height': IO_NODE_SIZE.height,
   '--pm-step-node-width': STEP_NODE_SIZE.width,

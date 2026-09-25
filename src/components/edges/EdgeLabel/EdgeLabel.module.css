@@ -21,3 +21,19 @@
      мышь, попавшая на подпись, иначе роняла бы жест. */
   pointer-events: none;
 }
+
+/* Переносимая подпись — артефакт между модулями уровня 1 (process-map-9mn.16).
+   Модификатор к .label, а не отдельный класс: подложка, цвет и кегль общие.
+   Ширина своя и меньше однострочной: от неё раскладка уровня 1 считает зазор
+   между карточками (EDGE_LABEL_WRAP_MAX_WIDTH в src/theme/sizes.ts), и подпись
+   обязана в этот зазор помещаться, а не ложиться на соседние карточки.
+   overflow-wrap: anywhere — страховка от слова длиннее строки: без неё оно
+   вылезло бы за подложку, и текст лёг бы прямо на линию ребра. */
+.wrap {
+  max-width: var(--pm-edge-label-wrap-max-width);
+  overflow: visible;
+  overflow-wrap: anywhere;
+  text-align: center;
+  text-overflow: clip;
+  white-space: normal;
+}

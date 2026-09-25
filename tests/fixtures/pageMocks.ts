@@ -124,3 +124,50 @@ export function defaultVersionModule(): JsonModule {
 export function altVersionModule(): JsonModule {
   return { default: fixtureAltVersion() };
 }
+
+// ─── ТРЁХУРОВНЕВАЯ СТРАНИЦА (process-map-9mn.16) ──────────────────────────────
+//
+// Вторая страница из фикстур, ЗЕРКАЛЬНАЯ первой: по умолчанию — трёхуровневая
+// карта (модули → этапы → шаги), второй версией — двухуровневая. Такой будет
+// корень после эпика M8: «Процессы» (inplan, пять модулей) и «Полная модель»
+// (inplan-model, десять этапов) на одном адресе.
+//
+// ЗАЧЕМ ОТДЕЛЬНАЯ, а не перестановка первой. Первая страница нужна тестам
+// механики версий, которые смотрят на обзор этапов и не должны зависеть от
+// числа уровней (см. fixtureAltVersion выше). Экрану модулей нужна страница,
+// которая ОТКРЫВАЕТСЯ им, — и заодно проверяет, что переключатель версий живёт
+// на корне трёхуровневой карты и уводит с него на корень двухуровневой.
+//
+// Подключается теми же двумя vi.mock в самом тестовом файле, по тем же трём
+// правилам из шапки:
+//
+//   vi.mock('@map/process.json', async () =>
+//     (await import('./fixtures/pageMocks')).threeLevelDefaultVersionModule(),
+//   );
+//   vi.mock('@map-alt/process.json', async () =>
+//     (await import('./fixtures/pageMocks')).twoLevelAltVersionModule(),
+//   );
+
+/**
+ * Версия по умолчанию трёхуровневой страницы — id трёхуровневой фикстуры как
+ * есть. Свой id фикстуре не нужен: на этой странице она и есть та карта, которую
+ * её id называет (сравни с fixtureAltVersion, где id подменён ровно потому, что
+ * модули у копии вырезаны).
+ */
+export const THREE_LEVEL_PAGE_DEFAULT_ID: string = buildThreeLevelProcessMap().id;
+
+/**
+ * Вторая версия трёхуровневой страницы — двухуровневая фикстура со своим id.
+ * Тоже как есть: её id на этой странице не встречается ни у кого другого.
+ */
+export const THREE_LEVEL_PAGE_ALT_ID: string = buildSampleProcessMap().id;
+
+/** Для фабрики vi.mock('@map/process.json', …) трёхуровневой страницы. */
+export function threeLevelDefaultVersionModule(): JsonModule {
+  return { default: buildThreeLevelProcessMap() };
+}
+
+/** Для фабрики vi.mock('@map-alt/process.json', …) трёхуровневой страницы. */
+export function twoLevelAltVersionModule(): JsonModule {
+  return { default: buildSampleProcessMap() };
+}
