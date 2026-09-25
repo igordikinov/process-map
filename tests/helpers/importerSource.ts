@@ -137,12 +137,22 @@ function locateOnce(source: string, pattern: RegExp, what: string, expected = ''
 // тройные кавычки, выражения, вызовы — ИСКЛЮЧЕНИЕ с номером строки, а не
 // догадка: тот, кто впервые запишет в таблицу новый вид значения, узнает об этом
 // здесь, а не по тихо укоротившемуся списку.
+//
+// Выражение, которое НАЧИНАЕТСЯ с литерала, — тоже исключение, а не литерал без
+// хвоста: `("DP", "ERP") + EXTRA` или `"snp" if X else "mrp"`. Для этого у
+// константы верхнего уровня после значения допустимы только пробелы и
+// комментарий до конца строки (readPythonValue), а перевод строки ВНЕ скобок
+// завершает значение, как и в Python: `"snp"` и `"other"` на соседних строках —
+// два оператора, а не склейка "snpother". Внутри скобок Python переводов строк
+// не замечает, и разбор тоже — это глубина вложенности `depth`.
 
 const NUMBER = /-?\d[\d_]*(?:\.\d[\d_]*)?(?![\w.])/y;
 const CONSTANT = /(?:True|False|None)(?!\w)/y;
 
 class LiteralReader {
   private pos: number;
+  /** Сколько скобок открыто: при нуле перевод строки завершает значение. */
+  private depth: number;
   private readonly text: string;
   private readonly where: string;
   private readonly firstLine: number;
@@ -151,13 +161,17 @@ class LiteralReader {
    * @param text      текст, в котором лежит литерал;
    * @param start     позиция начала литерала в этом тексте;
    * @param where     имя константы — для сообщений;
-   * @param firstLine номер строки импортёра, с которой начинается `text`.
+   * @param firstLine номер строки импортёра, с которой начинается `text`;
+   * @param depth     сколько скобок уже открыто в позиции `start`: 0 для правой
+   *                  части `NAME = …`, 1 для тела таблицы решений — оно вырезано
+   *                  из-под внешней скобки `(` объявления.
    */
-  constructor(text: string, start: number, where: string, firstLine: number) {
+  constructor(text: string, start: number, where: string, firstLine: number, depth: number) {
     this.text = text;
     this.pos = start;
     this.where = where;
     this.firstLine = firstLine;
+    this.depth = depth;
   }
 
   /** Номер строки scripts/import-pptx.py для позиции в тексте. */
@@ -172,13 +186,19 @@ class LiteralReader {
     );
   }
 
-  /** Пробелы, переводы строк и комментарии: внутри скобок Python их не замечает. */
+  /**
+   * Пробелы и комментарии; переводы строк — только внутри скобок, где Python их
+   * не замечает. Вне скобок перевод строки — конец оператора, и пропустить его
+   * значило бы приклеить к значению следующую строку файла.
+   */
   private skipTrivia(): void {
     while (this.pos < this.text.length) {
       const ch = this.text[this.pos];
-      if (ch === ' ' || ch === '\t' || ch === '\n' || ch === '\r') {
+      if (ch === ' ' || ch === '\t' || ch === '\r' || (ch === '\n' && this.depth > 0)) {
         this.pos += 1;
       } else if (ch === '#') {
+        // Комментарий — до перевода строки, но не включая его: решать, конец ли
+        // это оператора, — снова делу глубины выше.
         const eol = this.text.indexOf('\n', this.pos);
         this.pos = eol === -1 ? this.text.length : eol;
       } else {
@@ -203,6 +223,38 @@ class LiteralReader {
   private expect(token: string): void {
     if (!this.eat(token)) {
       this.fail(`ожидалось «${token}»`);
+    }
+  }
+
+  /** Открывающая скобка: дальше, до парной, переводы строк — пробел. */
+  private open(token: '(' | '[' | '{'): void {
+    this.expect(token);
+    this.depth += 1;
+  }
+
+  /** Закрывающая скобка, если она следующая; парная к open. */
+  private close(token: ')' | ']' | '}'): boolean {
+    if (!this.eat(token)) {
+      return false;
+    }
+    this.depth -= 1;
+    return true;
+  }
+
+  /**
+   * Конец оператора `NAME = значение`: после значения — только пробелы и
+   * комментарий до конца строки. Иначе значение — начало выражения
+   * (`("DP", "ERP") + EXTRA`, `"snp" if X else "mrp"`), и прочитанный литерал —
+   * не то, что получит Python.
+   */
+  endOfStatement(): void {
+    this.skipTrivia();
+    const ch = this.text[this.pos];
+    if (ch !== undefined && ch !== '\n') {
+      this.fail(
+        'после значения до конца строки допустим только комментарий — это выражение, а не ' +
+          'литерал, и его значение разбор не вычислит',
+      );
     }
   }
 
@@ -251,9 +303,14 @@ class LiteralReader {
   /**
    * Элементы тела кортежа без внешних скобок — в таком виде readDecisionBlock
    * отдаёт таблицу. Висячая запятая допустима, как и в Python.
+   *
+   * `comma` — была ли хоть одна запятая верхнего уровня. Без неё ОДИН элемент в
+   * скобках для Python не кортеж, а сам элемент (см. parenthesized), и решать,
+   * ошибка ли это, — вызывающему: здесь скобок не видно.
    */
-  elements(): { value: PyValue; at: number }[] {
+  elements(): { items: { value: PyValue; at: number }[]; comma: boolean } {
     const items: { value: PyValue; at: number }[] = [];
+    let comma = false;
     while (!this.atEnd()) {
       const at = this.pos;
       items.push({ value: this.value(), at });
@@ -261,8 +318,9 @@ class LiteralReader {
         break;
       }
       this.expect(',');
+      comma = true;
     }
-    return items;
+    return { items, comma };
   }
 
   /**
@@ -316,12 +374,12 @@ class LiteralReader {
   }
 
   private parenthesized(): PyValue {
-    this.expect('(');
+    this.open('(');
     const items: PyValue[] = [];
     let comma = false;
-    while (!this.eat(')')) {
+    while (!this.close(')')) {
       items.push(this.value());
-      if (this.eat(')')) {
+      if (this.close(')')) {
         break;
       }
       this.expect(',');
@@ -335,11 +393,11 @@ class LiteralReader {
   }
 
   private list(): PyValue[] {
-    this.expect('[');
+    this.open('[');
     const items: PyValue[] = [];
-    while (!this.eat(']')) {
+    while (!this.close(']')) {
       items.push(this.value());
-      if (this.eat(']')) {
+      if (this.close(']')) {
         break;
       }
       this.expect(',');
@@ -348,9 +406,9 @@ class LiteralReader {
   }
 
   private dict(): PyDict {
-    this.expect('{');
+    this.open('{');
     const dict: PyDict = new Map();
-    while (!this.eat('}')) {
+    while (!this.close('}')) {
       this.skipTrivia();
       const at = this.pos;
       const key = this.value();
@@ -362,7 +420,7 @@ class LiteralReader {
       }
       this.expect(':');
       dict.set(key, this.value());
-      if (this.eat('}')) {
+      if (this.close('}')) {
         break;
       }
       this.expect(',');
@@ -384,7 +442,10 @@ function readPythonValue(source: string, name: string): PyValue {
     new RegExp(String.raw`^${name}\b[^=\n]*=[ \t]*`, 'gm'),
     `константа ${name}`,
   );
-  return new LiteralReader(source, match.index + match[0].length, name, 1).value();
+  const reader = new LiteralReader(source, match.index + match[0].length, name, 1, 0);
+  const value = reader.value();
+  reader.endOfStatement();
+  return value;
 }
 
 /**
@@ -490,7 +551,8 @@ function toRecord(table: string, index: number, line: number, value: PyValue): D
 
 /**
  * Все записи таблицы решений — ВСЕХ карт. Бросает, если таблица не найдена, пуста,
- * или хотя бы одна запись не словарь либо не начинается с ключа map.
+ * состоит из одной записи без запятой (для Python это не кортеж), или хотя бы одна
+ * запись не словарь либо не начинается с непустого ключа map.
  *
  * Пустая таблица — тоже исключение: самопроверка импортёра считает её ошибкой
  * («таблица решений … пуста»), и разбор не вправе быть мягче. А вот пустой
@@ -499,16 +561,31 @@ function toRecord(table: string, index: number, line: number, value: PyValue): D
  */
 export function readDecisionTable(source: string, name: string): DecisionRecord[] {
   const block = readDecisionBlock(source, name);
-  const reader = new LiteralReader(block.body, 0, name, block.firstLine);
-  const records = reader
-    .elements()
-    .map(({ value, at }, position) => toRecord(name, position + 1, reader.lineAt(at), value));
-  if (records.length === 0) {
+  const declaredAt = block.firstLine - 1;
+  // Глубина 1: тело вырезано из-под внешней скобки объявления.
+  const reader = new LiteralReader(block.body, 0, name, block.firstLine, 1);
+  const { items, comma } = reader.elements();
+  if (items.length === 0) {
     throw new Error(
-      `${name} в scripts/import-pptx.py найдена (строка ${block.firstLine - 1}), но записей в ней нет`,
+      `${name} в scripts/import-pptx.py найдена (строка ${declaredAt}), но записей в ней нет`,
     );
   }
-  return records;
+  // `NAME = (\n    {…}\n)` — не кортеж из одной записи, а сама запись: скобки
+  // без запятой Python читает как группировку (то же правило, что в
+  // parenthesized). Импортёр, перебирая такую «таблицу», перебрал бы КЛЮЧИ
+  // словаря и упал бы в decisions_for на первой строке ('str' has no .get), а
+  // разбор, прими он её за кортеж, остался бы зелёным. Сегодня во всех четырёх
+  // таблицах ровно по одной записи, так что стёртая висячая запятая — не
+  // теоретический случай.
+  if (items.length === 1 && !comma) {
+    throw new Error(
+      `${name} в scripts/import-pptx.py (строка ${declaredAt}): таблица из одной записи без ` +
+        'запятой — для Python это словарь, а не кортеж; нужна висячая запятая после «}»',
+    );
+  }
+  return items.map(({ value, at }, position) =>
+    toRecord(name, position + 1, reader.lineAt(at), value),
+  );
 }
 
 /**

@@ -15,9 +15,14 @@
 // скобками и кавычками внутри записи, висячие запятые, — иначе тест доказывал
 // бы разбор не того формата. Записи другой карты стоят в таблицах и перед
 // записями snp, и после: фильтр «первые N» так не пройдёт.
+//
+// Сверх настоящего формата в ней две ловушки для разбора. Подпись группы SNP
+// записана строкой в скобках группировки `("Группа " "SNP")` — в поле, которое
+// читатель ЧИТАЕТ (в настоящем импортёре так записаны только why и source,
+// которых не читает никто). А в функции self_test ПЕРЕД таблицами лежит литерал
+// с именем таблицы — объявлением верхнего уровня он не является.
 import { describe, expect, it } from 'vitest';
 import {
-  DECISION_TABLES,
   readDecisionBlock,
   readDecisionTable,
   readGroupSplit,
@@ -121,7 +126,7 @@ const GROUP_SPLIT = `STAGE_GROUP_SPLIT: tuple[dict, ...] = (
         "map": "snp",
         "task": "process-map-g1",
         "stage": 4,
-        "label": "Группа SNP",
+        "label": ("Группа " "SNP"),
         "nodes": (
             "Узел SNP 1",
             "Узел SNP 2",
@@ -153,22 +158,35 @@ NODE_KEY_ORDER = (
     "label",
 )
 
+def self_test() -> None:
+    # Литерал с ИМЕНЕМ таблицы, но в функции — не объявление верхнего уровня.
+    # Стоит ПЕРЕД настоящей таблицей нарочно: разбор, потерявший привязку к
+    # первой колонке, начал бы таблицу отсюда и дочитал бы до «)» настоящей.
+    OWNER_DECISION_EDGES = (
+        {"map": "snp", "task": "self-test", "stage": 1},
+    )
+
 ${EDGES}
 ${ENRICHMENT}
 ${EXTERNAL_IO}
 ${GROUP_SPLIT}
-
-def self_test() -> None:
-    # Похожий литерал в функции — не объявление верхнего уровня.
-    fake = (
-        {"map": "snp", "task": "self-test", "stage": 1},
-    )
 `;
 
 /** Синтетика с заменённым фрагментом: чтобы испортить одну таблицу, не трогая остальные. */
 function withReplaced(fragment: string, replacement: string): string {
   expect(SOURCE, 'фрагмент для замены не найден — тест испортил бы не то').toContain(fragment);
   return SOURCE.replace(fragment, replacement);
+}
+
+/**
+ * Номер строки (с единицы) первой строки `source`, содержащей `needle`. Считается
+ * независимо от разборщика — разбиением на строки, а не смещением, — чтобы
+ * сверять номера из его сообщений, а не повторять его арифметику.
+ */
+function lineNumberOf(source: string, needle: string): number {
+  const index = source.split('\n').findIndex((line) => line.includes(needle));
+  expect(index, `«${needle}» в синтетике не найдено`).toBeGreaterThanOrEqual(0);
+  return index + 1;
 }
 
 describe('таблицы решений: отбор по ключу map', () => {
@@ -295,9 +313,14 @@ describe('таблицы решений: ключ map — первый ключ 
         "map": "inplan",`,
   );
 
-  it('запись, где map стоит не первым, отвергается с именем таблицы и задачи', () => {
+  it('запись, где map стоит не первым, отвергается с именем таблицы, задачи и строкой', () => {
+    // Номер строки — точный, а не «какое-то число»: сообщение отправляет читать
+    // импортёр в определённое место, и сдвиг на единицу отправил бы не туда.
+    // «{» записи — строкой выше её "task".
+    const recordLine = lineNumberOf(mapSecond, '"task": "process-map-x3"') - 1;
     expect(() => readDecisionTable(mapSecond, 'OWNER_DECISION_EXTERNAL_IO')).toThrow(
-      /OWNER_DECISION_EXTERNAL_IO, запись 3, process-map-x3 \(строка \d+ scripts\/import-pptx\.py\): первым ключом записи обязан быть "map", а стоит "task"/,
+      `OWNER_DECISION_EXTERNAL_IO, запись 3, process-map-x3 (строка ${recordLine} ` +
+        'scripts/import-pptx.py): первым ключом записи обязан быть "map", а стоит "task"',
     );
   });
 
@@ -327,6 +350,118 @@ describe('таблицы решений: ключ map — первый ключ 
     );
     expect(() => readOwnerDecisionEdges(noneMap, 'snp')).toThrow(
       /OWNER_DECISION_EDGES, запись 2, process-map-e2 .*"map" обязано быть непустой строкой/,
+    );
+  });
+
+  it('пустое имя карты — ошибка, а не запись карты по имени ""', () => {
+    // Опечатка или недописанная правка. Прими её разбор, запись ушла бы из
+    // проверок ВСЕХ карт — тихо укоротившийся список, ровно то, от чего эта
+    // задача уходит; «не потеряно»-проверки заметили бы это, только когда
+    // пропали бы все записи карты в таблице.
+    const emptyMap = withReplaced(
+      `        "map": "inplan",
+        "task": "process-map-e2",`,
+      `        "map": "",
+        "task": "process-map-e2",`,
+    );
+    expect(() => readOwnerDecisionEdges(emptyMap, 'snp')).toThrow(
+      /OWNER_DECISION_EDGES, запись 2, process-map-e2 .*"map" обязано быть непустой строкой/,
+    );
+  });
+});
+
+describe('таблицы решений: объявление только верхнего уровня', () => {
+  it('литерал с именем таблицы внутри функции не считается объявлением', () => {
+    // В SOURCE перед настоящей OWNER_DECISION_EDGES стоит одноимённый литерал
+    // в self_test (с отступом). Разбор, принявший его за таблицу, прочитал бы
+    // запись self-test — или, дочитав до «)» настоящей таблицы, упал бы.
+    expect(readOwnerDecisionEdges(SOURCE, 'snp').map((entry) => entry.task)).toEqual([
+      'process-map-e1',
+    ]);
+  });
+
+  it('таблица с именем-суффиксом не считается второй таблицей', () => {
+    // Зеркало проверки «имя-префикс» ниже: INPLAN_STAGE_GROUP_SPLIT —
+    // правдоподобное имя таблицы другой карты, и оканчивается оно именем
+    // настоящей. Без привязки к началу строки разбор нашёл бы в нём
+    // STAGE_GROUP_SPLIT: второе объявление (ложная тревога) или — пропади
+    // настоящая таблица — тихое чтение чужой.
+    const suffixed = `${SOURCE}
+INPLAN_STAGE_GROUP_SPLIT: tuple[dict, ...] = (
+    {
+        "map": "inplan",
+        "task": "process-map-g9",
+        "stage": 1,
+        "label": "Чужая группа",
+        "nodes": ("Чужой узел",),
+    },
+)
+`;
+    expect(readGroupSplit(suffixed, 'snp').map((entry) => entry.task)).toEqual(['process-map-g1']);
+    expect(readGroupSplit(suffixed, 'inplan').map((entry) => entry.task)).toEqual([
+      'process-map-g2',
+    ]);
+  });
+});
+
+describe('python-литерал: скобки, запятые и строки', () => {
+  it('строка в скобках без запятой — строка, а не кортеж из одной строки', () => {
+    // `("Группа " "SNP")` — скобки группировки вокруг склейки двух литералов.
+    // Кортежем из одного элемента это было бы только с запятой.
+    expect(readGroupSplit(SOURCE, 'snp').map((entry) => entry.label)).toEqual(['Группа SNP']);
+  });
+
+  it('кортеж из одного элемента без запятой — строка, и читатель кортежа её отвергает', () => {
+    // Для Python ("inplan-priemnik") — строка, и импортёр перебрал бы её
+    // ПОСИМВОЛЬНО: пятнадцать «приёмников» из одной буквы. Разбор, прочитавший
+    // её как кортеж из одного id, остался бы зелёным.
+    const noComma = withReplaced(
+      '"targets": ("inplan-priemnik",),',
+      '"targets": ("inplan-priemnik"),',
+    );
+    expect(() => readOwnerDecisionEdges(noComma, 'inplan')).toThrow(
+      /OWNER_DECISION_EDGES, запись 2, process-map-e2 .*"targets" обязан быть кортежем строк/,
+    );
+  });
+
+  it('таблица из одной записи без висячей запятой — исключение: для Python это словарь', () => {
+    // Сегодня во всех четырёх настоящих таблицах ровно по одной записи, так что
+    // это не теоретический случай: стёртая запятая после «}» — и импортёр
+    // перебирает КЛЮЧИ словаря, падая в decisions_for.
+    const single = `STAGE_GROUP_SPLIT: tuple[dict, ...] = (
+    {
+        "map": "snp",
+        "task": "process-map-g1",
+        "stage": 4,
+        "label": "Группа SNP",
+        "nodes": ("Узел SNP 1",),
+    }
+)
+`;
+    expect(() => readGroupSplit(withReplaced(GROUP_SPLIT, single), 'snp')).toThrow(
+      /STAGE_GROUP_SPLIT .*таблица из одной записи без запятой — для Python это словарь/,
+    );
+    // С висячей запятой та же запись — законный кортеж из одной записи.
+    const singleWithComma = single.replace('    }\n)', '    },\n)');
+    expect(readGroupSplit(withReplaced(GROUP_SPLIT, singleWithComma), 'snp')).toEqual([
+      {
+        map: 'snp',
+        task: 'process-map-g1',
+        stage: 4,
+        label: 'Группа SNP',
+        nodes: ['Узел SNP 1'],
+      },
+    ]);
+  });
+
+  it('повторённый ключ записи — исключение, а не молча последнее значение', () => {
+    const twice = withReplaced(
+      '"stage": 5,',
+      `"stage": 5,
+        "stage": 6,`,
+    );
+    expect(() => readGroupSplit(twice, 'snp')).toThrow(
+      /STAGE_GROUP_SPLIT, .*ключ «stage» повторён/,
     );
   });
 });
@@ -383,7 +518,8 @@ describe('таблицы решений: промах — исключение, 
     // становился короче без единого сообщения.
     const call = withReplaced('"stage": 5,', '"stage": int("5"),');
     expect(() => readGroupSplit(call, 'snp')).toThrow(
-      /STAGE_GROUP_SPLIT, строка \d+ scripts\/import-pptx\.py: значение не разобрано/,
+      `STAGE_GROUP_SPLIT, строка ${lineNumberOf(call, 'int("5")')} scripts/import-pptx.py: ` +
+        'значение не разобрано',
     );
   });
 });
@@ -406,16 +542,41 @@ describe('константы верхнего уровня', () => {
     expect(() => readPythonTuple(SOURCE, 'MAP_ID')).toThrow(/MAP_ID .*не кортеж строк/);
     expect(() => readPythonString(SOURCE, 'SYSTEM_CODES')).toThrow(/SYSTEM_CODES .*не строка/);
   });
+
+  it('выражение, начинающееся с литерала, — исключение, а не литерал без хвоста', () => {
+    // Python вычислил бы всё выражение; разбор, отрезавший хвост, сверял бы
+    // тесты с тем, чего в импортёре нет.
+    expect(() =>
+      readPythonTuple('SYSTEM_CODES = ("DP", "ERP") + EXTRA_CODES\n', 'SYSTEM_CODES'),
+    ).toThrow(/SYSTEM_CODES, строка 1 .*это выражение, а не литерал/);
+    expect(() => readPythonString('MAP_ID = "snp" if X else "mrp"\n', 'MAP_ID')).toThrow(
+      /MAP_ID, строка 1 .*это выражение, а не литерал/,
+    );
+  });
+
+  it('комментарий после значения допустим', () => {
+    expect(readPythonString('MAP_ID = "snp"  # карта по умолчанию\n', 'MAP_ID')).toBe('snp');
+    expect(readPythonTuple('CODES = (\n    "DP",\n)  # коды\nOTHER = 1\n', 'CODES')).toEqual([
+      'DP',
+    ]);
+  });
+
+  it('перевод строки вне скобок завершает значение, внутри скобок — нет', () => {
+    // `"snp"` и `"other"` на соседних строках — два оператора Python, а не
+    // склейка "snpother"; в скобках те же две строки — одна склеенная строка.
+    expect(readPythonString('MAP_ID = "snp"\n"other"\n', 'MAP_ID')).toBe('snp');
+    expect(readPythonString('MAP_ID = (\n    "sn"\n    "p"\n)\n', 'MAP_ID')).toBe('snp');
+  });
 });
 
 // Тот же разбор на НАСТОЯЩЕМ импортёре: синтетика доказывает поведение, но не
 // то, что формат scripts/import-pptx.py ему по-прежнему соответствует.
+//
+// Таблицы решений на настоящем импортёре разбирает блок «решения владельца
+// привязаны к карте» в tests/snp/importPreserve.test.ts — там проверка названа
+// по правилу и по таблице, и здесь она не повторяется.
 describe('scripts/import-pptx.py разбирается целиком', () => {
   const source = readImporterSource();
-
-  it.each(DECISION_TABLES)('%s: все записи разобраны, у каждой map первым', (table) => {
-    expect(readDecisionTable(source, table).length).toBeGreaterThan(0);
-  });
 
   it('строковые константы карт читаются', () => {
     expect(readPythonString(source, 'MAP_ID')).toBe('snp');
