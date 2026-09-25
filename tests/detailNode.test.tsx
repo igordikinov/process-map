@@ -27,7 +27,7 @@
 // jsdom не делает hit-testing и не считает раскладку: здесь проверяется, ЧТО
 // нарисовано и какие стили к этому применены, а не то, что по этому можно
 // кликнуть мышью в браузере (для этого — pointer-events обёртки ниже).
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { ReactFlow, ReactFlowProvider } from '@xyflow/react';
@@ -179,29 +179,53 @@ describe('DetailNode на полотне уровня 2', () => {
 //   2. в этом модуле нет ни одного объявления, которое режет текст;
 //   3. на элементе с текстом стоит класс, чьё правило даёт white-space:
 //      pre-line — абзацы остаются абзацами;
-//   4. инлайновых стилей на карточке нет вовсе — обрезка не придёт и оттуда.
+//   4. инлайновых стилей на карточке нет вовсе — обрезка не придёт и оттуда;
+//   5. обрезка не придёт и из ЧУЖОЙ таблицы стилей: ни одна другая таблица в
+//      src/ не адресует узел подробности React Flow, а правила, которые
+//      достают до любого узла (глобальные и по .react-flow__node), ничего не
+//      режут. Без этого кламп, объявленный, скажем, в StageDetail.module.css
+//      через :global(.react-flow__node-detail), прошёл бы мимо пунктов 1–4:
+//      на самой карточке классов из чужого модуля при этом нет.
 
-const DETAIL_CSS = readFileSync('src/components/nodes/DetailNode/DetailNode.module.css', 'utf8');
+const DETAIL_CSS_PATH = 'src/components/nodes/DetailNode/DetailNode.module.css';
+const DETAIL_CSS = readFileSync(DETAIL_CSS_PATH, 'utf8');
+/** Глобальная таблица: её селекторы элементов (button, *) достают до карточки. */
+const GLOBAL_CSS_PATH = 'src/theme/global.css';
 
 interface CssRule {
   selector: string;
   body: string;
 }
 
-/** Плоский список правил модуля. Комментарии вырезаются до разбора. */
-function cssRules(css: string): CssRule[] {
-  const text = css.replace(/\/\*[\s\S]*?\*\//g, '');
-  // Разбор плоский: вложенных блоков (@media, @supports) он не понимает, и
-  // правило внутри них прошло бы мимо проверки. Поэтому их отсутствие —
-  // часть проверки, а не допущение.
-  expect(text, 'в DetailNode.module.css появился @-блок — разбор ниже его не видит').not.toMatch(
-    /@/,
-  );
+/** CSS без комментариев: закомментированное правило не действует. */
+function withoutComments(css: string): string {
+  return css.replace(/\/\*[\s\S]*?\*\//g, '');
+}
+
+/**
+ * Правила-листья таблицы стилей: селектор и тело без вложенных блоков.
+ * Правило внутри @media или @supports тоже лист и тоже попадает в список —
+ * регулярное выражение просто находит его внутри блока; теряется только
+ * условие самого @-блока, а для проверок ниже важно тело.
+ */
+function leafRules(css: string): CssRule[] {
   const rules: CssRule[] = [];
-  for (const match of text.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+  for (const match of withoutComments(css).matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
     rules.push({ selector: (match[1] ?? '').trim(), body: match[2] ?? '' });
   }
   return rules;
+}
+
+/** Правила модуля подробности. */
+function cssRules(css: string): CssRule[] {
+  // В модуле подробности @-блоков нет, и это часть проверки, а не допущение:
+  // правило под медиазапросом действует не всегда, и сверка «класс на
+  // карточке → его правила» ниже этого условия не видит.
+  expect(
+    withoutComments(css),
+    'в DetailNode.module.css появился @-блок — сверка ниже не видит его условия',
+  ).not.toMatch(/@/);
+  return leafRules(css);
 }
 
 /** Локальные имена классов, объявленных в модуле: `.card:hover` → card. */
@@ -219,14 +243,25 @@ function declaredClasses(rules: readonly CssRule[]): Set<string> {
 
 /**
  * Всё, чем CSS умеет срезать текст: кламп строк, многоточие, скрытие
- * переполнения, запрет переноса.
+ * переполнения, запрет переноса, обрезка по контуру.
+ *
+ * Прокрутка (overflow: auto/scroll) — тоже обрезка. Карточка фиксированной
+ * высоты с полосой прокрутки прятала бы хвост текста внутри себя, а колесо
+ * мыши на полотне забирает React Flow (панорама и масштаб): прокрутить
+ * карточку пользователь не смог бы, и хвост был бы потерян так же, как под
+ * overflow: hidden. Значение ищется в любом месте после двоеточия — у
+ * overflow бывает и два значения («visible hidden»).
  */
 const CLIPPING = [
   /line-clamp/,
   /text-overflow/,
   /-webkit-box/,
-  /overflow(-[xy])?\s*:\s*(hidden|clip)/,
+  /overflow(-(x|y|block|inline))?\s*:[^;]*\b(hidden|clip|auto|scroll|overlay)\b/,
   /white-space\s*:\s*(nowrap|pre)\s*(;|$)/,
+  /text-wrap(-mode)?\s*:\s*nowrap/,
+  /clip-path/,
+  /(^|[\s;])clip\s*:/,
+  /contain\s*:[^;]*\b(paint|strict|content)\b/,
 ];
 
 describe('DetailNode: текст не обрезается ничем', () => {
@@ -283,10 +318,58 @@ describe('DetailNode: текст не обрезается ничем', () => {
   });
 });
 
+describe('DetailNode: чужие таблицы стилей текст подробности не режут', () => {
+  // Все таблицы стилей приложения, кроме модуля самой подробности (его
+  // проверяет блок выше). Разделитель пути нормализуется: на Windows
+  // readdirSync отдаёт обратные косые черты.
+  const others = readdirSync('src', { recursive: true, encoding: 'utf8' })
+    .map((name) => `src/${name.replace(/\\/g, '/')}`)
+    .filter((path) => path.endsWith('.css') && path !== DETAIL_CSS_PATH)
+    .map((path) => ({ path, css: readFileSync(path, 'utf8') }));
+
+  /** Правило достаёт до ЛЮБОГО узла полотна, а значит, и до подробности. */
+  const reachesEveryNode = (path: string, rule: CssRule) =>
+    path === GLOBAL_CSS_PATH || /react-flow__node(?![\w-])/.test(rule.selector);
+
+  it('предпосылка: найдены глобальная таблица и таблица полотна уровня 2', () => {
+    // Иначе зелёное ниже значило бы «проверять было нечего».
+    const paths = others.map((file) => file.path);
+    expect(paths).toContain(GLOBAL_CSS_PATH);
+    expect(paths).toContain('src/components/StageDetail/StageDetail.module.css');
+    // Правило «для всех узлов» в таблице полотна есть (курсор), то есть
+    // отбор ниже действительно что-то отбирает.
+    expect(
+      others.some(({ path, css }) => leafRules(css).some((rule) => reachesEveryNode(path, rule))),
+    ).toBe(true);
+  });
+
+  it('ни одна другая таблица не адресует узел подробности React Flow', () => {
+    // Вид подробности — только DetailNode.module.css: правило в чужом файле
+    // не видит ни сверка классов карточки выше, ни человек, правящий модуль.
+    for (const { path, css } of others) {
+      expect(withoutComments(css), path).not.toMatch(/react-flow__node-detail/);
+    }
+  });
+
+  it('правила, достающие до любого узла, ничего не режут', () => {
+    for (const { path, css } of others) {
+      for (const rule of leafRules(css).filter((candidate) => reachesEveryNode(path, candidate))) {
+        for (const pattern of CLIPPING) {
+          expect(rule.body, `${path} ${rule.selector}: ${pattern}`).not.toMatch(pattern);
+        }
+      }
+    }
+  });
+});
+
 // ─────────────────────── выноска и легенда ───────────────────────
 
 describe('DetailLinkEdge: выноска', () => {
-  it('рисует тонкий путь своим классом и БЕЗ стрелки', () => {
+  // Подпись передаётся намеренно: stageGraph.ts доносит `label` ребра модели
+  // до выноски (tests/stageGraph.test.ts), и компонент не должен терять её
+  // молча. В презентациях подписи у выноски нет, но поле законно у любого
+  // ребра.
+  it('рисует тонкий путь своим классом, БЕЗ стрелки и с подписью ребра', () => {
     const { container } = render(
       <ReactFlowProvider>
         <div style={{ width: 400, height: 300 }}>
@@ -305,6 +388,7 @@ describe('DetailLinkEdge: выноска', () => {
                   targetY: 120,
                   sourcePosition: 'bottom',
                   targetPosition: 'top',
+                  label: 'Пояснение к шагу',
                 } as unknown as Parameters<typeof DetailLinkEdge>[0])}
               />
             </svg>
@@ -316,6 +400,7 @@ describe('DetailLinkEdge: выноска', () => {
     expect(path, 'путь выноски без своего класса').not.toBeNull();
     // Стрелка — знак перехода потока; подробность не следующий шаг.
     expect(container.querySelectorAll('path[marker-end]')).toHaveLength(0);
+    expect(screen.getByText('Пояснение к шагу')).toBeInTheDocument();
   });
 });
 

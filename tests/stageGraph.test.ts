@@ -17,7 +17,12 @@ import {
 } from '../src/components/StageDetail';
 import { STEP_HANDLE } from '../src/components/nodes/StepNode';
 import { loadBaseProcessMap } from '../src/data/loader';
-import type { ProcessNode, Stage } from '../src/data/schema';
+import {
+  NodeTypeSchema,
+  validateIntegrity,
+  type ProcessNode,
+  type Stage,
+} from '../src/data/schema';
 import { ru } from '../src/i18n/ru';
 import { DATA_NODE_SIZE, DETAIL_NODE_SIZE, STEP_NODE_SIZE } from '../src/theme/sizes';
 import { countStageNodes, splitStageDataNodes } from '../src/utils/stageNodes';
@@ -677,6 +682,30 @@ describe('buildStageGraph: подробность', () => {
   if (detail === undefined) {
     throw new Error('в этапе stage-3 фикстуры нет подробности');
   }
+  const detailEdge = stage.edges.find((edge) => edge.target === detail.id);
+  const host = stage.nodes.find((node) => node.id === detailEdge?.source);
+  if (detailEdge === undefined || host === undefined) {
+    throw new Error('у подробности фикстуры нет ребра от хоста');
+  }
+
+  /** Копия этапа, в которой узел `id` заменён результатом `patch`. */
+  const withNode = (id: string, patch: (node: ProcessNode) => ProcessNode): Stage => ({
+    ...stage,
+    nodes: stage.nodes.map((node) => (node.id === id ? patch(node) : node)),
+  });
+
+  /**
+   * Замечания validateIntegrity к карте, в которой этап 3 заменён `variant`.
+   * Предпосылка тестов на копиях этапа: проверяется поведение на ЗАКОННОЙ
+   * карте, а не на конструкции, которую загрузчик и так бы отверг.
+   */
+  const integrityOf = (variant: Stage): string[] => {
+    const base = parseThreeLevelProcessMap();
+    return validateIntegrity({
+      ...base,
+      stages: base.stages.map((candidate) => (candidate.id === variant.id ? variant : candidate)),
+    });
+  };
 
   it('рисуется своим типом узла React Flow и своим размером', () => {
     // Свой тип, а не карточка шага: подробность — блок текста без обрезки.
@@ -724,34 +753,136 @@ describe('buildStageGraph: подробность', () => {
     // правее — right → left, левее — bottom → top. Выноска обязана идти снизу
     // вверх при ЛЮБОМ положении: сдвиг подробности левее и правее хоста не
     // меняет ничего.
-    const hostId = stage.edges.find((edge) => edge.target === detail.id)?.source;
-    const host = stage.nodes.find((node) => node.id === hostId);
-    if (host === undefined) {
-      throw new Error('у подробности фикстуры нет хоста');
-    }
     for (const dx of [-400, 0, 400]) {
-      const moved: Stage = {
-        ...stage,
-        nodes: stage.nodes.map((node) =>
-          node.id === detail.id
-            ? { ...node, position: { x: host.position.x + dx, y: node.position.y } }
-            : node,
-        ),
-      };
+      const moved = withNode(detail.id, (node) => ({
+        ...node,
+        position: { x: host.position.x + dx, y: node.position.y },
+      }));
       const flowEdge = buildStageGraph(moved).edges.find((edge) => edge.target === detail.id);
       expect(flowEdge?.sourceHandle, `сдвиг ${dx}`).toBe(STEP_HANDLE.bottom);
       expect(flowEdge?.targetHandle, `сдвиг ${dx}`).toBe(STEP_HANDLE.top);
     }
   });
 
+  /*
+   * Хост — не только шаг. validateIntegrity запрещает крепить подробность
+   * лишь к узлу данных и к другой подробности, так что законный хост — любой
+   * из остальных типов схемы. Список выводится из NodeTypeSchema, а не
+   * перечисляется руками: новый тип узла попадёт сюда сам, и если его хост
+   * окажется незаконным, покраснеет предпосылка, а не тест промолчит.
+   *
+   * Нижний хэндл-источник есть у всех этих типов: они рисуются через
+   * StepHandles (StageDetail.tsx: step, integration, gateway, event,
+   * subprocess — StepNode, warning — WarningNode). Тест держит то, что ветка
+   * выноски в stageGraph.ts не смотрит на тип ИСТОЧНИКА: сужение её до
+   * `source.type === 'step'` молча вернуло бы подробности под предупреждением
+   * или шлюзом пунктир данных со стрелкой, пущенный справа налево.
+   */
+  const HOST_TYPES = NodeTypeSchema.options.filter((type) => type !== 'data' && type !== 'detail');
+
+  it('предпосылка: хостов больше одного типа', () => {
+    expect(HOST_TYPES).toContain('step');
+    expect(HOST_TYPES.length).toBeGreaterThan(1);
+  });
+
+  it.each(HOST_TYPES)('хост типа %s: выноска снизу хоста к верху подробности', (type) => {
+    const retyped = withNode(host.id, (node) => ({ ...node, type }));
+    expect(integrityOf(retyped), `хост типа ${type} незаконен`).toEqual([]);
+
+    const flowEdge = buildStageGraph(retyped).edges.find((edge) => edge.target === detail.id);
+    expect(flowEdge?.type).toBe('detailLink');
+    expect(flowEdge?.sourceHandle).toBe(STEP_HANDLE.bottom);
+    expect(flowEdge?.targetHandle).toBe(STEP_HANDLE.top);
+  });
+
+  it('подпись ребра модели доезжает до выноски', () => {
+    // В презентациях у выноски подписи нет, но поле `label` модели законно у
+    // любого ребра, и ветка выноски не должна терять его молча — так же, как
+    // общее правило ниже её (tests/edgeLabel.test.tsx). Что подпись
+    // рисуется, проверяет tests/detailNode.test.tsx на самом компоненте.
+    const labelled: Stage = {
+      ...stage,
+      edges: stage.edges.map((edge) =>
+        edge.id === detailEdge.id ? { ...edge, label: 'Пояснение к шагу' } : edge,
+      ),
+    };
+    expect(integrityOf(labelled)).toEqual([]);
+
+    const flowEdge = buildStageGraph(labelled).edges.find((edge) => edge.id === detailEdge.id);
+    expect(flowEdge?.type).toBe('detailLink');
+    expect(flowEdge?.label).toBe('Пояснение к шагу');
+  });
+
   it('прочие рёбра данных выноской не становятся', () => {
-    // Правило — по типу ЦЕЛИ: ребро kind: 'data' к узлу, который не
-    // подробность, остаётся ребром данных (process-map-70e.6).
-    const { edges } = buildStageGraph(stage);
-    for (const edge of stage.edges) {
-      const target = stage.nodes.find((node) => node.id === edge.target);
+    // Правило — по типу ЦЕЛИ, а не по kind: ребро kind: 'data' к узлу,
+    // который не подробность, остаётся ребром данных (process-map-70e.6) со
+    // своими хэндлами. В этапе фикстуры такого ребра нет — единственное ребро
+    // данных там и есть выноска, — поэтому копии этапа дописывается артефакт
+    // на выходе хоста. Без него цикл ниже шёл бы только по рёбрам потока и
+    // не заметил бы, что ветку выноски выбрали по kind.
+    const artifact: ProcessNode = {
+      id: `${stage.id}-artifact`,
+      type: 'data',
+      label: 'Артефакт шага',
+      direction: 'out',
+      // Правее хоста: общее правило даёт такому ребру хэндлы right → left.
+      position: { x: host.position.x + 400, y: host.position.y },
+    };
+    const artifactEdgeId = `${stage.id}-edge-artifact`;
+    const withArtifact: Stage = {
+      ...stage,
+      nodes: [...stage.nodes, artifact],
+      edges: [
+        ...stage.edges,
+        { id: artifactEdgeId, source: host.id, target: artifact.id, kind: 'data' },
+      ],
+    };
+    expect(integrityOf(withArtifact)).toEqual([]);
+    // Предпосылка: ребро данных НЕ к подробности в этапе теперь есть.
+    const targetOf = (id: string) => withArtifact.nodes.find((node) => node.id === id);
+    expect(
+      withArtifact.edges.some(
+        (edge) => edge.kind === 'data' && targetOf(edge.target)?.type !== 'detail',
+      ),
+    ).toBe(true);
+
+    const { edges } = buildStageGraph(withArtifact);
+    const artifactEdge = edges.find((edge) => edge.id === artifactEdgeId);
+    expect(artifactEdge?.type).toBe('data');
+    expect(artifactEdge?.sourceHandle).toBe(STEP_HANDLE.right);
+    expect(artifactEdge?.targetHandle).toBe(STEP_HANDLE.left);
+    // И в целом: выноской становится ровно ребро к подробности.
+    for (const edge of withArtifact.edges) {
       const flowEdge = edges.find((candidate) => candidate.id === edge.id);
-      expect(flowEdge?.type === 'detailLink', edge.id).toBe(target?.type === 'detail');
+      expect(flowEdge?.type === 'detailLink', edge.id).toBe(
+        targetOf(edge.target)?.type === 'detail',
+      );
+    }
+  });
+
+  /*
+   * Хост-интеграция при выключенном «Показать интеграции» (SPEC §4.6): узел
+   * хоста скрыт, и выноска от него обязана исчезнуть вместе с ним — иначе
+   * React Flow получил бы ребро, source которого нет среди узлов. Здесь
+   * держится ПОРЯДОК в stageGraph.ts: ветка выноски стоит после фильтра
+   * интеграций, и перенос её выше этот тест поймает.
+   *
+   * Что делать с самой подробностью скрытого хоста — рисовать её без выноски
+   * или прятать вместе с хостом, — не решено (находка ревью
+   * process-map-9mn.36; сегодня импортёр вешает подробности только на шаги),
+   * и тест этого намеренно не закрепляет.
+   */
+  it('при скрытых интеграциях выноска от скрытого хоста не повисает', () => {
+    const retyped = withNode(host.id, (node) => ({ ...node, type: 'integration' }));
+    const graph = buildStageGraph(retyped, false);
+    const nodeIds = new Set(graph.nodes.map((node) => node.id));
+    // Предпосылка: хост действительно скрыт.
+    expect(nodeIds.has(host.id)).toBe(false);
+
+    expect(graph.edges.find((edge) => edge.id === detailEdge.id)).toBeUndefined();
+    for (const edge of graph.edges) {
+      expect(nodeIds.has(edge.source), `${edge.id}: нет узла-источника`).toBe(true);
+      expect(nodeIds.has(edge.target), `${edge.id}: нет узла-цели`).toBe(true);
     }
   });
 
@@ -759,12 +890,15 @@ describe('buildStageGraph: подробность', () => {
     // bounds считается по sizeOf: без своей ветки для подробности её
     // прямоугольник был бы 318×52, и стартовый вид (initialViewport) срезал
     // бы низ блока текста у края полотна.
+    //
+    // Проверяется только высота. Ширина подробности сегодня равна ширине
+    // шага (DETAIL_NODE_SIZE в sizes.ts), и та же проверка по ширине
+    // проходила бы и без ветки для подробности в sizeOf — то есть не
+    // доказывала бы ничего. Смысл она обретёт, когда process-map-9mn.26
+    // назначит подробности свою ширину.
     const { bounds } = buildStageGraph(stage);
     expect(bounds.y + bounds.height).toBeGreaterThanOrEqual(
       detail.position.y + DETAIL_NODE_SIZE.height,
-    );
-    expect(bounds.x + bounds.width).toBeGreaterThanOrEqual(
-      detail.position.x + DETAIL_NODE_SIZE.width,
     );
   });
 

@@ -101,8 +101,8 @@ const BPMN_ITEMS: readonly (LegendItem & { readonly nodeType: NodeType })[] = [
  * того, чего на полотне нет.
  *
  * Образец — миниатюра самой карточки (без полоски типа, заливка и рамка
- * выноски); класс живёт рядом с карточкой, в DetailNode.module.css, — почему
- * там, сказано у .legendSwatch.
+ * выноски); класс пока живёт рядом с карточкой, в DetailNode.module.css, —
+ * почему там и куда ему переехать, сказано у .legendSwatch.
  */
 const DETAIL_ITEM: LegendItem & { readonly nodeType: NodeType } = {
   key: 'detail',
@@ -117,7 +117,9 @@ const DETAIL_ITEM: LegendItem & { readonly nodeType: NodeType } = {
 const HIDDEN_WITHOUT_INTEGRATIONS = new Set(['integration', 'system']);
 
 /**
- * Типы BPMN, реально присутствующие на открытом этапе.
+ * Типы узлов, реально присутствующие на открытом этапе. По ним включаются
+ * условные пункты легенды: типы BPMN (BPMN_ITEMS) и «Подробность»
+ * (DETAIL_ITEM). Имя хука — от BPMN, ради которых он появился первым.
  *
  * Читает карту, а не данные React Flow: легенда живёт ВНЕ <ReactFlowProvider>
  * (см. шапку файла), и до узлов полотна ей не дотянуться. На обзоре считать
@@ -145,9 +147,9 @@ export function Legend({ compact = false }: LegendProps) {
   const showIntegrations = useProcessStore((state) => state.showIntegrations);
   const [expanded, setExpanded] = useState(false);
 
-  // Типы BPMN добавляются только если такой узел на текущем этапе есть.
-  // Для карт, собранных из презентаций, множество всегда пусто, и легенда
-  // выглядит ровно как раньше.
+  // Типы BPMN и подробность (DETAIL_ITEM) добавляются только если такой узел
+  // на текущем этапе есть. На картах snp и mrp нет ни того, ни другого, и
+  // легенда там выглядит ровно как раньше.
   const present = usePresentBpmnTypes(isOverview);
   const base = isOverview ? OVERVIEW_ITEMS : STAGE_ITEMS;
   const extra = isOverview
