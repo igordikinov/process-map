@@ -78,7 +78,7 @@ interface ScreenLink {
 interface ProcessNode {
   id: string; // kebab-case, уникален глобально
   type: NodeType;
-  label: string; // ≤ 2 строки
+  label: string; // ≤ 2 строки; у detail — абзацы через \n, без ограничения
   description?: string;
   group?: string; // id группы (dashed-контейнер), напр. "unconstrained"
   direction?: 'in' | 'out'; // колонка data-узла: вход или выход этапа
