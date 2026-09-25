@@ -26,6 +26,7 @@ import dagre from '@dagrejs/dagre';
 import type { NodeType, ProcessMap, ProcessNode, Stage } from '../data/schema.ts';
 import {
   DATA_NODE_SIZE,
+  DETAIL_NODE_SIZE,
   STAGE_NODE_SIZE as STAGE_SIZE,
   STEP_NODE_SIZE,
   type NodeSize,
@@ -58,6 +59,12 @@ export type Size = NodeSize;
  * фигуры — на полотне её пришлось бы вынести, и она наехала бы на соседей.
  * Вид узла кодируется иконкой внутри карточки (задача process-map-70e.7).
  *
+ * Подробность (process-map-9mn.32) — свой размер: это блок из нескольких
+ * абзацев, в карточку шага он не помещается. Пока она раскладывается dagre в
+ * общем потоке вместе с шагами — ребро «шаг → подробность» ставит её в
+ * следующий ранг. Размещение ПОД шагом, как на слайде, — задача раскладки
+ * process-map-9mn.26, а не этой таблицы.
+ *
  * Эта таблица — единственный работающий сторож исчерпаемости NodeType: новое
  * значение перечисления роняет tsc здесь и заставляет назначить размер.
  */
@@ -69,6 +76,7 @@ export const NODE_SIZE: Record<NodeType, Size> = {
   gateway: STEP_NODE_SIZE,
   event: STEP_NODE_SIZE,
   subprocess: STEP_NODE_SIZE,
+  detail: DETAIL_NODE_SIZE,
 };
 
 export const STAGE_NODE_SIZE: Size = STAGE_SIZE;

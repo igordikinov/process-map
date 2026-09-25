@@ -3,8 +3,21 @@
 import { z } from 'zod';
 
 // Тип узла уровня 2. Первые четыре значения — исходная модель, снятая с
-// презентаций; три последних добавлены импортом BPMN (эпик M6, задача
-// process-map-70e.4).
+// презентаций; следующие три добавлены импортом BPMN (эпик M6, задача
+// process-map-70e.4); 'detail' — картой inplan (эпик M8, задача
+// process-map-9mn.32).
+//
+// 'detail' — ПОДРОБНОСТЬ: блок текста под шагом на слайдах детализации колоды
+// L2 («что именно делается на шаге»). Один узел на один блок, абзацы блока
+// склеены в label через \n (решение владельца, process-map-9mn.31). Отдельный
+// тип, а не description шага, потому что на слайде это отдельная фигура, и
+// владелец решил: подробность — коробка целиком, один узел на полотне
+// (process-map-9mn.2, следствие — process-map-9mn.26). Отдельный тип, а не
+// 'data', потому что подробность не является ни входом, ни выходом этапа:
+// 'data' попал бы в колонки splitStageDataNodes и в счётчик входов/выходов
+// крошек. Шагом подробность тоже не считается (countStageNodes). Как она
+// крепится к шагу, закреплено в validateIntegrity: ровно одно входящее ребро
+// kind 'data' от узла потока, исходящих нет.
 //
 // ПОЧЕМУ ТРИ ЗНАЧЕНИЯ, А НЕ ДВЕНАДЦАТЬ. Вид шлюза и вид события живут в
 // отдельных полях ниже, а не в самом перечислении. Тип узла отображается
@@ -27,6 +40,7 @@ export const NodeTypeSchema = z.enum([
   'gateway',
   'event',
   'subprocess',
+  'detail',
 ]);
 export type NodeType = z.infer<typeof NodeTypeSchema>;
 
@@ -64,7 +78,24 @@ export const EventDefinitionSchema = z.enum([
 ]);
 export type EventDefinition = z.infer<typeof EventDefinitionSchema>;
 
-export const SystemCodeSchema = z.enum(['DP', 'PS', 'IO', 'ERP', 'MRP', 'INPLAN', 'BI', 'EPM']);
+// Коды систем. 'NRM' добавлен картой inplan (process-map-9mn.31, п. 6):
+// внешняя система, с которой обменивается модуль DP («Передача в NRM
+// базового прогноза», «Получение плана промо из NRM»). Показывается кодом,
+// как ERP, — расшифровки владелец не давал.
+//
+// Перечисление продублировано кортежем SYSTEM_CODES в scripts/import-pptx.py;
+// расхождение ловит tests/snp/importPreserve.test.ts.
+export const SystemCodeSchema = z.enum([
+  'DP',
+  'PS',
+  'IO',
+  'ERP',
+  'MRP',
+  'INPLAN',
+  'BI',
+  'EPM',
+  'NRM',
+]);
 export type SystemCode = z.infer<typeof SystemCodeSchema>;
 
 export const ScreenLinkSchema = z.object({
@@ -258,6 +289,33 @@ export const ModuleSchema = z.object({
 });
 export type Module = z.infer<typeof ModuleSchema>;
 
+// Полоса уровня 1 (эпик M8, решение владельца process-map-9mn.31, п. 5):
+// сквозная лента на экране модулей с подписью — сегодня одна, «FP&A ·
+// Финансовое планирование и анализ». Не кликается и в цепочку модулей не
+// входит.
+//
+// ПОЧЕМУ НЕ МОДУЛЬ. Модуль — это карточка, в которую проваливаются
+// (stageIds.min(1), ?module=<id>), и звено цепочки moduleEdges. У полосы нет
+// ни этапов, ни провала: модулем её пришлось бы оформить с выдуманным этапом,
+// то есть ровно тем тупиком на экране, который ModuleSchema запрещает, а
+// инвариант «блоки этапов упорядочены по module.number» (validateIntegrity)
+// потребовал бы для неё ещё и номера.
+//
+// ПОЧЕМУ НЕ КОД СИСТЕМЫ. SystemCodeSchema — закрытый список ВНЕШНИХ систем,
+// с которыми модули обмениваются артефактами (ExternalIO, концы moduleEdges).
+// FP&A — функция бизнеса, а не система, и расширять перечисление под неё
+// значило бы назвать системой то, что ею не является, — тот же довод, что у
+// артефактов между модулями в moduleEdges.
+//
+// id — та же форма, что у id модуля: полоса рисуется узлом на том же полотне
+// уровня 1, и оба id живут в одном пространстве имён React Flow. Совпадение
+// id полосы с id модуля ловит validateIntegrity.
+export const LaneSchema = z.object({
+  id: z.string().regex(/^[a-z][a-z0-9-]*$/),
+  title: z.string(),
+});
+export type Lane = z.infer<typeof LaneSchema>;
+
 export const ProcessMapSchema = z.object({
   version: z.string(),
   // Идентификатор карты (process-map-3wh.4). Совпадает с именем каталога
@@ -302,6 +360,21 @@ export const ProcessMapSchema = z.object({
   // расширять перечисление под него значило бы назвать системой то, что ею не
   // является.
   moduleEdges: z.array(EdgeSchema).optional(),
+  // Полосы уровня 1 (LaneSchema выше). ОТСУТСТВИЕ ПОЛЯ и означает «полос
+  // нет», пустой массив невыразим (.min(1)) — тот же довод, что у modules:
+  // одного способа сказать «нет» достаточно.
+  //
+  // Полосы рисуются только на экране модулей, поэтому без modules они
+  // бессмысленны: такой документ отвергает validateIntegrity, а не схема —
+  // зависимость «поле допустимо, если есть другое поле» zod без refine не
+  // выражает, а refine здесь спрятал бы ошибку данных в сообщение разбора
+  // вместо поимённого списка проблем.
+  //
+  // МЕСТО КЛЮЧА — после moduleEdges, и это часть контракта: zod пересобирает
+  // объект в порядке ключей схемы, а экспорт (serializeProcessMap) обязан
+  // совпадать с process.json побайтово. Сторож — round-trip в
+  // tests/mapContract.test.ts.
+  lanes: z.array(LaneSchema).min(1).optional(),
   stages: z.array(StageSchema),
   overviewEdges: z.array(EdgeSchema),
 });
@@ -354,12 +427,20 @@ export const LEGACY_OVERRIDES_MAP_ID = 'snp';
  * - id рёбер уникальны глобально (React Flow требует уникальных id в пределах
  *   отрисовываемого графа);
  * - node.group, если задан, ссылается на существующую group своего этапа;
+ * - подробность (type 'detail') висит ровно на одном узле потока: одно
+ *   входящее ребро kind 'data' от узла, который не 'data' и не 'detail', и ни
+ *   одного исходящего (process-map-9mn.32);
  * - модули, если поле modules есть: id и номера модулей уникальны, stageIds
  *   ссылаются на существующие этапы, ни один этап не заявлен двумя модулями и
- *   ни один не остался без модуля;
- * - обзорное ребро не соединяет этапы разных модулей;
+ *   ни один не остался без модуля; номера этапов каждого модуля — сплошной
+ *   блок, и блоки идут в порядке module.number (process-map-9mn.24);
+ * - обзорное ребро не соединяет этапы разных модулей, и хотя бы один его
+ *   конец — этап (process-map-9ow);
  * - оба конца moduleEdges — id модуля либо код системы, и хотя бы один из них
- *   модуль.
+ *   модуль; конец-система не совпадает с id модуля без учёта регистра — как и
+ *   система ExternalIO в документе с модулями (process-map-9mn.23);
+ * - полосы уровня 1 (lanes) есть только при модулях, их id уникальны и не
+ *   совпадают с id модулей.
  *
  * Для overviewEdges допустимыми source/target считаются:
  *   - id любого этапа (stage.id) — рёбра этап → этап;
@@ -368,8 +449,8 @@ export const LEGACY_OVERRIDES_MAP_ID = 'snp';
  *     система → этап (SPEC §3, §4.1: свимлейны уровня 1 — это внешние
  *     системы, а не узлы графа с собственным id).
  * Это два разных пространства идентификаторов (kebab-case id этапов и
- * короткие коды систем DP/PS/IO/ERP/MRP/INPLAN/BI/EPM), поэтому конфликтов имён
- * не возникает и ложных ошибок не даёт.
+ * короткие коды систем DP/PS/IO/ERP/MRP/INPLAN/BI/EPM/NRM), поэтому конфликтов
+ * имён не возникает и ложных ошибок не даёт.
  */
 export function validateIntegrity(map: ProcessMap): string[] {
   const problems: string[] = [];
@@ -433,6 +514,8 @@ export function validateIntegrity(map: ProcessMap): string[] {
         );
       }
     }
+
+    problems.push(...detailProblems(stage));
   }
 
   // ───────────────────────── уровень 1: модули (эпик M8) ─────────────────────
@@ -505,6 +588,35 @@ export function validateIntegrity(map: ProcessMap): string[] {
         problems.push(`Этап "${stage.id}" не заявлен ни одним модулем`);
       }
     }
+
+    problems.push(...moduleBlockProblems(map.modules, map.stages, moduleIdByStageId));
+  }
+
+  // Полосы уровня 1 (LaneSchema). Проверяются ВСЕГДА, а не внутри блока
+  // модулей выше: главная ошибка здесь — как раз полосы БЕЗ модулей. Полоса
+  // рисуется только на экране модулей, и у двухуровневой карты такого экрана
+  // нет вовсе: без этой строки полоса молча нигде бы не появилась.
+  const moduleIds = new Set((map.modules ?? []).map((module) => module.id));
+  if (map.lanes !== undefined) {
+    if (moduleIds.size === 0) {
+      problems.push(
+        `Полосы уровня 1 заданы, а модулей нет: полосы рисуются только на экране модулей ` +
+          `(${map.lanes.map((lane) => `"${lane.id}"`).join(', ')})`,
+      );
+    }
+    const seenLaneIds = new Set<string>();
+    for (const lane of map.lanes) {
+      if (seenLaneIds.has(lane.id)) {
+        problems.push(`Дублирующийся id полосы: "${lane.id}"`);
+      }
+      seenLaneIds.add(lane.id);
+      // Полоса и модуль — узлы ОДНОГО полотна уровня 1, и id узла React Flow
+      // обязан быть уникальным: при совпадении один из двух просто не
+      // нарисовался бы, а ?module=<id> указывал бы на полосу.
+      if (moduleIds.has(lane.id)) {
+        problems.push(`Полоса "${lane.id}" совпадает по id с модулем`);
+      }
+    }
   }
 
   const isValidOverviewEndpoint = (value: string): boolean =>
@@ -520,6 +632,23 @@ export function validateIntegrity(map: ProcessMap): string[] {
     if (!isValidOverviewEndpoint(edge.target)) {
       problems.push(
         `Ребро обзора "${edge.id}": target "${edge.target}" не является ни id этапа, ни кодом системы`,
+      );
+    }
+
+    // Хотя бы один конец — этап (process-map-9ow). Проверка каждого конца по
+    // отдельности выше пропускала ребро «система → система»: оба конца
+    // законны сами по себе, но на обзоре такое ребро соединяло бы два
+    // свимлейна внешних систем в обход всех этапов — связь, которой на этом
+    // экране нет смысла. Правило то же, что у рёбер уровня 1 ниже («хотя бы
+    // один конец — модуль»), на уровень ниже. Сообщение своё, а не общее с
+    // тем: читатель должен сразу понять, про какой экран речь.
+    //
+    // Срабатывает независимо от проверок концов выше, как и правило уровня 1:
+    // ребро с ненайденными концами получает по строке на каждую причину, а не
+    // одну, за которой прячутся остальные.
+    if (!stageIds.has(edge.source) && !stageIds.has(edge.target)) {
+      problems.push(
+        `Ребро обзора "${edge.id}": ни один конец не является этапом ("${edge.source}" → "${edge.target}")`,
       );
     }
 
@@ -557,13 +686,31 @@ export function validateIntegrity(map: ProcessMap): string[] {
   // требовать, чтобы систему уровня 1 кто-то упомянул ещё и на уровне 2,
   // значило бы запрещать связь только за то, что ниже ей нет соответствия.
   //
-  // ЧЕГО ЭТА ПРОВЕРКА НЕ ЛОВИТ, и это не мелочь: модули эпика M8 зовут dp, mrp,
-  // ps, а коды систем — DP, MRP, PS, то есть различаются одним регистром.
-  // "DP" на месте "dp" пройдёт как код системы: это не опечатка, а валидная
-  // ДРУГАЯ сущность, и здесь она неотличима от намерения. Запрет на
-  // совпадение id модуля с кодом системы вынесен в задачу process-map-9mn.23 —
-  // он зависит от решения владельца про свимлейны уровня 1.
-  const moduleIds = new Set((map.modules ?? []).map((module) => module.id));
+  // РЕГИСТРОВАЯ КОЛЛИЗИЯ (process-map-9mn.23). Модули карты inplan зовут dp,
+  // meio, snp, ps, mrp, а коды систем — DP, PS, MRP: три из пяти различаются
+  // одним регистром. "DP" на месте "dp" проходит проверку выше как код
+  // системы — это не опечатка, а валидная ДРУГАЯ сущность, и связь тихо
+  // уехала бы к свимлейну внешней системы вместо карточки модуля. Поэтому
+  // конец-система, совпадающий с id модуля этой карты без учёта регистра, —
+  // ошибка: модуль уже нарисован карточкой на том же экране, и рисовать его
+  // же ещё и внешней системой бессмысленно по построению. Решение владельца —
+  // process-map-9mn.31.
+  //
+  // Сравнение — БЕЗ учёта регистра, и это вся суть проверки: с учётом регистра
+  // "DP" и "dp" различны, и она не поймала бы ровно тот случай, ради которого
+  // заведена. Коды, ни с одним модулем не совпадающие (ERP, BI, NRM), концами
+  // остаются законными.
+  //
+  // source и target — ОТДЕЛЬНЫМИ ветками и отдельными тестами (урок
+  // process-map-9mn.11: один тест на оба конца оставлял целую ветку
+  // непроверенной).
+  const moduleIdByLowerCase = new Map(
+    (map.modules ?? []).map((module) => [module.id.toLowerCase(), module.id] as const),
+  );
+  const moduleCollidingWithSystem = (value: string): string | undefined =>
+    SystemCodeSchema.safeParse(value).success
+      ? moduleIdByLowerCase.get(value.toLowerCase())
+      : undefined;
   const isValidModuleEndpoint = (value: string): boolean =>
     moduleIds.has(value) || SystemCodeSchema.safeParse(value).success;
 
@@ -580,6 +727,21 @@ export function validateIntegrity(map: ProcessMap): string[] {
       );
     }
 
+    const sourceCollision = moduleCollidingWithSystem(edge.source);
+    if (sourceCollision !== undefined) {
+      problems.push(
+        `Ребро модулей "${edge.id}": source "${edge.source}" — код системы, совпадающий ` +
+          `с id модуля "${sourceCollision}" без учёта регистра`,
+      );
+    }
+    const targetCollision = moduleCollidingWithSystem(edge.target);
+    if (targetCollision !== undefined) {
+      problems.push(
+        `Ребро модулей "${edge.id}": target "${edge.target}" — код системы, совпадающий ` +
+          `с id модуля "${targetCollision}" без учёта регистра`,
+      );
+    }
+
     // Хотя бы один конец — модуль. Связь «система → система» на уровне 1
     // бессмысленна по построению: экран уровня 1 рисует модули, а системы
     // существуют на нём только как то, с чем модуль обменивается. Ребро между
@@ -592,5 +754,159 @@ export function validateIntegrity(map: ProcessMap): string[] {
     }
   }
 
+  // Та же регистровая коллизия в свимлейнах уровня 2 (ExternalIO). В карте с
+  // модулями обмен между модулями — это moduleEdges, а свимлейн — только
+  // ВНЕШНЯЯ система (решение владельца process-map-9mn.31, п. 6: «модули
+  // In.Plan полосами не бывают»). Свимлейн PS в этапе карты, где ps — модуль,
+  // рисовал бы модуль этой же карты внешней системой. У двухуровневой карты
+  // модулей нет, словарь пуст, и проверка молчит: в картах snp и mrp свимлейны
+  // DP, PS, IO, MRP законны — там это действительно соседние системы.
+  for (const stage of map.stages) {
+    for (const io of [...stage.inputs, ...stage.outputs]) {
+      const collision = moduleIdByLowerCase.get(io.system.toLowerCase());
+      if (collision !== undefined) {
+        problems.push(
+          `Этап "${stage.id}": внешняя система "${io.system}" («${io.label}») совпадает ` +
+            `с id модуля "${collision}" без учёта регистра`,
+        );
+      }
+    }
+  }
+
+  return problems;
+}
+
+/**
+ * Подробности этапа (type 'detail', process-map-9mn.32): каждая висит ровно на
+ * одном узле потока.
+ *
+ * Подробность — текст под шагом, а не звено процесса. Её место на полотне,
+ * смысл и то, к какому шагу она относится, выражены ЕДИНСТВЕННЫМ ребром
+ * «узел → подробность» kind 'data'; поэтому каждое отклонение — отдельная
+ * ошибка со своим сообщением:
+ *  - входящих нет — подробность ни к чему не относится и повисла бы на полотне
+ *    сама по себе;
+ *  - входящих больше одного — неясно, чей это текст;
+ *  - kind не 'data' — 'process' нарисовал бы подробность звеном потока, а
+ *    'integration' — передачей между системами;
+ *  - источник 'data' или 'detail' — подробность описывает то, что ДЕЛАЕТСЯ, а
+ *    вход/выход этапа и другая подробность ничего не делают; цепочка
+ *    подробностей к тому же сделала бы порядок текста зависимым от рёбер;
+ *  - исходящее ребро — подробность не звено: ребро из неё продолжило бы поток
+ *    через текст.
+ *
+ * Источник, которого нет среди узлов этапа, здесь не обсуждается: висящий конец
+ * уже назван проверкой рёбер этапа, и повторять его значило бы утопить диагноз.
+ */
+function detailProblems(stage: Stage): string[] {
+  const problems: string[] = [];
+  const nodeById = new Map(stage.nodes.map((node) => [node.id, node]));
+
+  for (const detail of stage.nodes) {
+    if (detail.type !== 'detail') {
+      continue;
+    }
+    const where = `Подробность "${detail.id}" (этап "${stage.id}")`;
+    const incoming = stage.edges.filter((edge) => edge.target === detail.id);
+    const outgoing = stage.edges.filter((edge) => edge.source === detail.id);
+
+    if (incoming.length === 0) {
+      problems.push(`${where} не привязана ни к одному узлу: входящих рёбер нет`);
+    }
+    if (incoming.length > 1) {
+      problems.push(
+        `${where} привязана сразу к нескольким узлам: входящих рёбер ${incoming.length} ` +
+          `(${incoming.map((edge) => `"${edge.id}"`).join(', ')})`,
+      );
+    }
+    for (const edge of incoming) {
+      if (edge.kind !== 'data') {
+        problems.push(`${where}: входящее ребро "${edge.id}" вида "${edge.kind}", а не "data"`);
+      }
+      const source = nodeById.get(edge.source);
+      if (source !== undefined && (source.type === 'data' || source.type === 'detail')) {
+        problems.push(
+          `${where}: входящее ребро "${edge.id}" идёт от узла "${source.id}" типа ` +
+            `"${source.type}" — подробность крепится к узлу потока`,
+        );
+      }
+    }
+    for (const edge of outgoing) {
+      problems.push(`${where}: исходящее ребро "${edge.id}" — у подробности исходящих не бывает`);
+    }
+  }
+  return problems;
+}
+
+/**
+ * Этапы модуля — сплошной блок номеров, и блоки идут в порядке module.number
+ * (process-map-9mn.24, утверждён вариант «а» — process-map-9mn.31).
+ *
+ * ЗАЧЕМ. Довод №1 всей конструкции ModuleSchema — сквозная нумерация этапов
+ * 1..N, которая делится на модули ДИАПАЗОНАМИ: ?stage=N, бейдж «Этап k из n»
+ * уровня 3, порядок карточек уровня 2. Схема этого не требует — модуль A вправе
+ * заявить этапы 1 и 4, модуль B — 2 и 3, — и тогда уровень 2 модуля A показал
+ * бы этапы 1 и 4, а сквозной номер перестал бы что-либо значить.
+ *
+ * СПЛОШНЫМ ОБЯЗАНО БЫТЬ МНОЖЕСТВО номеров, а не ПОРЯДОК stageIds. Объявленный
+ * порядок остаётся авторитетом для экранов (stagesOfModule отдаёт этапы в
+ * порядке stageIds), и {5, 4, 3} — законный модуль. Формулировка «stageIds
+ * перечислены по возрастанию номеров» (вариант «б») отвергнута: она отняла бы
+ * у объявленного порядка смысл, и 9mn.17 пришлось бы считать бейдж по номеру.
+ *
+ * Порядок блоков сравнивается по module.number, а НЕ по соседству номеров:
+ * дыра в номерах модулей (1, 2, 4) законна (см. проверку уникальности выше),
+ * поэтому «следующий» — это следующий по возрастанию, а не number + 1.
+ *
+ * Номера считаются только у этапов, которыми модуль ВЛАДЕЕТ (moduleIdByStageId):
+ * висящая ссылка и этап, заявленный вторым модулем, уже названы поимённо, и
+ * пересчитывать их ещё и здесь значило бы приписать модулю чужой этап.
+ */
+function moduleBlockProblems(
+  modules: readonly Module[],
+  stages: readonly Stage[],
+  moduleIdByStageId: ReadonlyMap<string, string>,
+): string[] {
+  const problems: string[] = [];
+  const numberByStageId = new Map(stages.map((stage) => [stage.id, stage.number]));
+
+  const blocks: { module: Module; first: number; last: number }[] = [];
+  for (const module of modules) {
+    const numbers = [
+      ...new Set(
+        module.stageIds
+          .filter((stageId) => moduleIdByStageId.get(stageId) === module.id)
+          .map((stageId) => numberByStageId.get(stageId))
+          .filter((number): number is number => number !== undefined),
+      ),
+    ].sort((a, b) => a - b);
+    const first = numbers[0];
+    const last = numbers[numbers.length - 1];
+    if (first === undefined || last === undefined) {
+      continue;
+    }
+    if (last - first + 1 !== numbers.length) {
+      problems.push(
+        `Номера этапов модуля "${module.id}" не образуют сплошной блок: ${numbers.join(', ')}`,
+      );
+    }
+    blocks.push({ module, first, last });
+  }
+
+  // Сортировка устойчива: при дубле номера модуля (он уже назван выше) пары
+  // сравниваются в порядке документа, а не как придётся.
+  const ordered = [...blocks].sort((a, b) => a.module.number - b.module.number);
+  for (let index = 1; index < ordered.length; index += 1) {
+    const previous = ordered[index - 1];
+    const next = ordered[index];
+    if (previous === undefined || next === undefined || previous.last < next.first) {
+      continue;
+    }
+    problems.push(
+      `Блоки этапов модулей идут не в порядке номеров модулей: модуль ` +
+        `"${previous.module.id}" (№${previous.module.number}) доходит до этапа ${previous.last}, ` +
+        `а модуль "${next.module.id}" (№${next.module.number}) начинается с этапа ${next.first}`,
+    );
+  }
   return problems;
 }

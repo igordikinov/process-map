@@ -72,10 +72,16 @@ describe('Breadcrumbs', () => {
       const { unmount } = render(<Breadcrumbs stages={map.stages} rootLabel={map.moduleLabel} />);
 
       // Независимый от countStageNodes пересчёт: тип узла напрямую из данных,
-      // чтобы тест не был тавтологией с тестируемой функцией.
-      const steps = stage.nodes.filter((node) => node.type !== 'data').length;
+      // чтобы тест не был тавтологией с тестируемой функцией. Подробность
+      // (type 'detail', process-map-9mn.32) — не шаг и не вход/выход: пересчёт
+      // обязан исключать её так же, как countStageNodes, иначе на первой
+      // базовой карте с подробностями тест упал бы с сообщением про шаги.
+      const steps = stage.nodes.filter(
+        (node) => node.type !== 'data' && node.type !== 'detail',
+      ).length;
       const dataNodes = stage.nodes.filter((node) => node.type === 'data');
-      expect(steps + dataNodes.length).toBe(stage.nodes.length);
+      const details = stage.nodes.filter((node) => node.type === 'detail');
+      expect(steps + dataNodes.length + details.length).toBe(stage.nodes.length);
 
       const counts = countStageNodes(stage);
       expect(counts.steps).toBe(steps);

@@ -10,9 +10,10 @@
 import type { Edge as FlowEdge, FitViewOptions } from '@xyflow/react';
 import type { ProcessNode, Stage } from '../../data/schema';
 import { ru } from '../../i18n/ru';
-import { DATA_NODE_SIZE, STEP_NODE_SIZE, type NodeSize } from '../../theme/sizes';
+import { DATA_NODE_SIZE, DETAIL_NODE_SIZE, STEP_NODE_SIZE, type NodeSize } from '../../theme/sizes';
 import { splitStageDataNodes } from '../../utils/stageNodes';
 import type { DataNodeType } from '../nodes/DataNode';
+import type { DetailNodeType } from '../nodes/DetailNode';
 import type { GroupNodeType } from '../nodes/GroupNode';
 import {
   STEP_HANDLE,
@@ -33,7 +34,8 @@ export type StageDetailNode =
   | DataNodeType
   | GatewayNodeType
   | EventNodeType
-  | SubprocessNodeType;
+  | SubprocessNodeType
+  | DetailNodeType;
 
 // ───────────────────────────── геометрия ─────────────────────────────
 
@@ -242,8 +244,24 @@ export function groupContainerId(groupId: string): string {
 export const COLUMN_IN_ID = 'column:in';
 export const COLUMN_OUT_ID = 'column:out';
 
+/**
+ * Размер узла на полотне. Та же таблица, что NODE_SIZE в
+ * src/layout/stageLayout.ts, но свёрнутая: всё, что не данные и не
+ * подробность, рисуется карточкой шага.
+ *
+ * Подробность (process-map-9mn.32) обязана быть здесь отдельной веткой: иначе
+ * габарит группы, bounds и стартовый вид считались бы по 318×52, а раскладка —
+ * по её настоящему размеру, и рамка группы обрезала бы подробность.
+ */
 function sizeOf(node: ProcessNode): NodeSize {
-  return node.type === 'data' ? DATA_NODE_SIZE : STEP_NODE_SIZE;
+  switch (node.type) {
+    case 'data':
+      return DATA_NODE_SIZE;
+    case 'detail':
+      return DETAIL_NODE_SIZE;
+    default:
+      return STEP_NODE_SIZE;
+  }
 }
 
 /** Прямоугольник в координатах раскладки (не экрана). */
@@ -395,6 +413,10 @@ function flowNodeOf(node: ProcessNode, parentId: string | undefined, origin: Box
         type: 'step' as const,
         data: { node, variant: 'step' satisfies StepCardVariant },
       } satisfies StepNodeType;
+    case 'detail':
+      // Свой компонент, а не вариант карточки шага: подробность — блок текста
+      // без обрезки, а не подпись в две строки (process-map-9mn.32).
+      return { ...common, type: 'detail' as const, data: { node } } satisfies DetailNodeType;
     default: {
       const unreachable: never = node.type;
       throw new Error(`Неизвестный тип узла: ${String(unreachable)}`);

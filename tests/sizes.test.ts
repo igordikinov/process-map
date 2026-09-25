@@ -11,6 +11,7 @@ import { buildOverviewGraph } from '../src/components/Overview/overviewGraph';
 import { loadBaseProcessMap } from '../src/data/loader';
 import {
   DATA_NODE_SIZE,
+  DETAIL_NODE_SIZE,
   IO_NODE_SIZE,
   SIZE_TOKENS,
   STAGE_NODE_SIZE,
@@ -56,6 +57,7 @@ describe('размеры: sizes.ts ↔ раскладка', () => {
     expect(NODE_SIZE.integration).toEqual(STEP_NODE_SIZE);
     expect(NODE_SIZE.warning).toEqual(STEP_NODE_SIZE);
     expect(NODE_SIZE.data).toEqual(DATA_NODE_SIZE);
+    expect(NODE_SIZE.detail).toEqual(DETAIL_NODE_SIZE);
     expect(LAYOUT_STAGE_SIZE).toEqual(STAGE_NODE_SIZE);
   });
 

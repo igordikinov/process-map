@@ -32,6 +32,7 @@ import {
   type Edge,
   type ExternalIO,
   type Group,
+  type Lane,
   type Module,
   type ProcessMap,
   type ProcessNode,
@@ -69,7 +70,36 @@ export const SYSTEM_OUTSIDE_IO_2: SystemCode = 'EPM';
 
 export const MODULE_DEMAND = 'demand-planning';
 export const MODULE_SUPPLY = 'supply-planning';
-export const MODULE_PRODUCTION = 'production-planning';
+/*
+ * id 'mrp', а НЕ 'production-planning', — РЕГИСТРОВАЯ КОЛЛИЗИЯ НАМЕРЕННО
+ * (process-map-9mn.23, 9mn.32). У реальной карты inplan модули зовут dp,
+ * meio, snp, ps, mrp, и три из пяти отличаются от кодов систем DP, PS, MRP
+ * только регистром. Пока id фикстуры не могли столкнуться с кодом системы ни
+ * при каком сравнении, весь код уровня 1 проверялся на данных, где приведение
+ * регистра или сравнение без его учёта проходят все тесты, а на реальной карте
+ * конец 'MRP' тихо уехал бы к свимлейну внешней системы.
+ *
+ * Базовая фикстура при этом ВАЛИДНА: 'MRP' не стоит ни концом её moduleEdges,
+ * ни в её ExternalIO (IO_SYSTEM_CODES выше его не содержит) — коллизию
+ * добавляют сами тесты, которые её проверяют. Подписи модуля (PP ·
+ * Планирование производства) не тронуты: по ним его называют тесты
+ * tests/modules.test.ts, а предмет коллизии — только id.
+ */
+export const MODULE_PRODUCTION = 'mrp';
+
+/**
+ * Код системы, совпадающий с MODULE_PRODUCTION без учёта регистра. Тесты
+ * 9mn.23 ставят его концом ребра уровня 1 или системой ExternalIO; константа
+ * здесь, рядом с id модуля, чтобы пара не разъехалась.
+ */
+export const SYSTEM_COLLIDING_WITH_MODULE: SystemCode = 'MRP';
+
+/**
+ * Полоса уровня 1 (LaneSchema): та самая FP&A с решения владельца
+ * process-map-9mn.31, п. 5. Одна — больше фикстуре не нужно: проверки полос
+ * (уникальность, совпадение с модулем) тесты делают, дописывая свою.
+ */
+export const LANE_FPA = 'fpa';
 
 /**
  * Подпись ребра модуль → модуль. Артефакт между модулями живёт именно в
@@ -84,6 +114,8 @@ interface StageSpec {
   readonly shortTitle: string;
   readonly keyOutputs: readonly string[];
   readonly warningsCount?: number;
+  /** Текст подробности под первым шагом этапа; абзацы через \n. */
+  readonly detail?: string;
   readonly inputs: readonly { readonly system: SystemCode; readonly label: string }[];
   readonly outputs: readonly { readonly system: SystemCode; readonly label: string }[];
 }
@@ -156,6 +188,12 @@ const MODULE_LAYOUT: readonly ModuleSpec[] = [
  * У этапа 6 внешних входов и выходов НЕТ НИ ОДНОГО. Это не пропуск: пустые
  * inputs/outputs законны схемой, и потребитель, молча предположивший «у каждого
  * этапа есть свимлейн», должен спотыкаться о фикстуру, а не о реальные данные.
+ *
+ * ПОДРОБНОСТЬ (NodeType 'detail', process-map-9mn.32) — ровно одна, под первым
+ * шагом этапа 3, и текст её из двух абзацев: одна — потому что у остальных
+ * этапов её отсутствие тоже закреплено (потребитель, решивший «у каждого шага
+ * есть подробность», споткнётся), два абзаца — потому что склейка через \n и
+ * есть форма, которую пишет импортёр.
  */
 const STAGE_LAYOUT: readonly StageSpec[] = [
   {
@@ -179,6 +217,7 @@ const STAGE_LAYOUT: readonly StageSpec[] = [
     title: 'Этап 3: неограниченный план',
     shortTitle: 'Неограниченный план',
     keyOutputs: ['Неограниченный план поставок'],
+    detail: 'Расчёт потребности по всем узлам сети\nБез учёта ограничений мощностей',
     inputs: [{ system: 'ERP', label: 'Остатки и заказы' }],
     outputs: [],
   },
@@ -279,6 +318,20 @@ function buildStage(spec: StageSpec): Stage {
     kind: 'process',
   }));
 
+  // Подробность дописывается ПОСЛЕ цепочки: иначе цепочка протянула бы ребро
+  // «выход → подробность», а у подробности входящее ребро ровно одно, от
+  // узла потока и вида 'data' (validateIntegrity).
+  if (spec.detail !== undefined) {
+    const detail: ProcessNode = {
+      id: `${first.id}-detail`,
+      type: 'detail',
+      label: spec.detail,
+      position: { x: 160, y: spec.number * 100 + 60 },
+    };
+    nodes.push(detail);
+    edges.push({ id: `${id}-edge-detail`, source: first.id, target: detail.id, kind: 'data' });
+  }
+
   const externalIO = (
     io: readonly { readonly system: SystemCode; readonly label: string }[],
     direction: 'in' | 'out',
@@ -309,9 +362,9 @@ function buildStage(spec: StageSpec): Stage {
 }
 
 /**
- * Карта с гарантированно непустыми modules/moduleEdges.
+ * Карта с гарантированно непустыми modules/moduleEdges/lanes.
  *
- * В самой схеме оба поля необязательные («отсутствие и означает двухуровневую
+ * В самой схеме все три поля необязательные («отсутствие и означает двухуровневую
  * карту»), и потребителю фикстуры пришлось бы ставить `!` на каждое обращение к
  * тому, что фикстура обещает всегда. Сужение стоит одной строкой здесь вместо
  * десятков восклицательных знаков в тестах — и, в отличие от них, обещание
@@ -320,6 +373,7 @@ function buildStage(spec: StageSpec): Stage {
 export type ThreeLevelProcessMap = ProcessMap & {
   modules: Module[];
   moduleEdges: Edge[];
+  lanes: Lane[];
 };
 
 /** Этапы каждого модуля — ОБЪЯВЛЕННЫЙ состав, а не вычисленный из карты. */
@@ -412,6 +466,7 @@ export function buildThreeLevelProcessMap(): ThreeLevelProcessMap {
     moduleLabel: 'Все процессы In.Plan',
     modules,
     moduleEdges,
+    lanes: [{ id: LANE_FPA, title: 'FP&A · Финансовое планирование и анализ' }],
     stages,
     overviewEdges,
   };
@@ -432,8 +487,12 @@ export function buildThreeLevelProcessMap(): ThreeLevelProcessMap {
  */
 export function parseThreeLevelProcessMap(): ThreeLevelProcessMap {
   const parsed = ProcessMapSchema.parse(buildThreeLevelProcessMap());
-  if (parsed.modules === undefined || parsed.moduleEdges === undefined) {
-    throw new Error('Трёхуровневая фикстура обязана приносить modules и moduleEdges');
+  if (
+    parsed.modules === undefined ||
+    parsed.moduleEdges === undefined ||
+    parsed.lanes === undefined
+  ) {
+    throw new Error('Трёхуровневая фикстура обязана приносить modules, moduleEdges и lanes');
   }
   return parsed as ThreeLevelProcessMap;
 }

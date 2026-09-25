@@ -59,7 +59,7 @@ export interface StageNodeCounts {
    *  рисуются карточкой шага и раскладываются dagre в одном потоке —
    *  см. `scripts/layout.ts::NODE_SIZE` и `layoutFlow`, где integration/
    *  warning используют тот же размер, что step, и не выделяются в
-   *  отдельную группу). */
+   *  отдельную группу). Подробности (`detail`) шагами НЕ считаются. */
   steps: number;
   inputs: number;
   outputs: number;
@@ -67,8 +67,14 @@ export interface StageNodeCounts {
 
 export function countStageNodes(stage: Stage): StageNodeCounts {
   const { inputs, outputs } = splitStageDataNodes(stage);
+  // Подробность (process-map-9mn.32) — текст под шагом, а не шаг: на колоде
+  // L2 под шагом их бывает по одной на каждый, и счётчик «N шагов» в крошках
+  // удвоился бы, хотя шагов на экране столько же. Отдельного пункта в счётчике
+  // у неё нет: формат «N шагов · M входов · K выходов» (ru.breadcrumbs.counter)
+  // эта задача не меняет.
+  const details = stage.nodes.filter((node) => node.type === 'detail').length;
   return {
-    steps: stage.nodes.length - inputs.length - outputs.length,
+    steps: stage.nodes.length - inputs.length - outputs.length - details,
     inputs: inputs.length,
     outputs: outputs.length,
   };

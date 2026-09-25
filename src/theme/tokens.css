@@ -423,6 +423,11 @@
   --pm-data-node-width: 200px;
   --pm-data-node-height: 56px;
 
+  /* DetailNode — подробность под шагом (process-map-9mn.32). Размер
+     временный, итог по макету — process-map-9mn.26. */
+  --pm-detail-node-width: 318px;
+  --pm-detail-node-height: 170px;
+
   /* Drawer (A3), SPEC §4.3 */
   --pm-drawer-width: 360px;
 

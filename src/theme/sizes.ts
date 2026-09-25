@@ -49,6 +49,23 @@ export const STEP_NODE_SIZE: NodeSize = { width: 318, height: 52 };
 /** DataNode, уровень 2 (SPEC §4.2). */
 export const DATA_NODE_SIZE: NodeSize = { width: 200, height: 56 };
 
+/**
+ * DetailNode — подробность под шагом, уровень 2 (NodeType 'detail',
+ * process-map-9mn.32).
+ *
+ * РАЗМЕР ВРЕМЕННЫЙ. Ширина — ширина карточки шага: подробность стоит под
+ * своим шагом и шире него быть не должна. Поэтому она ВЫВЕДЕНА из
+ * STEP_NODE_SIZE, а не переписана числом: литерал 318 здесь молча разошёлся
+ * бы с шагом при первой же правке его ширины. Высота 170 — запас под
+ * несколько абзацев без обрезки (текст не клампится, в отличие от шага).
+ *
+ * Итоговые числа по макету назначит задача process-map-9mn.26. Раскладка
+ * (stageLayout.ts, stageGraph.ts) берёт их отсюда сама, а токены
+ * --pm-detail-node-* в tokens.css — это вторая запись тех же чисел, и править
+ * её нужно руками: расхождение ловит tests/sizes.test.ts (SIZE_TOKENS).
+ */
+export const DETAIL_NODE_SIZE: NodeSize = { width: STEP_NODE_SIZE.width, height: 170 };
+
 /** Drawer (SPEC §4.3). */
 export const DRAWER_WIDTH = 360;
 
@@ -72,6 +89,8 @@ export const SIZE_TOKENS: Readonly<Record<string, number>> = {
   '--pm-step-node-height': STEP_NODE_SIZE.height,
   '--pm-data-node-width': DATA_NODE_SIZE.width,
   '--pm-data-node-height': DATA_NODE_SIZE.height,
+  '--pm-detail-node-width': DETAIL_NODE_SIZE.width,
+  '--pm-detail-node-height': DETAIL_NODE_SIZE.height,
   '--pm-drawer-width': DRAWER_WIDTH,
   '--pm-header-height': HEADER_HEIGHT,
   '--pm-header-height-compact': HEADER_HEIGHT_COMPACT,

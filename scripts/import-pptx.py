@@ -298,7 +298,11 @@ MAX_KEY_OUTPUTS = 4                  # ограничение zod-схемы
 ARTIFACT_FILL = "scheme:accent2"
 MAX_ID_LENGTH = 72                   # длиннее, чтобы различающая часть текста не срезалась
 
-SYSTEM_CODES = ("DP", "PS", "IO", "ERP", "MRP", "INPLAN", "BI", "EPM")
+# NRM — внешняя система модуля DP на карте inplan (process-map-9mn.31, п. 6).
+# В презентации SNP и на слайде 8 презентации MRP токена NRM нет ни разу, поэтому
+# расширение SYSTEM_RE эти карты не меняет: сторож — побайтовое совпадение
+# пересобранных файлов (npm run data -- --map snp|mrp и пустой git diff).
+SYSTEM_CODES = ("DP", "PS", "IO", "ERP", "MRP", "INPLAN", "BI", "EPM", "NRM")
 
 # --------------------------------------------------------------------------------------
 # Контракт с src/data/schema.ts

@@ -18,8 +18,9 @@ import {
 import { loadBaseProcessMap } from '../src/data/loader';
 import type { ProcessNode, Stage } from '../src/data/schema';
 import { ru } from '../src/i18n/ru';
-import { DATA_NODE_SIZE, STEP_NODE_SIZE } from '../src/theme/sizes';
+import { DATA_NODE_SIZE, DETAIL_NODE_SIZE, STEP_NODE_SIZE } from '../src/theme/sizes';
 import { countStageNodes, splitStageDataNodes } from '../src/utils/stageNodes';
+import { parseThreeLevelProcessMap } from './fixtures/three-level-process';
 
 const map = loadBaseProcessMap();
 
@@ -31,6 +32,9 @@ interface Rect {
 }
 
 function sizeOf(node: ProcessNode): { width: number; height: number } {
+  if (node.type === 'detail') {
+    return DETAIL_NODE_SIZE;
+  }
   return node.type === 'data' ? DATA_NODE_SIZE : STEP_NODE_SIZE;
 }
 
@@ -655,5 +659,46 @@ describe('initialViewport', () => {
       // bounds.y обязан быть отрицательным, иначе верх раскладки срежется.
       expect(bounds.y).toBeLessThan(0);
     }
+  });
+});
+
+// ─────────────── подробность под шагом (NodeType 'detail', 9mn.32) ───────────────
+//
+// На карте snp подробностей нет, поэтому тесты выше их не видят: этап берётся
+// из трёхуровневой фикстуры, где подробность ровно одна — под первым шагом
+// этапа 3.
+describe('buildStageGraph: подробность', () => {
+  const stage = parseThreeLevelProcessMap().stages.find((candidate) => candidate.id === 'stage-3');
+  if (stage === undefined) {
+    throw new Error('в трёхуровневой фикстуре нет этапа stage-3');
+  }
+  const detail = stage.nodes.find((node) => node.type === 'detail');
+  if (detail === undefined) {
+    throw new Error('в этапе stage-3 фикстуры нет подробности');
+  }
+
+  it('рисуется своим типом узла React Flow и своим размером', () => {
+    // Свой тип, а не карточка шага: подробность — блок текста без обрезки.
+    // Размер — DETAIL_NODE_SIZE, а не 318×52: иначе габарит, bounds и
+    // стартовый вид считались бы по чужому размеру.
+    const flowNode = buildStageGraph(stage).nodes.find((node) => node.id === detail.id);
+    expect(flowNode?.type).toBe('detail');
+    expect({ width: flowNode?.width, height: flowNode?.height }).toEqual(DETAIL_NODE_SIZE);
+    expect(flowNode?.data).toEqual({ node: detail });
+  });
+
+  it('ребро «шаг → подробность» рисуется ребром данных', () => {
+    const incoming = stage.edges.filter((edge) => edge.target === detail.id);
+    expect(incoming).toHaveLength(1);
+    const flowEdge = buildStageGraph(stage).edges.find((edge) => edge.id === incoming[0]?.id);
+    expect(flowEdge?.type).toBe('data');
+  });
+
+  it('не попадает в колонки входов и выходов', () => {
+    const { nodes } = buildStageGraph(stage);
+    const flowNode = nodes.find((node) => node.id === detail.id);
+    const parentId =
+      flowNode !== undefined && 'parentId' in flowNode ? flowNode.parentId : undefined;
+    expect([COLUMN_IN_ID, COLUMN_OUT_ID]).not.toContain(parentId);
   });
 });
