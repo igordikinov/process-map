@@ -21,7 +21,7 @@ dagre). Порядок обязателен и обратного не имее�
 
 Чтобы этот порядок не приходилось помнить, есть одна команда:
 
-    npm run data          # import-pptx.py → layout.ts
+    npm run data          # --self-test → import-pptx.py → layout.ts
 
 Исходная геометрия слайда при этом не теряется: она пишется ещё и в
 `node.slidePosition` (SPEC §3), и раскладка сидируется именно ею, а не своим
@@ -73,18 +73,33 @@ id стабильны по построению (см. IdFactory). Всё, чт�
 Самопроверка переноса (без презентации, только stdlib):
 
     python scripts/import-pptx.py --self-test
+
+ФЛАГИ (process-map-9mn.14.1)
+----------------------------
+Принимаются ТОЛЬКО эти; любой другой аргумент — остановка со списком, а не
+тихая пересборка карты по умолчанию (так было до process-map-5o8: `--help`
+молча переписывал src/data/snp/process.json сырой геометрией):
+
+    --map <ключ>     какую карту собирать (реестр MAPS), по умолчанию snp;
+    --dry-run        собрать и напечатать отчёт, НИЧЕГО не записывая;
+    --in-pipeline    ставит scripts/data.ts: раскладка стартует следом;
+    --self-test      самопроверка без презентации;
+    --help           эта справка, ничего не пишет.
 """
 
 from __future__ import annotations
 
+import io
 import json
 import math
 import re
 import sys
+import tempfile
 from collections import Counter
-from dataclasses import dataclass, field
+from contextlib import redirect_stdout
+from dataclasses import dataclass, field, replace
 from pathlib import Path
-from typing import AbstractSet, Iterable, Sequence
+from typing import AbstractSet, Callable, Iterable, Mapping, Sequence
 
 from lxml import etree
 from pptx import Presentation
@@ -121,8 +136,10 @@ MAP_ID = "snp"
 # каждый новый день.
 #
 # ЧТО НЕ ДАЁТ ЕЙ ПРОТУХНУТЬ СНОВА — соседняя константа: отпечаток содержания
-# process.json. Расходятся — краснеет tests/updatedAt.test.ts. Проверка на
-# TypeScript, а не здесь, потому что Python в CI не запускается вовсе.
+# process.json. Расходятся — краснеет tests/mapFingerprint.test.ts. Проверка на
+# TypeScript, а не здесь: npm run check обязан краснеть и на машине без Python
+# (решение владельца по process-map-ngw), а Python в CI запускает только
+# самопроверку этого файла — с данными на диске она не сверяется.
 MAP_UPDATED_AT = "2026-09-01"
 
 # sha256 содержания src/data/snp/process.json с НЕЙТРАЛИЗОВАННЫМ updatedAt.
@@ -135,7 +152,7 @@ MAP_UPDATED_AT = "2026-09-01"
 # пересчитывает при записи» надо отвергнуть: тогда сторож всегда зелёный и
 # дата протухнет ровно тем же способом. Python и не смог бы посчитать финальный
 # отпечаток — после него файл переписывает scripts/layout.ts.
-# Значение печатает падающий тест; алгоритм — в tests/updatedAt.test.ts.
+# Значение печатает падающий тест; алгоритм — в tests/mapFingerprint.test.ts.
 MAP_DATA_FINGERPRINT = "415efc85cc982ddf8cd9c6b419cf8e6ea70cb347641e92b400c77bc7315a51c8"
 
 # Заголовок шапки обзора. Решение владельца от 31.08.2026 (process-map-4d2):
@@ -154,7 +171,7 @@ MAP_MODULE_LABEL = "Модуль SNP"
 # --- карта MRP (process-map-3wh.9) -------------------------------------------
 # Собирается с ОДНОГО слайда 8 «MRP процесс» (решение владельца: остальные 37
 # слайдов вебинара не трогать). Имена констант плоские с суффиксом, а не
-# словарь: tests/snp/updatedAt.test.ts читает их регуляркой ^ИМЯ = "значение".
+# словарь: tests/mapFingerprint.test.ts читает их регуляркой ^ИМЯ = "значение".
 MAP_ID_MRP = "mrp"
 
 # Решение владельца от 01.09.2026: та же расшифровка, что у кода MRP в словаре
@@ -183,13 +200,17 @@ class MapSpec:
     Всё, чем одна карта отличается от другой (process-map-3wh.7).
 
     ПОЧЕМУ РЕЕСТР В КОДЕ, А НЕ КОНФИГ-ФАЙЛ НА ДИСКЕ. Тесты проекта уже разбирают
-    ИСХОДНИК этого файла регулярками (tests/snp/importPreserve.test.ts,
-    tests/snp/updatedAt.test.ts) — Python в CI не запускается вовсе. Внешний
-    конфиг потребовал бы третьего механизма сверки и ещё одного артефакта,
-    который надо держать в синхроне.
+    ИСХОДНИК этого файла: константы и таблицы решений — разборщиком
+    tests/helpers/importerSource.ts (для tests/snp/importPreserve.test.ts и
+    tests/importerSource.test.ts), дату и отпечаток — регуляркой
+    tests/mapFingerprint.test.ts, реестр MAPS — tests/mapRegistry.test.ts.
+    Исходник, а не запуск: npm run check обязан обходиться без Python (решение
+    владельца по process-map-ngw), а Python в CI запускает только самопроверку
+    этого файла. Внешний конфиг потребовал бы третьего механизма сверки и ещё
+    одного артефакта, который надо держать в синхроне.
 
     ПОЧЕМУ КОНСТАНТЫ MAP_* ОСТАЛИСЬ ПЛОСКИМИ, а не переехали сюда значениями.
-    tests/snp/updatedAt.test.ts читает их регуляркой вида ^ИМЯ = "значение".
+    tests/mapFingerprint.test.ts читает их регуляркой вида ^ИМЯ = "значение".
     Словарь эту регулярку ломает и заставляет переписывать сторож даты; плоские
     имена с суффиксом карты позволяют его параметризовать.
     """
@@ -199,7 +220,10 @@ class MapSpec:
     json: Path
     required_nodes: Path
     # 'overview+details' — обзор на слайде 2 плюс четыре слайда детализации
-    # (устройство презентации SNP). Профиль 'single-slide' вводит process-map-3wh.9.
+    # (устройство презентации SNP). Профиль 'single-slide' вводит process-map-3wh.9,
+    # 'three-tier' — process-map-9mn.14. Значение обязано быть ключом
+    # PROFILE_BUILDERS (построитель) и PROFILE_READS (какие таблицы решений
+    # владельца профиль читает); иначе импорт останавливается ДО сборки.
     profile: str
     slides: int
     # Индекс рабочего слайда для профиля 'single-slide' (0-based). У профиля
@@ -312,7 +336,9 @@ SYSTEM_CODES = ("DP", "PS", "IO", "ERP", "MRP", "INPLAN", "BI", "EPM", "NRM")
 # ProcessNodeSchema и StageSchema. Это не косметика: экспорт из приложения
 # (src/utils/processTransfer.ts::serializeProcessMap) прогоняет карту через zod,
 # который пересобирает объекты в порядке схемы, и обязан совпадать с этим файлом
-# побайтово. Расхождение ловит tests/importPreserve.test.ts.
+# побайтово. Расхождение ловит tests/snp/importPreserve.test.ts: кортежи он
+# читает из исходника разборщиком tests/helpers/importerSource.ts::readPythonTuple
+# и сравнивает со схемой.
 NODE_KEY_ORDER = (
     "id",
     "type",
@@ -406,6 +432,8 @@ EXIT_LINKS_LOST = 2
 # полем записи. Решение владельца относится к одной карте, а не ко всем сразу;
 # отбор делает decisions_for (ниже), она же останавливает импорт, если ключ
 # забыт или назван картой, которой нет в MAPS. Про «первым полем» — там же.
+# Запись для карты, чей профиль эту таблицу не читает, тоже останавливает
+# импорт — до сборки (PROFILE_READS и unread_decisions ниже, process-map-9mn.25).
 OWNER_DECISION_EDGES: tuple[dict, ...] = (
     {
         "map": "snp",
@@ -506,17 +534,71 @@ STAGE_GROUP_SPLIT: tuple[dict, ...] = (
 )
 
 
-def decisions_for(spec: MapSpec, table: Sequence[dict]) -> tuple[dict, ...]:
-    """
-    Записи таблицы решений владельца, относящиеся ИМЕННО К ЭТОЙ карте.
+# --------------------------------------------------------------------------------------
+# Кто какие таблицы решений читает (process-map-9mn.25, вариант (а))
+# --------------------------------------------------------------------------------------
+#
+# DECISION_TABLES — все таблицы решений владельца по имени. Жила внутри
+# самопроверки (owner_tables) и нужна была только ей; теперь по имени таблицы
+# отбирает записи decisions_for, а сверку «кто что читает» делает
+# unread_decisions — обеим нужен один и тот же реестр, и он обязан быть один.
+# Самопроверка сверяет, что под каждым именем лежит одноимённая константа, а не
+# соседняя таблица.
+#
+# Строки ниже для разбора tests/helpers/importerSource.ts невидимы: он ищет
+# объявление таблицы ВЕРХНЕГО уровня (имя в первой колонке и `= (`), а здесь
+# имена стоят с отступом, ключами словаря. Второго объявления таблицы файл не
+# получает.
+DECISION_TABLES: dict[str, tuple[dict, ...]] = {
+    "OWNER_DECISION_EDGES": OWNER_DECISION_EDGES,
+    "STAGE_INPUT_ENRICHMENT": STAGE_INPUT_ENRICHMENT,
+    "OWNER_DECISION_EXTERNAL_IO": OWNER_DECISION_EXTERNAL_IO,
+    "STAGE_GROUP_SPLIT": STAGE_GROUP_SPLIT,
+}
 
-    ЗАЧЕМ. Все четыре таблицы выше собирались, когда карта была одна, и
-    применялись безусловно — любая запись накладывалась на любую карту. Пока
-    таблицы описывали только SNP, это не проявлялось: вторая карта собирается
-    другим профилем, который до них просто не доходит. Третья карта дойдёт, и
-    тогда «этапа 3 нет в презентации» из решения по SNP остановило бы сборку
-    чужой карты, а совпадение номеров этапов, наоборот, применило бы к ней
-    чужое решение молча. Второе хуже первого.
+# Какие таблицы читает построитель каждого профиля (решение владельца
+# process-map-9mn.31: вариант (а) задачи process-map-9mn.25).
+#
+# ЗАЧЕМ. Ключ map создаёт ожидание, что решение поддержано для любой карты. Но
+# build_single_slide_map (профиль MRP) не читает НИ ОДНОЙ таблицы: запись
+# {"map": "mrp", …} прошла бы npm run data зелёным, в карту не попала бы, и в
+# отчёте не было бы ни строчки. decisions_for сторожила только обратное
+# направление — чтобы чужое решение не применилось к карте.
+#
+# Объявление держат ДВА сторожа, по одному на направление:
+#   · decisions_for останавливает импорт, если код читает таблицу, которой его
+#     профиль здесь не объявил, — иначе объявление врало бы в сторону «не
+#     читает», и следующий сторож ругался бы на записи, которые на деле
+#     применяются;
+#   · unread_decisions — ДО сборки, в main(), — если запись объявлена для
+#     карты, чей профиль таблицу не читает: такое решение не применится никогда.
+#
+# Чего не держит никто: профиль ОБЪЯВИЛ таблицу, а его код её так и не открыл.
+# Тогда unread_decisions промолчит о записи, которая не применяется. Поэтому
+# список перечислен явно, а не «все таблицы» через DECISION_TABLES: новая
+# таблица не должна считаться прочитанной профилем, чей код её не открывал.
+PROFILE_READS: dict[str, frozenset[str]] = {
+    "overview+details": frozenset(
+        {
+            "OWNER_DECISION_EDGES",
+            "STAGE_INPUT_ENRICHMENT",
+            "OWNER_DECISION_EXTERNAL_IO",
+            "STAGE_GROUP_SPLIT",
+        }
+    ),
+    "single-slide": frozenset(),
+    # Трёхуровневая карта inplan (process-map-9mn.14): из четырёх таблиц ей
+    # нужна только внешняя система этапа, названная владельцем. Читать её
+    # начнёт построитель подзадачи 14.6; до тех пор профиль зарегистрирован
+    # заглушкой (см. PROFILE_BUILDERS), которая останавливает импорт раньше,
+    # чем что-либо прочитает.
+    "three-tier": frozenset({"OWNER_DECISION_EXTERNAL_IO"}),
+}
+
+
+def decision_map(entry: dict, maps: Mapping[str, MapSpec] = MAPS) -> str:
+    """
+    Карта, к которой относится запись таблицы решений, — проверенная по реестру.
 
     ЗАПИСЬ БЕЗ КЛЮЧА `map` — ОСТАНОВКА, а не тихое «значит, применять везде»:
     забытый ключ обязан упасть на первом же прогоне, а не через полгода чужим
@@ -525,30 +607,102 @@ def decisions_for(spec: MapSpec, table: Sequence[dict]) -> tuple[dict, ...]:
     Ключ проверяется по реестру MAPS: опечатка в имени карты иначе дала бы
     запись, которая не применится никогда и ни к чему, — самый тихий способ
     потерять решение владельца.
-
-    ПОЧЕМУ КЛЮЧ СТОИТ ПЕРВЫМ ПОЛЕМ ЗАПИСИ. tests/snp/importPreserve.test.ts
-    разбирает все четыре таблицы регулярками с ЖЁСТКИМ порядком ключей
-    (`"task": … , "stage": …`) — Python в CI не запускается, другого способа
-    сверить объявление с данными нет. Вставка между 'task' и 'stage' ломает
-    разбор, перед 'task' не ломает ни одного.
     """
-    chosen: list[dict] = []
-    for entry in table:
-        key = entry.get("map")
-        if key is None:
-            raise SystemExit(
-                f"решение владельца ({entry.get('task', 'без задачи')}) объявлено без "
-                f"ключа «map» — непонятно, к какой карте оно относится. Добавьте ключ "
-                f"первым полем записи в scripts/import-pptx.py."
-            )
-        if key not in MAPS:
-            raise SystemExit(
-                f"решение владельца ({entry.get('task', 'без задачи')}) объявлено для "
-                f"неизвестной карты «{key}». Известны: {', '.join(sorted(MAPS))}."
-            )
-        if key == spec.key:
-            chosen.append(entry)
-    return tuple(chosen)
+    key = entry.get("map")
+    if key is None:
+        raise SystemExit(
+            f"решение владельца ({entry.get('task', 'без задачи')}) объявлено без "
+            f"ключа «map» — непонятно, к какой карте оно относится. Добавьте ключ "
+            f"первым полем записи в scripts/import-pptx.py."
+        )
+    if key not in maps:
+        raise SystemExit(
+            f"решение владельца ({entry.get('task', 'без задачи')}) объявлено для "
+            f"неизвестной карты «{key}». Известны: {', '.join(sorted(maps))}."
+        )
+    return key
+
+
+def decisions_for(
+    spec: MapSpec, name: str, tables: Mapping[str, Sequence[dict]] = DECISION_TABLES
+) -> tuple[dict, ...]:
+    """
+    Записи таблицы решений владельца `name`, относящиеся ИМЕННО К ЭТОЙ карте.
+
+    ЗАЧЕМ. Все четыре таблицы выше собирались, когда карта была одна, и
+    применялись безусловно — любая запись накладывалась на любую карту. Пока
+    таблицы описывали только SNP, это не проявлялось: вторая карта собирается
+    другим профилем, который до них просто не доходит. Третья карта дойдёт, и
+    тогда «этапа 3 нет в презентации» из решения по SNP остановило бы сборку
+    чужой карты, а совпадение номеров этапов, наоборот, применило бы к ней
+    чужое решение молча. Второе хуже первого. Запись без ключа map или с картой
+    не из реестра — остановка (decision_map).
+
+    ПОЧЕМУ ИМЯ ТАБЛИЦЫ, А НЕ САМА ТАБЛИЦА (process-map-9mn.14.1). По имени
+    сверяется объявление PROFILE_READS: построитель, прочитавший таблицу,
+    которой его профиль не объявил, — остановка. Иначе объявление разошлось бы с
+    кодом, и unread_decisions ругалась бы на записи, которые на деле применяются.
+
+    `tables` — только для самопроверки: она передаёт фикстуры параметром, а не
+    подменой глобали (см. пункт 1d самопроверки). Рабочий путь зовёт функцию
+    без него.
+
+    ПОЧЕМУ КЛЮЧ `map` СТОИТ ПЕРВЫМ ПОЛЕМ ЗАПИСИ. Таблицы для тестов разбирает
+    tests/helpers/importerSource.ts — python-литерал целиком, а не регуляркой
+    на запись (process-map-n6h). Порядок остальных ключей ему безразличен, а
+    первым он требует map (toRecord): по первой строке записи видно, к какой
+    карте относится решение, и отбор по карте (recordsFor) делается ДО чтения
+    остальных полей — у записей другой карты набор ключей может быть другим.
+    Самопроверка держит то же правило (next(iter(entry)) == "map").
+    """
+    if name not in tables:
+        raise SystemExit(
+            f"таблицы решений «{name}» нет. Известны: {', '.join(sorted(tables))}."
+        )
+    reads = PROFILE_READS.get(spec.profile)
+    if reads is None or name not in reads:
+        declared = ", ".join(sorted(reads)) if reads else "ни одной"
+        raise SystemExit(
+            f"построитель профиля «{spec.profile}» (карта «{spec.key}») читает таблицу "
+            f"{name}, которую PROFILE_READS ему не объявляет (объявлены: {declared}). "
+            f"Объявите чтение в PROFILE_READS или не читайте таблицу — иначе "
+            f"unread_decisions судит о записях по неверному объявлению."
+        )
+    return tuple(entry for entry in tables[name] if decision_map(entry) == spec.key)
+
+
+def unread_decisions(
+    tables: Mapping[str, Sequence[dict]],
+    maps: Mapping[str, MapSpec],
+    reads: Mapping[str, AbstractSet[str]],
+) -> list[str]:
+    """
+    Записи таблиц решений, которые не применятся НИКОГДА: они объявлены для
+    карты, чей профиль эту таблицу не читает (process-map-9mn.25, вариант (а)).
+
+    Пустой список — норма. Непустой main() превращает в остановку ДО сборки:
+    решение владельца, тихо не попавшее в карту, — ровно то, от чего карта
+    защищается выносом решений в таблицы (см. шапку OWNER_DECISION_EDGES).
+
+    Проверяются ВСЕ карты реестра, а не только собираемая: сборка snp
+    остановится и на записи для mrp. Так ошибка ловится первым же прогоном
+    любой карты, а не когда кто-нибудь соберёт именно ту, к которой она
+    относится.
+
+    Реестры приходят параметрами: самопроверка подаёт фикстуры, main() —
+    настоящие DECISION_TABLES, MAPS и PROFILE_READS.
+    """
+    unread: list[str] = []
+    for name, table in tables.items():
+        for entry in table:
+            key = decision_map(entry, maps)
+            profile = maps[key].profile
+            if name not in reads.get(profile, frozenset()):
+                unread.append(
+                    f"{name} ({entry.get('task', 'без задачи')}): карта «{key}», "
+                    f"профиль «{profile}» эту таблицу не читает"
+                )
+    return unread
 
 
 A = "{http://schemas.openxmlformats.org/drawingml/2006/main}"
@@ -698,9 +852,24 @@ class NodeDraft:
         return "\n".join(self.description_parts) if self.description_parts else None
 
 
+# Роли слайда в отчёте (SlideReport.role). Набор расширяют профили, которым
+# нужен свой блок отчёта; неизвестная роль — ошибка программиста, а не данных.
+SLIDE_ROLES = ("overview", "detail")
+
+
 @dataclass
 class SlideReport:
     slide_no: int
+    # Чем слайд служит карте: 'overview' — обзор этапов, 'detail' — слайд, с
+    # которого собираются узлы этапа (process-map-9mn.14.1).
+    #
+    # ПОЧЕМУ ПОЛЕ, А НЕ `slide_no == 2`. print_report раньше узнавал обзор по
+    # номеру слайда — а это свойство ОДНОЙ презентации (SNP: обзор на втором
+    # слайде). Профиль single-slide с рабочим слайдом 2 получил бы шапку обзора
+    # вместо счётчиков узлов, а в колоде трёхуровневой карты второй слайд — вовсе
+    # не обзор этапов. Роль ставит построитель, который знает устройство своей
+    # презентации; отчёт по ней только печатает.
+    role: str = "detail"
     nodes: int = 0
     data_nodes: int = 0
     groups: int = 0
@@ -739,6 +908,13 @@ class SlideReport:
     # None — полосу фаз на этом слайде не искали: ни один из двух собранных
     # профилей этого не делает, ярусы нужны третьему (process-map-9mn.13).
     phase_band_rule: str | None = None
+
+    def __post_init__(self) -> None:
+        if self.role not in SLIDE_ROLES:
+            raise ValueError(
+                f"SlideReport: неизвестная роль слайда «{self.role}», "
+                f"известны: {', '.join(SLIDE_ROLES)}"
+            )
 
 
 # --------------------------------------------------------------------------------------
@@ -1975,7 +2151,7 @@ def build_stage(
     enrichment = next(
         (
             e
-            for e in decisions_for(spec, STAGE_INPUT_ENRICHMENT)
+            for e in decisions_for(spec, "STAGE_INPUT_ENRICHMENT")
             if e["stage"] == stage_number
         ),
         None,
@@ -2833,7 +3009,7 @@ def build_process_map(
     reports: list[SlideReport] = []
     questions: list[str] = []
 
-    overview_report = SlideReport(slide_no=2)
+    overview_report = SlideReport(slide_no=2, role="overview")
     overview_shapes = read_slide(slides[1], overview_report)
     overview = build_overview(overview_shapes, overview_report)
 
@@ -2867,11 +3043,11 @@ def build_process_map(
     # Результат первой фазы всё равно выбрасывается, кроме карты коллизий, а
     # рёбра решения новых id не создают, так что пропуск ни на что не влияет.
     if collisions is not None:
-        apply_owner_decision_edges(stages, reports, decisions_for(spec, OWNER_DECISION_EDGES))
+        apply_owner_decision_edges(stages, reports, decisions_for(spec, "OWNER_DECISION_EDGES"))
         # Деление группы сверяется по подписям узлов, а не по id, поэтому
         # временные id первой фазы ему не мешают — но держим рядом с рёбрами:
         # обе таблицы описывают решения владельца поверх презентации.
-        apply_stage_group_split(stages, reports, decisions_for(spec, STAGE_GROUP_SPLIT))
+        apply_stage_group_split(stages, reports, decisions_for(spec, "STAGE_GROUP_SPLIT"))
 
     # Внешние системы этапа, названные владельцем (process-map-vjz.5). Идёт
     # ПОСЛЕ сборки этапов: таблица дописывает в stage["inputs"], которые к этому
@@ -2881,7 +3057,7 @@ def build_process_map(
         for shape in overview_shapes
         if shape.has_text
     }
-    external_io = decisions_for(spec, OWNER_DECISION_EXTERNAL_IO)
+    external_io = decisions_for(spec, "OWNER_DECISION_EXTERNAL_IO")
     apply_owner_decision_external_io(stages, overview_texts, overview_report, external_io)
 
     # Правая колонка выходов этапа (SPEC §4.2) — блоки выходов слайда 2.
@@ -3051,6 +3227,73 @@ def build_process_map(
         "overviewEdges": overview_edges,
     }
     return process_map, reports, questions, ids.counts
+
+
+def build_three_tier_map(
+    collisions: dict[str, int] | None,
+    spec: MapSpec,
+) -> tuple[dict, list[SlideReport], list[str], Counter[str]]:
+    """
+    Профиль «три уровня» (карта inplan, process-map-9mn.14) — ПОКА ЗАГЛУШКА.
+
+    Сам построитель пишет подзадача process-map-9mn.14.6 (подзадачи 14.2–14.5
+    готовят для него разбор слайдов); эта функция только останавливает импорт с
+    понятным сообщением. Почему профиль всё же зарегистрирован, а не оставлен
+    неизвестным, — см. PROFILE_BUILDERS.
+    """
+    raise SystemExit(
+        f"Профиль «three-tier» (карта «{spec.key}») объявлен, но его построитель ещё "
+        f"не написан — это подзадача process-map-9mn.14.6. Ничего не записано."
+    )
+
+
+# Сигнатура построителя карты: (коллизии slug'ов или None для первой фазы,
+# карта) → (документ, отчёты слайдов, открытые вопросы, счётчик базовых slug'ов).
+Builder = Callable[
+    [dict[str, int] | None, MapSpec],
+    tuple[dict, list[SlideReport], list[str], Counter[str]],
+]
+
+# Профиль разбора → построитель карты (process-map-9mn.14.1).
+#
+# ЗАЧЕМ СЛОВАРЬ. Раньше в main() стояла тернарка «single-slide — свой
+# построитель, иначе build_process_map»: любой профиль, кроме single-slide, —
+# опечатка или третий профиль, которого импортёр ещё не умеет, — молча уходил
+# в разбор презентации SNP. Здесь неизвестный профиль — остановка со списком
+# известных (builder_for), а добавить профиль можно только строкой в этом
+# словаре, на виду.
+#
+# ПОЧЕМУ 'three-tier' ЗАРЕГИСТРИРОВАН ЗАГЛУШКОЙ, А НЕ ОСТАВЛЕН НЕИЗВЕСТНЫМ.
+# PROFILE_READS уже объявляет, что читает этот профиль, — и ключи двух реестров
+# обязаны совпадать (это проверяет самопроверка): профиль с построителем, но
+# без объявления, уронил бы decisions_for, а объявление без построителя —
+# мёртвая запись, по которой unread_decisions судит о чтении, которого нет.
+# Заглушка к тому же честнее «неизвестного профиля»: запись карты inplan в MAPS,
+# появись она раньше 14.6, остановит импорт словами «построитель ещё не написан,
+# 14.6», а не ложным «такого профиля нет». Разобрать ею не получится ничего —
+# она останавливает импорт до первого чтения презентации.
+PROFILE_BUILDERS: dict[str, Builder] = {
+    "overview+details": build_process_map,
+    "single-slide": build_single_slide_map,
+    "three-tier": build_three_tier_map,
+}
+
+
+def builder_for(spec: MapSpec, builders: Mapping[str, Builder] = PROFILE_BUILDERS) -> Builder:
+    """
+    Построитель карты по её профилю. Неизвестный профиль — остановка со списком
+    известных, а не разбор чужим построителем.
+
+    `builders` — только для самопроверки (подставные построители); рабочий путь
+    зовёт функцию без него.
+    """
+    build = builders.get(spec.profile)
+    if build is None:
+        raise SystemExit(
+            f"У карты «{spec.key}» неизвестный профиль разбора «{spec.profile}». "
+            f"Известны: {', '.join(sorted(builders))}."
+        )
+    return build
 
 
 def apply_owner_decision_external_io(
@@ -3281,7 +3524,7 @@ def print_report(
 
     for report in reports:
         print(f"\n--- слайд {report.slide_no} " + "-" * 55)
-        if report.slide_no == 2:
+        if report.role == "overview":
             print(f"  этапов (контейнеров): {len(process_map['stages'])}")
             print(f"  обзорных рёбер:       {report.edges}")
             print(f"  узлов-выходов (data): {report.data_nodes}")
@@ -3305,7 +3548,7 @@ def print_report(
             print(f"  ПРОПУЩЕННЫЕ ФИГУРЫ С ТЕКСТОМ ({len(report.text_skipped)}):")
             for item in report.text_skipped:
                 print(f"    ! {item}")
-        elif report.slide_no != 2:
+        elif report.role != "overview":
             print("  пропущенных фигур с текстом: нет")
 
     print("\n" + "=" * 78)
@@ -3963,9 +4206,13 @@ def run_self_test() -> int:
             }
         ]
 
-    # Решение-фикстура передаётся параметром, а не подменой глобали: константу
-    # OWNER_DECISION_EDGES читает ещё и tests/importPreserve.test.ts (регуляркой
-    # по исходнику, без Python), и второй похожий литерал в файле сбил бы разбор.
+    # Решение-фикстура передаётся параметром, а не подменой глобали. Подмена во
+    # время прогона протекла бы в остальные проверки — в том числе в сверку
+    # настоящих таблиц ниже, — стоит забыть её вернуть. А объявить фикстуру
+    # вторым литералом верхнего уровня нельзя вовсе: тесты читают таблицы из
+    # исходника (tests/helpers/importerSource.ts, без Python), ищут объявление
+    # по имени в первой колонке и на двух объявлениях останавливаются — Python
+    # взял бы последнее, разбор первое.
     fake_decisions = (
         {
             "task": "self-test",
@@ -4093,23 +4340,60 @@ def run_self_test() -> int:
             f"обогащение {entry['task']} ничего не меняет",
         )
 
-    # 1e. Отбор решений владельца по карте (decisions_for, process-map-9mn.13).
-    #     Фикстура параметром, а не подменой глобали, — по той же причине, что и
-    #     у рёбер выше: таблицы разбирает регуляркой tests/snp/importPreserve.
+    # 1e. Отбор решений владельца по карте (decisions_for, process-map-9mn.13) и
+    #     объявление чтения по профилям (PROFILE_READS, process-map-9mn.25,
+    #     9mn.14.1). Фикстуры — параметром tables, по той же причине, что у
+    #     рёбер выше.
     fake_table = (
         {"map": "snp", "task": "self-test", "stage": 1, "why": "своя карта"},
         {"map": "mrp", "task": "self-test", "stage": 1, "why": "чужая карта"},
     )
-    picked = decisions_for(MAPS["snp"], fake_table)
+    fake_tables = {"OWNER_DECISION_EDGES": fake_table}
+    picked = decisions_for(MAPS["snp"], "OWNER_DECISION_EDGES", fake_tables)
     check(len(picked) == 1, f"decisions_for отдал {len(picked)} записей вместо одной")
     check(picked[0]["map"] == "snp", "decisions_for применил решение чужой карты")
+    # СТОРОЖ ОБЪЯВЛЕНИЯ. До process-map-9mn.14.1 этот же вызов был ПОЛОЖИТЕЛЬНЫМ
+    # случаем: decisions_for отдавала карте mrp её запись, хотя построитель
+    # профиля single-slide таблиц не читает вовсе. Теперь чтение необъявленной
+    # таблицы — остановка: код и PROFILE_READS не имеют права расходиться.
+    try:
+        leaked = decisions_for(MAPS["mrp"], "OWNER_DECISION_EDGES", fake_tables)
+    except SystemExit as error:
+        check(
+            "single-slide" in str(error) and "OWNER_DECISION_EDGES" in str(error),
+            f"в сообщении сторожа нет профиля или таблицы: {error}",
+        )
+    else:
+        check(
+            False,
+            f"профиль single-slide прочитал необъявленную таблицу — decisions_for отдала "
+            f"{len(leaked)} записей вместо остановки",
+        )
+    # three-tier объявил одну таблицу: её читает, соседнюю — нет.
+    three_tier_spec = replace(MAPS["snp"], profile="three-tier")
     check(
-        len(decisions_for(MAPS["mrp"], fake_table)) == 1,
-        "decisions_for не нашёл решения второй карты",
+        decisions_for(three_tier_spec, "OWNER_DECISION_EXTERNAL_IO", {"OWNER_DECISION_EXTERNAL_IO": fake_table})
+        == (fake_table[0],),
+        "профиль three-tier не прочитал объявленную таблицу OWNER_DECISION_EXTERNAL_IO",
     )
+    try:
+        decisions_for(three_tier_spec, "OWNER_DECISION_EDGES", fake_tables)
+    except SystemExit as error:
+        check("three-tier" in str(error), f"в сообщении сторожа нет профиля: {error}")
+    else:
+        check(False, "профиль three-tier прочитал необъявленную таблицу OWNER_DECISION_EDGES")
+    # Опечатка в имени таблицы — остановка, а не пустой отбор.
+    try:
+        decisions_for(MAPS["snp"], "OWNER_DECISION_EDGE", fake_tables)
+    except SystemExit as error:
+        check("OWNER_DECISION_EDGE" in str(error), "в сообщении нет неизвестного имени таблицы")
+    else:
+        check(False, "неизвестное имя таблицы не остановило импорт")
     # Запись без ключа — остановка, а не тихое «применить везде».
     try:
-        decisions_for(MAPS["snp"], ({"task": "self-test", "stage": 1},))
+        decisions_for(
+            MAPS["snp"], "OWNER_DECISION_EDGES", {"OWNER_DECISION_EDGES": ({"task": "self-test", "stage": 1},)}
+        )
     except SystemExit as error:
         check("map" in str(error), "в сообщении не назван пропущенный ключ map")
     else:
@@ -4117,34 +4401,71 @@ def run_self_test() -> int:
     # Опечатка в имени карты — тоже остановка: иначе решение не применится
     # никогда и ни к чему, а это самый тихий способ его потерять.
     try:
-        decisions_for(MAPS["snp"], ({"map": "snp-2", "task": "self-test", "stage": 1},))
+        decisions_for(
+            MAPS["snp"],
+            "OWNER_DECISION_EDGES",
+            {"OWNER_DECISION_EDGES": ({"map": "snp-2", "task": "self-test", "stage": 1},)},
+        )
     except SystemExit as error:
         check("snp-2" in str(error), "в сообщении нет неизвестного имени карты")
     else:
         check(False, "неизвестная карта в решении не остановила импорт")
 
-    # У каждой записи каждой таблицы есть map, и он из реестра MAPS. Проверка
-    # именно здесь: сборка одной карты чужих таблиц не касается и опечатку в
-    # них не заметит.
-    owner_tables = {
-        "OWNER_DECISION_EDGES": OWNER_DECISION_EDGES,
-        "STAGE_INPUT_ENRICHMENT": STAGE_INPUT_ENRICHMENT,
-        "OWNER_DECISION_EXTERNAL_IO": OWNER_DECISION_EXTERNAL_IO,
-        "STAGE_GROUP_SPLIT": STAGE_GROUP_SPLIT,
+    # unread_decisions на фикстуре: запись для карты, чей профиль таблицу не
+    # читает, находится — и только она; прочитанная соседка списка не пачкает.
+    stray_tables = {
+        "OWNER_DECISION_EDGES": ({"map": "mrp", "task": "self-test-stray", "stage": 1},),
+        "OWNER_DECISION_EXTERNAL_IO": ({"map": "snp", "task": "self-test-read", "stage": 1},),
     }
-    for name, table in owner_tables.items():
+    stray = unread_decisions(stray_tables, MAPS, PROFILE_READS)
+    check(
+        len(stray) == 1 and "self-test-stray" in stray[0] and "single-slide" in stray[0],
+        f"unread_decisions не нашла запись для профиля, который таблицу не читает: {stray}",
+    )
+
+    # Реестры. DECISION_TABLES под каждым именем держит ОДНОИМЁННУЮ константу:
+    # перепутанная пара отдала бы построителю чужие решения под верным именем.
+    for name, table in DECISION_TABLES.items():
+        check(table is globals().get(name), f"DECISION_TABLES[{name!r}] — не константа {name}")
+    # PROFILE_READS называет только существующие таблицы: опечатка в имени
+    # означала бы «профиль ничего не читает» без единого сообщения.
+    for profile, reads in PROFILE_READS.items():
+        check(
+            reads <= set(DECISION_TABLES),
+            f"PROFILE_READS[{profile!r}] называет несуществующие таблицы: "
+            f"{sorted(reads - set(DECISION_TABLES))}",
+        )
+    # Решение владельца (process-map-9mn.31, вариант (а) задачи 9mn.25) — дословно.
+    check(
+        PROFILE_READS["overview+details"] == set(DECISION_TABLES),
+        "профиль overview+details обязан читать все четыре таблицы решений",
+    )
+    check(PROFILE_READS["single-slide"] == frozenset(), "профиль single-slide таблиц не читает")
+    check(
+        PROFILE_READS["three-tier"] == {"OWNER_DECISION_EXTERNAL_IO"},
+        "профиль three-tier читает ровно OWNER_DECISION_EXTERNAL_IO",
+    )
+
+    # Настоящие таблицы. У каждой записи есть map, он из реестра MAPS и стоит
+    # первым; проверка именно здесь, потому что сборка одной карты чужих записей
+    # не читает и опечатку в них не заметит.
+    for name, table in DECISION_TABLES.items():
         check(bool(table), f"таблица решений {name} пуста")
         for entry in table:
             check(entry.get("map") in MAPS, f"{name} ({entry.get('task')}): map не из MAPS")
-            # Порядок ключей в литерале — не косметика: таблицы разбирает
-            # регуляркой tests/snp/importPreserve.test.ts, и ключ между 'task'
-            # и 'stage' ломает разбор, а перед 'task' — не ломает ни одного.
+            # map ПЕРВЫМ — правило, которое держит и разбор таблиц для тестов
+            # (tests/helpers/importerSource.ts::toRecord): по первому ключу видно,
+            # к какой карте относится решение, не дочитывая запись. Порядок
+            # остальных ключей разбору безразличен.
             check(
                 next(iter(entry)) == "map",
                 f"{name} ({entry.get('task')}): ключ map обязан быть ПЕРВЫМ полем записи",
             )
-        covered = sum(len(decisions_for(MAPS[key], table)) for key in MAPS)
-        check(covered == len(table), f"{name}: записи разошлись по картам с потерей")
+    # И ни одна запись не объявлена для карты, чей профиль её таблицу не читает.
+    # main() делает ту же проверку перед каждой сборкой; здесь — чтобы
+    # самопроверка в CI краснела и без запуска импорта.
+    unread_real = unread_decisions(DECISION_TABLES, MAPS, PROFILE_READS)
+    check(not unread_real, f"решения владельца, которые никто не прочтёт: {unread_real}")
 
     # 1f. Заливка с модификаторами (read_fill_key, process-map-9mn.13).
     xml_ns = (
@@ -4632,10 +4953,10 @@ def run_self_test() -> int:
         "повторный перенос изменил документ — идемпотентность нарушена",
     )
 
-    # 10. Поворот коннектора (process-map-3wh.18). Python в CI не запускается,
-    #     поэтому геометрия проверяется здесь: без доворота концы повёрнутой
-    #     линии вычисляются по чужим координатам, и разбор выдаёт правдоподобное,
-    #     но неверное ребро.
+    # 10. Поворот коннектора (process-map-3wh.18). Геометрию разбора проверяет
+    #     только эта самопроверка — vitest питоновского кода не исполняет: без
+    #     доворота концы повёрнутой линии вычисляются по чужим координатам, и
+    #     разбор выдаёт правдоподобное, но неверное ребро.
     def probe(rot: float, head: bool = False, tail: bool = True) -> Shape:
         return Shape(
             sid=1,
@@ -4686,42 +5007,459 @@ def run_self_test() -> int:
         "headEnd не разворачивает концы повёрнутой линии",
     )
 
+    # 11. Диспетчер профилей (PROFILE_BUILDERS, process-map-9mn.14.1). Раньше в
+    #     main() стояла тернарка, и любой профиль, кроме single-slide, молча
+    #     уходил в build_process_map.
+    expected_builders = {
+        "overview+details": build_process_map,
+        "single-slide": build_single_slide_map,
+        "three-tier": build_three_tier_map,
+    }
+    check(
+        set(PROFILE_BUILDERS) == set(expected_builders),
+        f"профили PROFILE_BUILDERS: {sorted(PROFILE_BUILDERS)}, ожидались {sorted(expected_builders)}",
+    )
+    for profile, expected in expected_builders.items():
+        got = builder_for(replace(MAPS["snp"], profile=profile))
+        check(
+            got is expected,
+            f"профиль {profile} отдан построителю {getattr(got, '__name__', got)}, "
+            f"а не {expected.__name__}",
+        )
+    try:
+        builder_for(replace(MAPS["snp"], profile="bogus"))
+    except SystemExit as error:
+        check(
+            "bogus" in str(error) and all(profile in str(error) for profile in PROFILE_BUILDERS),
+            f"в сообщении о неизвестном профиле нет его имени или списка известных: {error}",
+        )
+    else:
+        check(False, "неизвестный профиль не остановил импорт — ушёл в чужой построитель")
+    # Два реестра профилей — одна и та же пара ключей: построитель без объявления
+    # чтения уронил бы decisions_for, объявление без построителя мертво.
+    check(
+        set(PROFILE_BUILDERS) == set(PROFILE_READS),
+        f"профили PROFILE_BUILDERS {sorted(PROFILE_BUILDERS)} и PROFILE_READS "
+        f"{sorted(PROFILE_READS)} разошлись",
+    )
+    for spec in MAPS.values():
+        check(
+            spec.profile in PROFILE_BUILDERS,
+            f"у карты {spec.key} профиль {spec.profile} без построителя",
+        )
+    # Заглушка three-tier останавливает импорт и называет подзадачу, которая её
+    # заменит. Проверка уходит вместе с заглушкой в process-map-9mn.14.6.
+    try:
+        build_three_tier_map(None, replace(MAPS["snp"], key="inplan", profile="three-tier"))
+    except SystemExit as error:
+        check("14.6" in str(error), f"заглушка three-tier не называет подзадачу 14.6: {error}")
+    else:
+        check(False, "заглушка three-tier не остановила импорт")
+
+    # 12. main() целиком: командная строка, сторожа до сборки, --dry-run.
+    #
+    #     main() гоняется на подставных реестрах (параметры maps/tables/builders),
+    #     потому что проверяется ПОРЯДОК шагов — сторож стоит до сборки, запись
+    #     идёт только без --dry-run, — а по отдельным функциям он не виден.
+    #     Вместо разбора презентации — построители-зонды: зонд бросает _Reached,
+    #     и по нему видно, что main() дошла до сборки, куда не должна была. Зонд
+    #     вызывается раньше первой записи файла, так что даже сломанный main()
+    #     здесь ничего не пишет.
+    class _Reached(Exception):
+        """Построитель вызван: main() дошла до сборки. args[0] — профиль зонда."""
+
+    def _probe(profile: str) -> Builder:
+        def build(collisions: dict[str, int] | None, spec: MapSpec):
+            raise _Reached(profile)
+
+        return build
+
+    probes = {profile: _probe(profile) for profile in PROFILE_BUILDERS}
+
+    def _fixture_builder(collisions: dict[str, int] | None, spec: MapSpec):
+        return _fresh_fixture(), [SlideReport(slide_no=1)], [], Counter()
+
+    fixture_builders = {profile: _fixture_builder for profile in PROFILE_BUILDERS}
+
+    def _run(argv: list[str], **registries) -> tuple[str, object]:
+        """stdout прогона и исход: код возврата, SystemExit или _Reached."""
+        out = io.StringIO()
+        try:
+            with redirect_stdout(out):
+                code = main(argv, **registries)
+        except (SystemExit, _Reached) as stop:
+            return out.getvalue(), stop
+        return out.getvalue(), code
+
+    # Неизвестный флаг — остановка со списком известных (process-map-5o8). Прямо
+    # на parse_args — и через main() с настоящим реестром карт: ровно так
+    # `--help` когда-то пересобирал карту по умолчанию. Зонд вместо построителя:
+    # сломанный разбор дошёл бы до него и выдал себя, ничего не записав.
+    try:
+        parse_args(["--bogus"])
+    except SystemExit as error:
+        check(
+            "--bogus" in str(error) and all(arg.split()[0] in str(error) for arg in KNOWN_ARGS),
+            f"в сообщении о неизвестном флаге нет его самого или списка известных: {error}",
+        )
+    else:
+        check(False, "parse_args принял неизвестный флаг --bogus")
+    _, outcome = _run(["--bogus"], builders=probes)
+    check(
+        isinstance(outcome, SystemExit) and "--bogus" in str(outcome),
+        f"main() с неизвестным флагом не остановилась на разборе, а дошла до: {outcome!r}",
+    )
+    # Прочие формы той же ошибки. Позиционный аргумент — тоже неизвестный:
+    # `import-pptx.py mrp` иначе молча собрал бы snp.
+    for argv in (
+        ["mrp"],
+        ["--dryrun"],
+        ["--map"],
+        ["--map", "--dry-run"],
+        ["--map", "snp", "--map", "mrp"],
+        ["--self-test", "--map", "snp"],
+        ["--self-test", "--dry-run"],
+    ):
+        try:
+            parse_args(argv)
+        except SystemExit:
+            check(True, "")
+        else:
+            check(False, f"parse_args принял {argv}")
+    parsed = parse_args(["--in-pipeline", "--map", "mrp", "--dry-run"])
+    check(
+        parsed == CliArgs(map_key="mrp", in_pipeline=True, dry_run=True),
+        f"допустимые флаги разобраны неверно: {parsed}",
+    )
+    check(parse_args([]) == CliArgs(), "пустая командная строка — не карта по умолчанию")
+
+    # --help печатает справку и ничего не пишет.
+    help_out, outcome = _run(["--help"], builders=probes)
+    check(outcome == 0, f"--help вернул не 0, а {outcome!r}")
+    check(
+        all(arg.split()[0] in help_out for arg in KNOWN_ARGS)
+        and all(key in help_out for key in MAPS),
+        "справка --help не перечисляет флаги или карты",
+    )
+
+    with tempfile.TemporaryDirectory() as tmp:
+        # Карта-фикстура целиком во временном каталоге: презентации нет, файлы
+        # карты и фикстуры пишутся (или не пишутся) туда же.
+        tmp_root = Path(tmp)
+        probe_spec = replace(
+            MAPS["snp"],
+            key="probe",
+            pptx=tmp_root / "нет-такой.pptx",
+            json=tmp_root / "probe" / "process.json",
+            required_nodes=tmp_root / "probe" / "required-nodes.json",
+        )
+        probe_maps = {"probe": probe_spec}
+        written = (probe_spec.json, probe_spec.required_nodes)
+
+        # --help побеждает прочие флаги и не пишет, даже когда построитель
+        # собрал бы документ без единой ошибки.
+        _, outcome = _run(
+            ["--map", "probe", "--help"], maps=probe_maps, tables={}, builders=fixture_builders
+        )
+        check(outcome == 0, f"--help вместе с --map вернул не 0, а {outcome!r}")
+        check(not any(path.exists() for path in written), "--help записал файлы карты")
+
+        # Неизвестный профиль — остановка со списком известных. Тернарка отдала
+        # бы его разбору SNP, и тот упал бы уже на отсутствующей презентации —
+        # с сообщением, в котором профиля нет.
+        _, outcome = _run(
+            ["--dry-run", "--map", "probe"],
+            maps={"probe": replace(probe_spec, profile="bogus")},
+            tables={},
+            builders=PROFILE_BUILDERS,
+        )
+        check(
+            isinstance(outcome, SystemExit)
+            and "bogus" in str(outcome)
+            and all(profile in str(outcome) for profile in PROFILE_BUILDERS),
+            f"main() с неизвестным профилем не остановилась диспетчером: {outcome!r}",
+        )
+
+        # Каждый профиль main() отдаёт СВОЕМУ построителю — через builder_for, а
+        # не тернаркой: подставные зонды видны только диспетчеру по реестру.
+        for profile in PROFILE_BUILDERS:
+            _, outcome = _run(
+                ["--dry-run", "--map", "probe"],
+                maps={"probe": replace(probe_spec, profile=profile)},
+                tables={},
+                builders=probes,
+            )
+            check(
+                isinstance(outcome, _Reached) and outcome.args == (profile,),
+                f"main() отдала профиль {profile} не его построителю: {outcome!r}",
+            )
+
+        # Непрочитанное решение останавливает main() ДО сборки (9mn.25): профиль
+        # single-slide таблицу OWNER_DECISION_EDGES не читает, и зонд не должен
+        # быть достигнут. Пропусти main() сторож — зонд выдаст её.
+        _, outcome = _run(
+            ["--dry-run", "--map", "probe"],
+            maps={"probe": replace(probe_spec, profile="single-slide")},
+            tables={
+                "OWNER_DECISION_EDGES": (
+                    {"map": "probe", "task": "self-test-unread", "stage": 1},
+                )
+            },
+            builders=probes,
+        )
+        check(
+            isinstance(outcome, SystemExit) and "self-test-unread" in str(outcome),
+            f"main() не остановилась на непрочитанном решении до сборки: {outcome!r}",
+        )
+
+        # --dry-run: собирает и печатает отчёт, но не пишет ни карты, ни фикстуры.
+        dry_out, outcome = _run(
+            ["--dry-run", "--map", "probe"], maps=probe_maps, tables={}, builders=fixture_builders
+        )
+        check(outcome == 0, f"--dry-run вернул не 0, а {outcome!r}")
+        check(not any(path.exists() for path in written), "--dry-run записал файлы карты")
+        check("ОТЧЁТ-СВЕРКА" in dry_out, "--dry-run не напечатал отчёт")
+        check("НИЧЕГО НЕ ЗАПИСАНО" in dry_out, "--dry-run не сказал, что ничего не записал")
+        check("записано:" not in dry_out, "--dry-run отчитался о записи файлов")
+
+        # Контроль: тот же прогон без --dry-run пишет оба файла. Без него проверка
+        # выше была бы зелёной и при пути, по которому main() не пишет никогда.
+        _, outcome = _run(["--map", "probe"], maps=probe_maps, tables={}, builders=fixture_builders)
+        check(outcome == 0, f"обычный прогон на фикстуре вернул не 0, а {outcome!r}")
+        check(all(path.exists() for path in written), "обычный прогон не записал файлы карты")
+        check(
+            json.loads(probe_spec.required_nodes.read_text(encoding="utf-8"))
+            == collect_required_node_ids(_fresh_fixture()),
+            "обычный прогон записал не ту фикстуру required-nodes",
+        )
+
+        # --dry-run не трогает и уже существующий файл: содержимое-маркер,
+        # которого сборка не произвела бы, обязано пережить прогон побайтово.
+        marker = b'{"stages": []}\n'
+        probe_spec.json.write_bytes(marker)
+        _run(["--dry-run", "--map", "probe"], maps=probe_maps, tables={}, builders=fixture_builders)
+        check(probe_spec.json.read_bytes() == marker, "--dry-run перезаписал существующий файл карты")
+
+    # 13. Роль слайда в отчёте (SlideReport.role, process-map-9mn.14.1): шапку
+    #     обзора печатает роль, а не номер слайда 2.
+    def _report_text(report: SlideReport) -> str:
+        out = io.StringIO()
+        with redirect_stdout(out):
+            print_report(_fresh_fixture(), [report], [], MAPS["snp"])
+        return out.getvalue()
+
+    overview_text = _report_text(SlideReport(slide_no=5, role="overview"))
+    check(
+        "этапов (контейнеров)" in overview_text and "пропущенных фигур с текстом" not in overview_text,
+        "слайд с ролью overview (не второй) напечатан как слайд детализации",
+    )
+    detail_text = _report_text(SlideReport(slide_no=2))
+    check(
+        "этапов (контейнеров)" not in detail_text and "пропущенных фигур с текстом: нет" in detail_text,
+        "второй слайд с ролью detail напечатан как обзор — отчёт смотрит на номер, а не на роль",
+    )
+    try:
+        SlideReport(slide_no=1, role="обзор")
+    except ValueError:
+        check(True, "")
+    else:
+        check(False, "SlideReport принял неизвестную роль слайда")
+
     print(f"САМОПРОВЕРКА ПРОЙДЕНА: {checks} проверок")
     return 0
 
 
-def resolve_map_spec(args: Sequence[str]) -> MapSpec:
+# --------------------------------------------------------------------------------------
+# Командная строка (process-map-9mn.14.1, закрывает process-map-5o8)
+# --------------------------------------------------------------------------------------
+
+# Флаги без значения. `--map` — единственный флаг со значением, разбирается отдельно.
+SWITCHES = ("--self-test", "--in-pipeline", "--dry-run", "--help")
+
+# Для сообщений: всё, что parse_args принимает, в порядке справки.
+KNOWN_ARGS = ("--map <ключ>", "--dry-run", "--in-pipeline", "--self-test", "--help")
+
+
+@dataclass(frozen=True)
+class CliArgs:
+    """Разобранная командная строка. map_key None — карта по умолчанию (DEFAULT_MAP)."""
+
+    map_key: str | None = None
+    self_test: bool = False
+    in_pipeline: bool = False
+    dry_run: bool = False
+    help: bool = False
+
+
+def usage(maps: Mapping[str, MapSpec] = MAPS) -> str:
+    """Текст --help. Список карт — из реестра, чтобы справка не протухала."""
+    return (
+        "Использование:\n"
+        "  python scripts/import-pptx.py [--map <ключ>] [--dry-run] [--in-pipeline]\n"
+        "  python scripts/import-pptx.py --self-test\n"
+        "  python scripts/import-pptx.py --help\n"
+        "\n"
+        f"  --map <ключ>     какую карту собирать: {', '.join(sorted(maps))}; "
+        f"по умолчанию {DEFAULT_MAP}\n"
+        "  --dry-run        собрать карту и напечатать отчёт, НИЧЕГО не записывая\n"
+        "  --in-pipeline    ставит scripts/data.ts: раскладка стартует следом\n"
+        "  --self-test      самопроверка импортёра, презентация не нужна\n"
+        "  --help           эта справка; ничего не пишет\n"
+        "\n"
+        "Импорт — первая половина конвейера. Обычный путь — весь конвейер сразу:\n"
+        "  npm run data -- --map <ключ>     (самопроверка → import-pptx.py → layout.ts)"
+    )
+
+
+def parse_args(argv: Sequence[str]) -> CliArgs:
     """
-    Какую карту собираем: `--map <key>`, по умолчанию snp.
+    Разбор аргументов — СТРОГИЙ: принимаются только KNOWN_ARGS.
+
+    ЗАЧЕМ (process-map-5o8). main() раньше смотрел только на --self-test, --map
+    и --in-pipeline, а прочее молча пропускал. `--help` поэтому не печатал
+    справку, а ПОЛНОСТЬЮ пересобирал карту по умолчанию и переписывал
+    src/data/snp/process.json сырой геометрией слайда — без раскладки, то есть в
+    промежуточном состоянии, от которого предостерегает шапка файла. Опечатка
+    `--dryrun` сделала бы то же самое с человеком, который как раз хотел ничего
+    не писать. Теперь любой неизвестный аргумент — остановка со списком
+    известных, тем же приёмом, каким resolve_map_spec отвергает неизвестную
+    карту.
+
+    Режимы не смешиваются молча. --help побеждает всё остальное (справка ничего
+    не пишет, и сочетание с ней безвредно). --self-test вместе с --map,
+    --dry-run или --in-pipeline — остановка: самопроверка карт не собирает, и
+    `--self-test --map mrp` обещал бы то, чего не делает, — ровно та тихая
+    игнорировка флага, от которой этот разбор и защищает.
+    """
+    args = list(argv)
+    switches: set[str] = set()
+    map_key: str | None = None
+    unknown: list[str] = []
+    index = 0
+    while index < len(args):
+        token = args[index]
+        index += 1
+        if token == "--map":
+            # Значение, похожее на флаг, — это пропущенное значение, а не имя
+            # карты: `--map --dry-run` иначе стал бы «неизвестной картой
+            # --dry-run» и потерял бы флаг.
+            if index >= len(args) or args[index].startswith("--"):
+                raise SystemExit("--map требует значение, например: --map snp")
+            if map_key is not None:
+                raise SystemExit(
+                    f"--map указан дважды («{map_key}» и «{args[index]}») — "
+                    f"какую карту собирать, непонятно"
+                )
+            map_key = args[index]
+            index += 1
+        elif token in SWITCHES:
+            switches.add(token)
+        else:
+            unknown.append(token)
+    if unknown:
+        raise SystemExit(
+            f"Неизвестные аргументы: {' '.join(unknown)}. "
+            f"Известны: {', '.join(KNOWN_ARGS)}.\n"
+            f"Ничего не собрано и не записано. Справка: python scripts/import-pptx.py --help"
+        )
+    cli = CliArgs(
+        map_key=map_key,
+        self_test="--self-test" in switches,
+        in_pipeline="--in-pipeline" in switches,
+        dry_run="--dry-run" in switches,
+        help="--help" in switches,
+    )
+    if cli.self_test and not cli.help and (map_key is not None or cli.dry_run or cli.in_pipeline):
+        raise SystemExit(
+            "--self-test не сочетается с --map, --dry-run и --in-pipeline: самопроверка "
+            "карт не собирает и ничего не пишет. Запустите её отдельно."
+        )
+    return cli
+
+
+def resolve_map_spec(key: str | None, maps: Mapping[str, MapSpec] = MAPS) -> MapSpec:
+    """
+    Какую карту собираем: значение `--map`, по умолчанию snp.
 
     Неизвестный ключ — остановка со списком известных, а не тихий откат на
     карту по умолчанию: молчаливая пересборка не той карты затёрла бы чужой
     файл данных.
     """
-    key = DEFAULT_MAP
-    if "--map" in args:
-        index = list(args).index("--map")
-        if index + 1 >= len(args):
-            raise SystemExit("--map требует значение, например: --map snp")
-        key = args[index + 1]
-    spec = MAPS.get(key)
+    key = DEFAULT_MAP if key is None else key
+    spec = maps.get(key)
     if spec is None:
-        raise SystemExit(f"Неизвестная карта «{key}». Известны: {', '.join(sorted(MAPS))}")
+        raise SystemExit(f"Неизвестная карта «{key}». Известны: {', '.join(sorted(maps))}")
     return spec
 
 
-def main(argv: Iterable[str]) -> int:
-    args = list(argv)
+def shown_path(path: Path) -> str:
+    """
+    Путь для отчёта: от корня репозитория, если файл в нём (рабочий путь), иначе
+    как есть — так пишет самопроверка, чьи файлы лежат во временном каталоге.
+    """
+    try:
+        return path.relative_to(ROOT).as_posix()
+    except ValueError:
+        return path.as_posix()
+
+
+def print_dry_run(spec: MapSpec) -> None:
+    """Последний блок прогона с --dry-run — вместо «записано» и требования раскладки."""
+    print("\n" + "=" * 78)
+    print("--dry-run: НИЧЕГО НЕ ЗАПИСАНО")
+    print("=" * 78)
+    print(f"  {shown_path(spec.json)} и {shown_path(spec.required_nodes)} остались как были.")
+    print("  Отчёт выше — то, что записал бы обычный прогон; раскладка не нужна:")
+    print("  файл карты не менялся.")
+
+
+def main(
+    argv: Iterable[str],
+    *,
+    maps: Mapping[str, MapSpec] = MAPS,
+    tables: Mapping[str, Sequence[dict]] = DECISION_TABLES,
+    builders: Mapping[str, Builder] = PROFILE_BUILDERS,
+) -> int:
+    """
+    Точка входа. Именованные параметры — ТОЛЬКО для самопроверки: она гоняет
+    main() целиком на подставных реестрах (карта во временном каталоге,
+    построитель-фикстура), чтобы проверить порядок шагов, а не отдельные
+    функции, — подмена глобалей в этом файле не практикуется (см. пункт 1d
+    самопроверки). Рабочий путь зовёт main(sys.argv[1:]).
+    """
     # Отчёт содержит кириллицу и стрелки: на консоли с cp866/cp1251 печать иначе
     # падает с UnicodeEncodeError уже после записи файлов.
     for stream in (sys.stdout, sys.stderr):
         if hasattr(stream, "reconfigure"):
             stream.reconfigure(encoding="utf-8", errors="replace")
 
-    if "--self-test" in args:
+    cli = parse_args(list(argv))
+    if cli.help:
+        print(usage(maps))
+        return 0
+    if cli.self_test:
         return run_self_test()
 
-    spec = resolve_map_spec(args)
+    # Решения владельца, которые не применятся никогда (process-map-9mn.25,
+    # вариант (а)). ДО сборки и до чтения чего-либо с диска: такая запись —
+    # ошибка объявления, а не данных, и разбирать ради неё презентацию незачем.
+    # Проверяются все карты реестра, а не только собираемая, — см.
+    # unread_decisions.
+    unread = unread_decisions(tables, maps, PROFILE_READS)
+    if unread:
+        raise SystemExit(
+            "Решения владельца объявлены для карт, чей профиль эти таблицы не читает, — "
+            "они не применятся никогда (PROFILE_READS, process-map-9mn.25):\n"
+            + "\n".join(f"  · {item}" for item in unread)
+            + "\nПеренесите решение в таблицу, которую профиль читает, научите построитель "
+            "читать таблицу (и объявите это в PROFILE_READS) или удалите запись. "
+            "Импорт остановлен до сборки, ничего не записано."
+        )
+
+    spec = resolve_map_spec(cli.map_key, maps)
+    # Профиль разбора: устройство презентации у карт разное (MapSpec.profile).
+    # Неизвестный профиль останавливает импорт здесь, до чтения файлов.
+    build = builder_for(spec, builders)
 
     # --in-pipeline ставит scripts/data.ts (npm run data): раскладка стартует
     # сразу после импорта, и требовать её отдельно уже не надо. На сам импорт
@@ -4731,9 +5469,6 @@ def main(argv: Iterable[str]) -> int:
     # раньше, чем после разбора презентации.
     previous = load_previous_map(spec.json)
 
-    # Профиль разбора: устройство презентации у карт разное (MapSpec.profile).
-    build = build_single_slide_map if spec.profile == "single-slide" else build_process_map
-
     # Фаза 1 — подсчёт коллизий базовых slug'ов, фаза 2 — стабильные id.
     _, _, _, collisions = build(None, spec)
     process_map, reports, questions, _ = build(dict(collisions), spec)
@@ -4741,18 +5476,32 @@ def main(argv: Iterable[str]) -> int:
     carry_over = carry_over_manual_fields(process_map, previous)
 
     check_unique_ids(process_map)
-    write_json(spec.json, process_map)
-    write_json(spec.required_nodes, collect_required_node_ids(process_map))
+    # --dry-run: всё то же, кроме записи. Сборка, перенос ручных полей и
+    # проверка id идут полностью — иначе отчёт показывал бы не то, что записал бы
+    # обычный прогон.
+    if not cli.dry_run:
+        write_json(spec.json, process_map)
+        write_json(spec.required_nodes, collect_required_node_ids(process_map))
     print_report(process_map, reports, questions, spec)
     print_carry_over(carry_over, spec)
-    print(f"\nзаписано: {spec.json.relative_to(ROOT).as_posix()}")
-    print(f"записано: {spec.required_nodes.relative_to(ROOT).as_posix()}")
-    print_layout_required(process_map, "--in-pipeline" in args)
+    if cli.dry_run:
+        print_dry_run(spec)
+    else:
+        print(f"\nзаписано: {shown_path(spec.json)}")
+        print(f"записано: {shown_path(spec.required_nodes)}")
+        print_layout_required(process_map, cli.in_pipeline)
     if carry_over.lost:
+        # Под --dry-run код тот же: так пробный прогон годится проверкой «не
+        # потеряет ли настоящий импорт ссылок», хотя сам ничего не потерял.
+        consequence = (
+            "Обычный прогон потерял бы их; файл не тронут."
+            if cli.dry_run
+            else "Список выше — проставьте их заново в редакторе."
+        )
         print(
             f"\nВНИМАНИЕ: потеряно ручных полей: {len(carry_over.lost)} "
             f"(из них ссылок на экраны: {carry_over.screens_lost}). "
-            f"Список выше — проставьте их заново в редакторе. Код возврата {EXIT_LINKS_LOST}."
+            f"{consequence} Код возврата {EXIT_LINKS_LOST}."
         )
         return EXIT_LINKS_LOST
     return 0

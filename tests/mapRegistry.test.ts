@@ -6,8 +6,10 @@
 // получилось бы «импорт прошёл, раскладка отказалась» или, хуже, раскладка
 // молча переписала бы координатами не тот файл.
 //
-// Python в CI не запускается (.github/workflows), поэтому его исходник, как и
-// в tests/snp/importPreserve.test.ts, разбирается регуляркой.
+// Python из npm run check не запускается (решение владельца по process-map-ngw:
+// проверка обязана обходиться без него; в CI Python гоняет только самопроверку
+// импортёра), поэтому его исходник, как и в tests/snp/importPreserve.test.ts,
+// разбирается регуляркой.
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -16,13 +18,40 @@ import { BPMN_MAP_IDS, DEFAULT_MAP, MAP_IDS, mapAlias } from '../scripts/mapTarg
 const IMPORTER_SOURCE = readFileSync(resolve(process.cwd(), 'scripts', 'import-pptx.py'), 'utf8');
 const DATA_ROOT = resolve(process.cwd(), 'src', 'data');
 
-/** Ключи MAPS из импортёра: строки вида `    "snp": MapSpec(`. */
-function importerMapKeys(): string[] {
+/** Тело реестра MAPS — между `MAPS: … = {` и `}` в первой колонке. */
+function importerMapsBody(): string {
   const body = /^MAPS: dict\[str, MapSpec\] = \{$([\s\S]*?)^\}$/m.exec(IMPORTER_SOURCE);
   expect(body, 'в scripts/import-pptx.py не найден реестр MAPS').not.toBeNull();
-  return [...(body?.[1] ?? '').matchAll(/^\s{4}"([a-z0-9-]+)": MapSpec\(/gm)].map(
+  return body?.[1] ?? '';
+}
+
+/** Ключи MAPS из импортёра: строки вида `    "snp": MapSpec(`. */
+function importerMapKeys(): string[] {
+  return [...importerMapsBody().matchAll(/^\s{4}"([a-z0-9-]+)": MapSpec\(/gm)].map(
     (m) => m[1] ?? '',
   );
+}
+
+/**
+ * Профили карт из MAPS: строки вида `        profile="single-slide",`.
+ *
+ * Ищутся ТОЛЬКО внутри тела MAPS. Раньше регулярка шла по всему файлу, и
+ * самопроверка импортёра с её `replace(MAPS["snp"], profile="bogus")` —
+ * стоило бы перенести аргумент на свою строку с тем же отступом — добавила бы
+ * «профиль карты», которой нет.
+ */
+function importerMapProfiles(): string[] {
+  return [...importerMapsBody().matchAll(/^\s{8}profile="([a-z+-]+)",$/gm)].map((m) => m[1] ?? '');
+}
+
+/**
+ * Ключи PROFILE_BUILDERS — диспетчера профилей импортёра (process-map-9mn.14.1):
+ * строки вида `    "single-slide": build_single_slide_map,` в теле словаря.
+ */
+function importerProfileBuilders(): string[] {
+  const body = /^PROFILE_BUILDERS: dict\[str, Builder\] = \{$([\s\S]*?)^\}$/m.exec(IMPORTER_SOURCE);
+  expect(body, 'в scripts/import-pptx.py не найден диспетчер PROFILE_BUILDERS').not.toBeNull();
+  return [...(body?.[1] ?? '').matchAll(/^\s{4}"([a-z+-]+)": [a-z_]+,$/gm)].map((m) => m[1] ?? '');
 }
 
 /** Каталоги src/data/<id>/ с файлом process.json. */
@@ -130,14 +159,35 @@ describe('реестры карт', () => {
   });
 
   it('у объявленной карты профиль разбора из известного набора', () => {
-    // Профилей два: overview+details (устройство презентации SNP — обзор плюс
-    // четыре слайда детализации) и single-slide (вводит process-map-3wh.9).
-    const profiles = [...IMPORTER_SOURCE.matchAll(/^\s{8}profile="([a-z+-]+)",$/gm)].map(
-      (m) => m[1],
-    );
+    // Профилей три: overview+details (устройство презентации SNP — обзор плюс
+    // четыре слайда детализации), single-slide (вводит process-map-3wh.9) и
+    // three-tier (трёхуровневая карта inplan, process-map-9mn.14).
+    const profiles = importerMapProfiles();
     expect(profiles.length).toBe(MAP_IDS.length);
     for (const profile of profiles) {
-      expect(['overview+details', 'single-slide']).toContain(profile);
+      expect(['overview+details', 'single-slide', 'three-tier']).toContain(profile);
+    }
+  });
+
+  /*
+   * ПРОФИЛЬ КАРТЫ ОБЯЗАН ИМЕТЬ ПОСТРОИТЕЛЬ (process-map-9mn.14.1). До диспетчера
+   * main() выбирал построитель тернаркой, и профиль, которого импортёр не знал,
+   * молча уходил в разбор презентации SNP. Теперь такой профиль останавливает
+   * импорт — но только когда импорт запускают, а запускают его руками и с
+   * Python. Эта проверка ловит расхождение раньше, в npm run check: запись в
+   * MAPS с профилем без построителя краснеет здесь, не дожидаясь npm run data.
+   */
+  it('профиль каждой карты — ключ диспетчера PROFILE_BUILDERS', () => {
+    const builders = importerProfileBuilders();
+    // Без этого сломанная регулярка дала бы пустой список, и проверка ниже
+    // краснела бы по поводу, который не назван.
+    expect(builders).toContain('overview+details');
+    for (const profile of importerMapProfiles()) {
+      expect(
+        builders,
+        `профиль «${profile}» из MAPS не зарегистрирован в PROFILE_BUILDERS ` +
+          'scripts/import-pptx.py — импорт такой карты остановится',
+      ).toContain(profile);
     }
   });
 });

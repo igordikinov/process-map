@@ -12,6 +12,9 @@
 //   2. scripts/layout.ts — считает по `slidePosition` пригодные координаты
 //      (dagre) и перезаписывает `position`.
 //
+// Перед ними — шаг 0: самопроверка импортёра (`--self-test`, решение владельца
+// по process-map-ngw). Упала — не запускается ни импорт, ни раскладка.
+//
 // Раньше порядок нигде не был зафиксирован: тот, кто прогонял только импорт и
 // коммитил, получал карту с наложенными узлами. Теперь помнить порядок не надо
 // — есть одна команда, а забытая раскладка ловится ещё и тестом
@@ -42,13 +45,16 @@ function pythonCandidates(): string[] {
   return explicit !== undefined && explicit !== '' ? [explicit] : ['python', 'py'];
 }
 
-function runImport(mapId: MapId): number {
+/**
+ * Запуск scripts/import-pptx.py с аргументами `args` первым найденным
+ * интерпретатором Python. Возвращает код возврата скрипта; 1 — если запустить
+ * не удалось вовсе.
+ */
+function runImporter(args: readonly string[]): number {
   const script = fileURLToPath(new URL('./import-pptx.py', import.meta.url));
   const candidates = pythonCandidates();
   for (const [index, exe] of candidates.entries()) {
-    // --in-pipeline: импортёр знает, что раскладка запустится следом, и не
-    // требует её отдельной строкой (scripts/import-pptx.py::print_layout_required).
-    const result = spawnSync(exe, [script, '--in-pipeline', '--map', mapId], {
+    const result = spawnSync(exe, [script, ...args], {
       stdio: 'inherit',
     });
     // @types/node типизирует result.error как обычный Error, без code: код
@@ -75,6 +81,28 @@ function runImport(mapId: MapId): number {
   return 1;
 }
 
+/**
+ * Самопроверка импортёра (`--self-test`): презентация не нужна, ничего не пишет.
+ *
+ * ЗАЧЕМ ЗДЕСЬ (решение владельца по process-map-ngw). Самопроверка стережёт в
+ * том числе код, который из этого конвейера для опубликованных карт НЕДОСТИЖИМ
+ * (групп в колодах SNP и MRP нет, разбор ярусов не вызывается), — побайтовое
+ * сравнение пересобранных карт его не покрывает. Раньше самопроверку не
+ * запускало ничего: только человек руками. Теперь её гоняют CI
+ * (.github/workflows/deploy.yml) и этот конвейер, а npm run check — нет: он
+ * обязан обходиться без Python. Кто запускает конвейер, тот трогает импортёр,
+ * и Python у него есть.
+ */
+function runSelfTest(): number {
+  return runImporter(['--self-test']);
+}
+
+function runImport(mapId: MapId): number {
+  // --in-pipeline: импортёр знает, что раскладка запустится следом, и не
+  // требует её отдельной строкой (scripts/import-pptx.py::print_layout_required).
+  return runImporter(['--in-pipeline', '--map', mapId]);
+}
+
 function main(): number {
   // Карта разбирается ОДИН раз и передаётся обоим шагам: разные ключи у импорта
   // и раскладки означали бы, что вторая переписывает координатами чужой файл.
@@ -89,6 +117,25 @@ function main(): number {
    */
   if (isBpmnMapId(mapId)) {
     return runBpmnMap();
+  }
+
+  /*
+   * ШАГ 0 — САМОПРОВЕРКА ИМПОРТЁРА, до импорта (process-map-ngw). Стоит ПОСЛЕ
+   * развилки по источнику намеренно: карта из модели импортёра не касается, и
+   * требовать ради неё Python значило бы уронить конвейер там, где он не нужен.
+   *
+   * Упавшая самопроверка обрывает конвейер: импорт по сломанному импортёру дал
+   * бы файл, которому нельзя верить, — а разбираться, что именно в нём не так,
+   * пришлось бы по диффу данных вместо названной проверки.
+   */
+  const selfTestCode = runSelfTest();
+  if (selfTestCode !== 0) {
+    console.error(
+      `\nсамопроверка импортёра (scripts/import-pptx.py --self-test) завершилась с кодом ` +
+        `${selfTestCode} — импорт и раскладка НЕ запускались, ` +
+        `src/data/${mapId}/process.json остался в прежнем состоянии`,
+    );
+    return selfTestCode;
   }
 
   const importCode = runImport(mapId);
@@ -107,7 +154,7 @@ function main(): number {
     return layoutCode;
   }
 
-  console.log('\nконвейер завершён: import-pptx.py → layout.ts');
+  console.log('\nконвейер завершён: самопроверка → import-pptx.py → layout.ts');
   if (importCode === EXIT_LINKS_LOST) {
     console.log(
       `код возврата ${EXIT_LINKS_LOST}: часть ручных ссылок на экраны потеряна — ` +

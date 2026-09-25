@@ -58,6 +58,28 @@ jobs:
 
       - run: npm ci
 
+      # САМОПРОВЕРКА ИМПОРТЁРА (решение владельца по process-map-ngw). До неё
+      # python scripts/import-pptx.py --self-test не запускалось нигде, а код,
+      # который она стережёт, из npm run data для опубликованных карт
+      # недостижим — побайтовое сравнение карт его не покрывает. В npm run
+      # check её НЕ добавляли намеренно: он обязан обходиться без Python, иначе
+      # на машине без него краснел бы не по делу. Здесь Python ставится явно, и
+      # шаг блокирует деплой так же, как npm run check: job deploy ждёт build.
+      #
+      # Версии закреплены: 3.11 — та, на которой импортёр пишется и проверяется
+      # локально; python-pptx и lxml — те, на которых обе опубликованные карты
+      # пересобираются побайтово (проверено при вводе шага, process-map-9mn.14.1).
+      # lxml импортёр зовёт и напрямую, поэтому он закреплён отдельно.
+      # setup-python@v7 — по тому же правилу, что остальные actions (runs.using
+      # в манифесте тега — node24).
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+
+      - run: python -m pip install python-pptx==1.0.2 lxml==6.0.2
+
+      - run: python scripts/import-pptx.py --self-test
+
       # Сломанная сборка не должна попасть на Pages: сначала проверки.
       # npm run check это tsc + eslint + vitest + prettier --check
       # (process-map-mx2). e2e гоняются соседним job'ом e2e: им нужны браузеры
