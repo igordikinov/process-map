@@ -213,6 +213,36 @@ describe('buildModulesGraph: полоса FP&A', () => {
     expect(bandIndex).toBeLessThan(firstCard);
   });
 
+  /*
+   * НЕСКОЛЬКО ПОЛОС. У фикстуры и у настоящей inplan полоса одна (FP&A), но
+   * схема разрешает сколько угодно (LaneSchema, lanes.min(1)), и на одной
+   * полосе раскладка «все в одну y» неотличима от стопки: без этого теста
+   * выживала мутация, ставящая каждой полосе одну и ту же высоту (ревью 9mn.16).
+   */
+  it('полосы map.lanes идут стопкой: не накладываются, свимлейн выхода — под последней', () => {
+    const map = fixture();
+    map.lanes = [...(map.lanes ?? []), { id: 'hr', title: 'Кадровое планирование' }];
+    expect(validateIntegrity(map), 'вариант обязан оставаться валидной картой').toEqual([]);
+
+    const { nodes } = buildModulesGraph(map, true);
+    const bands = nodes
+      .filter((node) => node.type === 'moduleLane')
+      .sort((a, b) => a.position.y - b.position.y);
+    // Порядок стопки — порядок массива map.lanes.
+    expect(bands.map((band) => band.id)).toEqual(map.lanes.map((lane) => lane.id));
+
+    const bottomOf = (node: ModulesNode) => node.position.y + Number(node.style?.height);
+    for (let index = 1; index < bands.length; index += 1) {
+      const upper = bands[index - 1] as ModulesNode;
+      const lower = bands[index] as ModulesNode;
+      expect(lower.position.y, `${lower.id} под ${upper.id}`).toBeGreaterThanOrEqual(
+        bottomOf(upper),
+      );
+    }
+    const last = bands[bands.length - 1] as ModulesNode;
+    expect(nodeById(nodes, LANE_OUT_ID).position.y).toBeGreaterThanOrEqual(bottomOf(last));
+  });
+
   it('без map.lanes полос нет, и экран всё равно строится', () => {
     const map = fixture();
     delete map.lanes;
@@ -268,6 +298,43 @@ describe('buildModulesGraph: связи модулей', () => {
     const edge = edges.find((candidate) => candidate.id === 'module-edge-1');
 
     expect(edge?.sourceHandle, 'обратная связь обязана выходить снизу').toBe('bottom');
+    expect(edge?.targetHandle).toBe('left');
+  });
+
+  /*
+   * ВТОРОЕ НАПРАВЛЕНИЕ РАСХОЖДЕНИЯ. Тест выше ловит «по номеру прямая, по
+   * индексу обратная». Обратный случай — «по индексу прямая к соседу справа,
+   * по номеру обратная» — на нём не встречается: в переставленном массиве обе
+   * связи фикстуры идут справа налево. Без этого теста выживала мутация,
+   * добавляющая номер к индексу (`targetIndex === sourceIndex + 1 &&
+   * number(source) < number(target)`) — правило обзора этапов «обратная или не
+   * в ряд — снизу», перенесённое на уровень 1. Прямая связь соседей на валидной
+   * карте рисовалась бы тогда петлёй снизу вместо отрезка через зазор (ревью
+   * 9mn.16).
+   */
+  it('ПРЯМАЯ по индексу связь с соседом справа выходит справа, даже если по номеру обратная', () => {
+    const map = reversedModules();
+    // supply (номер 2, индекс 1) → demand (номер 1, индекс 2).
+    map.moduleEdges = [
+      ...(map.moduleEdges ?? []),
+      {
+        id: 'module-edge-back-by-number',
+        source: MODULE_SUPPLY,
+        target: MODULE_DEMAND,
+        kind: 'process',
+      },
+    ];
+    expect(validateIntegrity(map), 'вариант обязан оставаться валидной картой').toEqual([]);
+    // Предпосылки: по индексу — соседи слева направо, по номеру — назад.
+    const index = (id: string) => map.modules.findIndex((module) => module.id === id);
+    const number = (id: string) => map.modules.find((module) => module.id === id)?.number ?? 0;
+    expect(index(MODULE_DEMAND)).toBe(index(MODULE_SUPPLY) + 1);
+    expect(number(MODULE_DEMAND)).toBeLessThan(number(MODULE_SUPPLY));
+
+    const edge = buildModulesGraph(map, true).edges.find(
+      (candidate) => candidate.id === 'module-edge-back-by-number',
+    );
+    expect(edge?.sourceHandle, 'связь с соседом справа обязана выходить справа').toBe('right');
     expect(edge?.targetHandle).toBe('left');
   });
 

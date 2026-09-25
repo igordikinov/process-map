@@ -12,7 +12,7 @@
 // Deep-link (?stage=&node=, SPEC §4.7) разбирается хуком useDeepLink: он
 // подставляет id в store сразу после монтирования и дальше синхронизирует URL
 // (replaceState) при любой навигации — см. src/hooks/useDeepLink.ts.
-import { useEffect } from 'react';
+import { useEffect, type ReactElement } from 'react';
 import { ImportReport } from './components/ImportReport';
 import { ModulesOverview } from './components/ModulesOverview';
 import { Overview } from './components/Overview';
@@ -24,10 +24,19 @@ import { useProcessStore } from './store/useProcessStore';
 
 /**
  * Экран по его имени. switch по объединению без default: забытая ветка при
- * новом значении MapScreen — ошибка tsc («не все пути возвращают значение»), а
- * не молчаливый пустой экран.
+ * новом значении MapScreen — ошибка tsc TS2366 («Function lacks ending return
+ * statement and return type does not include 'undefined'»), а не молчаливый
+ * пустой экран.
+ *
+ * Эту ошибку даёт ТОЛЬКО явный тип результата ReactElement. Без него проверки
+ * нет, хотя выглядит, будто есть: noImplicitReturns в tsconfig не включён, а
+ * выведенный тип функции-компонента допускает undefined (ReactNode в
+ * @types/react 18 включает undefined) — и switch без одной ветки молча
+ * компилируется, рисуя пустой экран. Проверено на ревью 9mn.16: объединение
+ * из четырёх значений при трёх ветках без аннотации — tsc exit 0, с
+ * аннотацией — TS2366. Поэтому аннотацию не снимать «для краткости».
  */
-function ScreenView({ screen }: { screen: MapScreen }) {
+function ScreenView({ screen }: { screen: MapScreen }): ReactElement {
   switch (screen) {
     case 'modules':
       return <ModulesOverview />;

@@ -18,10 +18,13 @@
 //     вовсе: хэндлы узлов не измерены (layout нет), и ребру не к чему
 //     крепиться. Подписи проверены на графе (tests/modulesGraph.test.ts), их
 //     перенос — на самом компоненте ребра (tests/artifactEdge.test.tsx).
+//     САМИ хэндлы при этом рисуются (разметка без геометрии), и их сторона
+//     проверяется здесь — по атрибутам, которые React Flow ставит без layout.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import App from '../src/App';
 import { Legend } from '../src/components/Legend';
+import { MODULE_HANDLE } from '../src/components/nodes/ModuleNode';
 import { clearImportedMap, setImportedMap } from '../src/data/activeMap';
 import { loadBaseProcessMap } from '../src/data/loader';
 import { ProcessMapSchema } from '../src/data/schema';
@@ -29,6 +32,7 @@ import { listVersions, resetSelectedVersion } from '../src/data/versions';
 import { refreshProcessMap } from '../src/hooks/useProcessMap';
 import { ru } from '../src/i18n/ru';
 import { createInitialState, useProcessStore } from '../src/store/useProcessStore';
+import { MODULE_NODE_SIZE, MODULE_NODE_SIZE_COMPACT } from '../src/theme/sizes';
 import { THREE_LEVEL_PAGE_ALT_ID, THREE_LEVEL_PAGE_DEFAULT_ID } from './fixtures/pageMocks';
 import { buildSampleProcessMap } from './fixtures/sample-process';
 import { LANE_FPA, MODULE_SUPPLY, buildThreeLevelProcessMap } from './fixtures/three-level-process';
@@ -166,6 +170,67 @@ describe('корень трёхуровневой карты — экран мо
     expect(band?.querySelector('button')).toBeNull();
   });
 
+  /*
+   * СТОРОНА КАЖДОГО ХЭНДЛА. Граф (modulesGraph.ts) выбирает хэндл по id, а
+   * куда этот id выведен на карточке, решает ModuleNode.tsx — и граф об этом
+   * не знает. Переставь выход 'right' на Position.Bottom, и каждая связь с
+   * соседом справа молча выходила бы снизу, а все тесты графа оставались бы
+   * зелёными (ревью 9mn.16). Рёбра в jsdom не рисуются, но разметку хэндлов
+   * React Flow ставит без layout: data-handleid, data-handlepos и класс
+   * source/target.
+   */
+  it('хэндлы карточки модуля — на своих сторонах и своего направления', async () => {
+    const { container } = await renderApp();
+    const expected = [
+      { id: MODULE_HANDLE.left, position: 'left', type: 'target' },
+      { id: MODULE_HANDLE.top, position: 'top', type: 'target' },
+      { id: MODULE_HANDLE.right, position: 'right', type: 'source' },
+      { id: MODULE_HANDLE.bottom, position: 'bottom', type: 'source' },
+    ] as const;
+
+    for (const module of THREE.modules) {
+      const wrapper = container.querySelector<HTMLElement>(`[data-id="${module.id}"]`);
+      expect(wrapper, module.id).not.toBeNull();
+      expect(wrapper?.querySelectorAll('.react-flow__handle'), module.id).toHaveLength(
+        expected.length,
+      );
+      for (const { id, position, type } of expected) {
+        const handle = wrapper?.querySelector<HTMLElement>(
+          `.react-flow__handle[data-handleid="${id}"]`,
+        );
+        expect(handle, `${module.id}: хэндл ${id}`).not.toBeNull();
+        expect(handle?.dataset.handlepos, `${module.id}: сторона хэндла ${id}`).toBe(position);
+        expect(handle, `${module.id}: направление хэндла ${id}`).toHaveClass(type);
+      }
+    }
+  });
+
+  /*
+   * ТУМБЛЕР ИНТЕГРАЦИЙ НА САМОМ ЭКРАНЕ (SPEC §4.6). Граф проверяет, что сборка
+   * с showIntegrations=false убирает системы (tests/modulesGraph.test.ts), но
+   * не то, что экран передаёт в сборку значение тумблера. Экран, звавший
+   * buildModulesGraph(map, true, …), проходил все тесты: ESLint замечал только
+   * «лишнюю зависимость» useMemo предупреждением, а npm run check на
+   * предупреждениях не падает (ревью 9mn.16).
+   */
+  it('тумблер интеграций убирает с полотна системы и свимлейны, карточки и полоса остаются', async () => {
+    const { container } = await renderApp();
+    // Предпосылка: у фикстуры есть концы-системы (BI, EPM), иначе убирать нечего.
+    expect(container.querySelectorAll('.react-flow__node-system').length).toBeGreaterThan(0);
+    expect(container.querySelectorAll('.react-flow__node-lane').length).toBeGreaterThan(0);
+
+    await act(async () => {
+      useProcessStore.getState().toggleIntegrations();
+    });
+
+    expect(container.querySelectorAll('.react-flow__node-system')).toHaveLength(0);
+    expect(container.querySelectorAll('.react-flow__node-lane')).toHaveLength(0);
+    expect(container.querySelectorAll('.react-flow__node-module')).toHaveLength(
+      THREE.modules.length,
+    );
+    expect(container.querySelector(`[data-id="${LANE_FPA}"]`)).not.toBeNull();
+  });
+
   it('клик по карточке ведёт на экран этапов этого модуля', async () => {
     await renderApp();
     const supply = THREE.modules.find((module) => module.id === MODULE_SUPPLY);
@@ -216,6 +281,149 @@ describe('защита «модуль не найден»', () => {
       useProcessStore.getState().navigateToModule(MODULE_SUPPLY);
     });
     expect(useProcessStore.getState().currentModuleId).toBe(MODULE_SUPPLY);
+  });
+
+  /*
+   * ЗАЩИТА СТОИТ ТОЛЬКО НА ЭКРАНЕ 'stages'. Этап без модуля — законное
+   * состояние (комментарий к navigateToStage в useProcessStore.ts: «этап
+   * задан, модуль нет»): в него ведёт deep-link ?stage=N, useDeepLink зовёт
+   * navigateToStage(stageId) без модуля.
+   * Защита, расширенная на всякий экран кроме корня (`screen !== 'modules'`),
+   * выбрасывала бы такого читателя на корень — и ни один тест выше этого не
+   * замечал (ревью 9mn.16).
+   */
+  it('deep-link ?stage=N без модуля защита не трогает: открыт этап, модуль не задан', async () => {
+    const stage = THREE.stages.find((candidate) => candidate.number === 2);
+    expect(stage).toBeDefined();
+    window.history.replaceState({}, '', '/?stage=2');
+
+    const { container } = await renderApp();
+
+    expect(useProcessStore.getState().currentStageId).toBe(stage?.id);
+    expect(useProcessStore.getState().currentModuleId).toBeNull();
+    // Экран шагов именно этого этапа, а не корень: узел этапа 2 на полотне.
+    // По id узла, а не по подписи полотна — подпись экрана шагов трёхуровневой
+    // карты ещё поменяется (ru.stageDetail.moduleStageCanvasLabel).
+    expect(container.querySelector(`[data-id="${stage?.nodes[0]?.id ?? ''}"]`)).not.toBeNull();
+    expect(screen.queryByRole('region', { name: ru.overview.allModulesCanvasLabel })).toBeNull();
+  });
+});
+
+/**
+ * ResizeObserver, чей колбэк дёргает тест, — урезанная копия прецедента из
+ * tests/compact.test.tsx (там же — почему размер задаётся точечно на узле, а
+ * не расширением глобального мока tests/setup.ts). Своя копия, а не импорт:
+ * тот файл — тест, а не помощник, и его правка не должна задевать этот.
+ */
+class ControllableResizeObserver implements ResizeObserver {
+  static instances: ControllableResizeObserver[] = [];
+  private readonly callback: ResizeObserverCallback;
+  readonly targets = new Set<Element>();
+
+  constructor(callback: ResizeObserverCallback) {
+    this.callback = callback;
+    ControllableResizeObserver.instances.push(this);
+  }
+
+  observe(target: Element): void {
+    this.targets.add(target);
+  }
+
+  unobserve(target: Element): void {
+    this.targets.delete(target);
+  }
+
+  disconnect(): void {
+    this.targets.clear();
+  }
+
+  /** Сообщить о новом размере одного наблюдаемого элемента. */
+  emit(target: Element): void {
+    this.callback(
+      [{ target, contentRect: target.getBoundingClientRect() } as ResizeObserverEntry],
+      this,
+    );
+  }
+}
+
+/** Размер ОДНОГО элемента, не прототипа, — довод в шапке tests/compact.test.tsx. */
+function setElementSize(element: HTMLElement, width: number, height: number): void {
+  element.getBoundingClientRect = () =>
+    ({
+      x: 0,
+      y: 0,
+      top: 0,
+      left: 0,
+      right: width,
+      bottom: height,
+      width,
+      height,
+      toJSON: () => ({}),
+    }) as DOMRect;
+}
+
+/*
+ * КОМПАКТНЫЙ РЕЖИМ ЭКРАНА (SPEC §4.5). Доводка компактного уровня 1 — задача
+ * process-map-9mn.19; здесь экран обязан лишь рисоваться. Но «рисоваться» —
+ * это ещё и «получить режим»: граф проверен с compact=true отдельно
+ * (tests/modulesGraph.test.ts), а экран, звавший сборку с жёстким false,
+ * проходил все тесты (ревью 9mn.16). Поэтому фрейм опускается ниже порога
+ * настоящим путём — через useFrameSize, — и проверяется, что режим доехал и до
+ * карточек, и до шапки с легендой.
+ */
+describe('компактный режим экрана модулей', () => {
+  const originalResizeObserver = globalThis.ResizeObserver;
+
+  beforeEach(() => {
+    ControllableResizeObserver.instances = [];
+    globalThis.ResizeObserver = ControllableResizeObserver as unknown as typeof ResizeObserver;
+  });
+
+  afterEach(() => {
+    globalThis.ResizeObserver = originalResizeObserver;
+  });
+
+  it('низкий фрейм: карточки модулей компактные, бейдж модулей на месте, легенда свёрнута', async () => {
+    const { container } = await renderApp();
+    const root = screen.getByRole('region', {
+      name: ru.overview.allModulesCanvasLabel,
+    }).parentElement;
+    if (root === null) {
+      throw new Error('У полотна модулей нет корневого элемента экрана');
+    }
+    const wrapperOf = (id: string) => container.querySelector<HTMLElement>(`[data-id="${id}"]`);
+    // До подмены — обычный режим: иначе тест прошёл бы, ничего не переключив.
+    expect(wrapperOf(MODULE_SUPPLY)?.style.width).toBe(`${MODULE_NODE_SIZE.width}px`);
+
+    // Наблюдатель корня экрана — тот, что завёл useFrameSize; колбэки React
+    // Flow (полотно, узлы) не дёргаются.
+    const observers = ControllableResizeObserver.instances.filter((instance) =>
+      instance.targets.has(root),
+    );
+    expect(observers.length, 'useFrameSize обязан наблюдать корень экрана').toBeGreaterThan(0);
+    setElementSize(root, 1024, 600);
+    act(() => {
+      for (const observer of observers) {
+        observer.emit(root);
+      }
+    });
+
+    for (const module of THREE.modules) {
+      const card = screen.getByRole('button', {
+        name: ru.moduleNode.ariaLabel(module.number, module.title),
+      });
+      // Компактная карточка — без подписи «Модуль» (ModuleCard).
+      expect(within(card).queryByText(ru.moduleNode.caption), module.id).toBeNull();
+      expect(wrapperOf(module.id)?.style.width, module.id).toBe(
+        `${MODULE_NODE_SIZE_COMPACT.width}px`,
+      );
+      expect(wrapperOf(module.id)?.style.height, module.id).toBe(
+        `${MODULE_NODE_SIZE_COMPACT.height}px`,
+      );
+    }
+    expect(screen.getByText(ru.overview.modulesBadge(THREE.modules.length))).toBeInTheDocument();
+    // Легенда свёрнута в кнопку — режим доехал и до неё.
+    expect(screen.getByRole('button', { name: ru.legend.expand })).toBeInTheDocument();
   });
 });
 
@@ -319,6 +527,30 @@ describe('легенда экрана модулей', () => {
     render(<Legend />);
     legend = screen.getByRole('group', { name: ru.legend.ariaLabel });
     expect(within(legend).getByText(ru.legend.process)).toBeInTheDocument();
+    expect(within(legend).getByText(ru.legend.integration)).toBeInTheDocument();
+    expect(within(legend).getByText(ru.legend.system)).toBeInTheDocument();
+  });
+
+  /*
+   * «Процесс» — только при связи МОДУЛЬ → МОДУЛЬ, а не при любой связи уровня
+   * 1. Тест ниже (карта без связей вовсе) этого не различает: на нём оба
+   * признака ложны. Различает карта, у которой связи уровня 1 есть, но все — с
+   * системами: линии процесса на её полотне нет ни одной (ревью 9mn.16).
+   */
+  it('связи уровня 1 только с системами: «Процесс» не обещан, свимлейны — да', async () => {
+    const systemsOnly = buildThreeLevelProcessMap();
+    const moduleIds = new Set(systemsOnly.modules.map((module) => module.id));
+    systemsOnly.moduleEdges = systemsOnly.moduleEdges.filter(
+      (edge) => !moduleIds.has(edge.source) || !moduleIds.has(edge.target),
+    );
+    // Предпосылка: связи остались, и ни одна не соединяет два модуля.
+    expect(systemsOnly.moduleEdges.length).toBeGreaterThan(0);
+    setImportedMap(ProcessMapSchema.parse({ ...systemsOnly, id: 'files-systems-only' }));
+    refreshProcessMap();
+
+    render(<Legend />);
+    const legend = screen.getByRole('group', { name: ru.legend.ariaLabel });
+    expect(within(legend).queryByText(ru.legend.process)).toBeNull();
     expect(within(legend).getByText(ru.legend.integration)).toBeInTheDocument();
     expect(within(legend).getByText(ru.legend.system)).toBeInTheDocument();
   });
