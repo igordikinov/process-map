@@ -486,6 +486,28 @@ describe('LaneSchema и полосы уровня 1', () => {
     expect(map.lanes).toEqual([{ id: LANE_FPA, title: 'FP&A · Финансовое планирование и анализ' }]);
   });
 
+  it('порядок ключей ProcessMap закреплён: lanes — после moduleEdges', () => {
+    // Порядок ключей схемы — это порядок ключей экспорта: zod пересобирает
+    // объект по схеме, а экспорт обязан совпадать с process.json побайтово.
+    // Round-trip в tests/mapContract.test.ts этого места не видит, пока ни у
+    // одной карты на диске нет lanes: перестановка lanes перед moduleEdges
+    // проходила весь корпус (проверено мутацией). Первой карте с полосами
+    // (inplan) импортёр запишет ключи в ЭТОМ порядке — задача
+    // process-map-9mn.32 фиксирует его до импортёра.
+    expect(Object.keys(ProcessMapSchema.shape)).toEqual([
+      'version',
+      'id',
+      'updatedAt',
+      'title',
+      'moduleLabel',
+      'modules',
+      'moduleEdges',
+      'lanes',
+      'stages',
+      'overviewEdges',
+    ]);
+  });
+
   it('отвергает пустой список полос: «полос нет» выражается отсутствием поля', () => {
     const map = buildThreeLevelProcessMap();
     map.lanes = [];
