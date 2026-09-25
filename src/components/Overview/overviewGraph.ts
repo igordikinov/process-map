@@ -34,15 +34,19 @@ const STAGE_STEP = STAGE_WIDTH + STAGE_GAP;
 const STAGE_X0 = 48;
 const STAGE_Y = 200;
 
-const LANE_X = 20;
-const LANE_IN_Y = 64;
-const LANE_IN_HEIGHT = 92;
+// Геометрия свимлейнов ЭКСПОРТИРУЕТСЯ ради экрана модулей (process-map-9mn.16):
+// modulesGraph.ts кладёт системы уровня 1 в те же свимлейны, и числа у двух
+// экранов обязаны быть одни — иначе рамки «Внешние системы» на соседних
+// экранах разошлись бы по отступам. Экспорт ничего здесь не меняет.
+export const LANE_X = 20;
+export const LANE_IN_Y = 64;
+export const LANE_IN_HEIGHT = 92;
 const LANE_OUT_Y = 474;
-const LANE_OUT_HEIGHT = 96;
+export const LANE_OUT_HEIGHT = 96;
 /** Отступ от правого края последней карточки до края свимлейна (макет: 1260 − 1234). */
-const LANE_RIGHT_GAP = 26;
+export const LANE_RIGHT_GAP = 26;
 /** Горизонтальный отступ карточек систем внутри свимлейна (макет: 60 − 20). */
-const LANE_PADDING_X = 40;
+export const LANE_PADDING_X = 40;
 
 const IO_WIDTH = IO_NODE_SIZE.width;
 const IO_HEIGHT = IO_NODE_SIZE.height;
@@ -136,7 +140,7 @@ export const MAX_ZOOM = 2;
  * (@xyflow/react/dist/esm/index.js: NodeWrapper), поэтому это корректный способ
  * вернуть события мыши, не включая перетаскивание и выделение.
  */
-const INTERACTIVE_NODE_STYLE = { pointerEvents: 'all' } as const;
+export const INTERACTIVE_NODE_STYLE = { pointerEvents: 'all' } as const;
 
 /** id узла внешней системы. Направление в id обязательно: одна и та же система
  *  может быть и входом, и выходом (DP, PS, ERP в текущих данных). */
@@ -146,13 +150,27 @@ export function systemNodeId(direction: 'in' | 'out', system: SystemCode): strin
 
 // ───────────────────────────── вспомогательное ─────────────────────────────
 
+/** Карточка системы в свимлейне: код, видимая подпись и полный список подписей. */
+export interface CollectedSystem {
+  readonly system: SystemCode;
+  readonly label: string;
+  readonly full: string;
+}
+
 /**
  * Схлопывает ExternalIO всех этапов в одну карточку на систему.
  * У одного этапа может быть несколько записей с одной системой (в текущих
  * данных у этапа 2 дважды IO) — в карточке показываем первую подпись,
  * полный список уходит в title.
+ *
+ * Вход — только пара «система + подпись», а не ExternalIO целиком: экран
+ * модулей (modulesGraph.ts, process-map-9mn.16) собирает свимлейны из концов
+ * moduleEdges, у которых этапа нет. Функция и раньше читала ровно эти два
+ * поля, поэтому ослабленное требование к входу поведения не меняет.
  */
-function collectSystems(ios: ExternalIO[]): { system: SystemCode; label: string; full: string }[] {
+export function collectSystems(
+  ios: readonly Pick<ExternalIO, 'system' | 'label'>[],
+): CollectedSystem[] {
   const order: SystemCode[] = [];
   const labels = new Map<SystemCode, string[]>();
 
@@ -177,7 +195,7 @@ function collectSystems(ios: ExternalIO[]): { system: SystemCode; label: string;
  * При n = 4 и laneWidth = 1240 даёт 40/360/680/1000 (абсолютные 60/380/700/1020) —
  * ровно как в макете.
  */
-function spreadX(count: number, laneWidth: number): number[] {
+export function spreadX(count: number, laneWidth: number): number[] {
   const usable = laneWidth - LANE_PADDING_X * 2;
   if (count <= 0) {
     return [];
@@ -187,6 +205,77 @@ function spreadX(count: number, laneWidth: number): number[] {
   }
   const step = (usable - IO_WIDTH) / (count - 1);
   return Array.from({ length: count }, (_, index) => Math.round(LANE_PADDING_X + index * step));
+}
+
+/** Один свимлейн внешних систем: где он стоит и какие системы в нём. */
+export interface SystemLane {
+  readonly id: string;
+  readonly title: string;
+  readonly y: number;
+  readonly height: number;
+  readonly items: readonly CollectedSystem[];
+  readonly direction: 'in' | 'out';
+}
+
+/**
+ * Узлы свимлейнов внешних систем: рамка и карточки систем внутри неё.
+ *
+ * Вынесено из buildOverviewGraph без единой правки поведения ради экрана
+ * модулей (process-map-9mn.16): у него свои системы (концы moduleEdges) и своя
+ * высота выходного свимлейна, а рамка, раскладка карточек и флаги узлов
+ * обязаны совпадать с обзором этапов — иначе свимлейн «Внешние системы» на
+ * соседних экранах выглядел бы по-разному. Свимлейн без систем не рисуется.
+ */
+export function systemLaneNodes(
+  lanes: readonly SystemLane[],
+  laneWidth: number,
+): (LaneNodeType | IntegrationNodeType)[] {
+  const nodes: (LaneNodeType | IntegrationNodeType)[] = [];
+  for (const lane of lanes) {
+    if (lane.items.length === 0) {
+      continue;
+    }
+    // Родительский узел обязан идти в массиве раньше своих детей.
+    nodes.push({
+      id: lane.id,
+      type: 'lane',
+      position: { x: LANE_X, y: lane.y },
+      data: { title: lane.title },
+      style: { width: laneWidth, height: lane.height },
+      draggable: false,
+      selectable: false,
+      connectable: false,
+      focusable: false,
+    });
+
+    const xs = spreadX(lane.items.length, laneWidth);
+    lane.items.forEach((item, index) => {
+      nodes.push({
+        id: systemNodeId(lane.direction, item.system),
+        type: 'system',
+        // Координаты ребёнка group-узла — относительно родителя.
+        position: { x: xs[index] ?? LANE_PADDING_X, y: IO_OFFSET_Y },
+        parentId: lane.id,
+        extent: 'parent',
+        data: {
+          system: item.system,
+          label: item.label,
+          fullLabel: item.full,
+          direction: lane.direction,
+        },
+        width: IO_WIDTH,
+        height: IO_HEIGHT,
+        // Подписи систем в данных длиннее макетных и обрезаются, полный текст
+        // лежит в title — без pointer-events подсказка недостижима мышью.
+        style: INTERACTIVE_NODE_STYLE,
+        draggable: false,
+        selectable: false,
+        connectable: false,
+        focusable: false,
+      });
+    });
+  }
+  return nodes;
 }
 
 // ───────────────────────────── сборка графа ─────────────────────────────
@@ -353,69 +442,29 @@ export function buildOverviewGraph(
     const inputs = collectSystems(map.stages.flatMap((stage) => stage.inputs));
     const outputs = collectSystems(map.stages.flatMap((stage) => stage.outputs));
 
-    const lanes = [
-      {
-        id: LANE_IN_ID,
-        title: ru.overview.laneIn,
-        y: LANE_IN_Y,
-        height: LANE_IN_HEIGHT,
-        items: inputs,
-        direction: 'in' as const,
-      },
-      {
-        id: LANE_OUT_ID,
-        title: ru.overview.laneOut,
-        y: LANE_OUT_Y + grid.extraHeight,
-        height: LANE_OUT_HEIGHT,
-        items: outputs,
-        direction: 'out' as const,
-      },
-    ];
-
-    for (const lane of lanes) {
-      if (lane.items.length === 0) {
-        continue;
-      }
-      // Родительский узел обязан идти в массиве раньше своих детей.
-      nodes.push({
-        id: lane.id,
-        type: 'lane',
-        position: { x: LANE_X, y: lane.y },
-        data: { title: lane.title },
-        style: { width: laneWidth, height: lane.height },
-        draggable: false,
-        selectable: false,
-        connectable: false,
-        focusable: false,
-      });
-
-      const xs = spreadX(lane.items.length, laneWidth);
-      lane.items.forEach((item, index) => {
-        nodes.push({
-          id: systemNodeId(lane.direction, item.system),
-          type: 'system',
-          // Координаты ребёнка group-узла — относительно родителя.
-          position: { x: xs[index] ?? LANE_PADDING_X, y: IO_OFFSET_Y },
-          parentId: lane.id,
-          extent: 'parent',
-          data: {
-            system: item.system,
-            label: item.label,
-            fullLabel: item.full,
-            direction: lane.direction,
+    nodes.push(
+      ...systemLaneNodes(
+        [
+          {
+            id: LANE_IN_ID,
+            title: ru.overview.laneIn,
+            y: LANE_IN_Y,
+            height: LANE_IN_HEIGHT,
+            items: inputs,
+            direction: 'in',
           },
-          width: IO_WIDTH,
-          height: IO_HEIGHT,
-          // Подписи систем в данных длиннее макетных и обрезаются, полный текст
-          // лежит в title — без pointer-events подсказка недостижима мышью.
-          style: INTERACTIVE_NODE_STYLE,
-          draggable: false,
-          selectable: false,
-          connectable: false,
-          focusable: false,
-        });
-      });
-    }
+          {
+            id: LANE_OUT_ID,
+            title: ru.overview.laneOut,
+            y: LANE_OUT_Y + grid.extraHeight,
+            height: LANE_OUT_HEIGHT,
+            items: outputs,
+            direction: 'out',
+          },
+        ],
+        laneWidth,
+      ),
+    );
   }
 
   // Рамка вокруг основного потока (process-map-sni). Рисуется НЕЗАВИСИМО от

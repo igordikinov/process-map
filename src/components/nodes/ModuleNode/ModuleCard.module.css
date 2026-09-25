@@ -1,0 +1,35 @@
+/*
+ * Карточка модуля, уровень 1 трёхуровневой карты (process-map-9mn.16).
+ *
+ * Вид — карточки этапа целиком (ModuleSchema: «карточка уровня 1 устроена как
+ * карточка этапа»), поэтому здесь нет ни одного цвета и отступа: классы
+ * .card и .compact ПОДМЕШИВАЮТ одноимённые классы StageCard.module.css через
+ * composes, а внутренние блоки (номер, название, выходы) ModuleCard.tsx берёт
+ * прямо оттуда. Правило наведения «.card:hover .number» из файла этапа
+ * срабатывает и здесь: composes кладёт на кнопку оба класса сразу.
+ *
+ * Своё здесь — только размер: MODULE_NODE_SIZE (src/theme/sizes.ts), от
+ * которого считает раскладку modulesGraph.ts. Сегодня он равен размеру этапа,
+ * но это две константы, и карточка обязана следовать своей: иначе правка
+ * одной из них развела бы вёрстку с раскладкой молча.
+ *
+ * composes стоит ПЕРВЫМ объявлением правила: спецификация CSS Modules требует,
+ * чтобы он предшествовал остальным объявлениям.
+ *
+ * ПОРЯДОК ПРАВИЛ. Специфичность у классов одна (0,1,0), и выигрывает правило,
+ * стоящее в CSS позже. composes подключает StageCard.module.css ЗАВИСИМОСТЬЮ
+ * этого файла, то есть раньше него, — поэтому размер модуля перекрывает размер
+ * этапа, а .compact ниже перекрывает .card выше.
+ */
+
+.card {
+  composes: card from '../StageNode/StageCard.module.css';
+  width: var(--pm-module-node-width);
+  height: var(--pm-module-node-height);
+}
+
+.compact {
+  composes: compact from '../StageNode/StageCard.module.css';
+  width: var(--pm-module-node-width-compact);
+  height: var(--pm-module-node-height-compact);
+}

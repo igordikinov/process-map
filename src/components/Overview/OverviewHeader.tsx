@@ -1,4 +1,5 @@
-// Шапка обзора (SPEC §4.1): заголовок, бейдж с числом этапов, дата обновления.
+// Шапка обзора (SPEC §4.1): заголовок, бейдж с числом этапов (на корне
+// трёхуровневой карты — модулей, process-map-9mn.16), дата обновления.
 // Компонент чистый — тестируется без React Flow.
 import type { MapVersion } from '../../data/versions';
 import { ru } from '../../i18n/ru';
@@ -10,10 +11,33 @@ function versionLabel(version: MapVersion): string {
   return ru.overview.versionLabels[version.id] ?? version.title;
 }
 
+/**
+ * Фраза счёта версии для подсказки и объявления: «5 модулей» у версии с
+ * модулями, «10 этапов» у остальных (process-map-9mn.16).
+ *
+ * Считается то, что читатель УВИДИТ, нажав кнопку: корень трёхуровневой карты
+ * — карточки модулей, и «Процессы — 20 этапов» называло бы экран, которого за
+ * этой кнопкой нет. Признак — наличие числа модулей у версии (listVersions
+ * кладёт его только карте с модулями), а не id версии: число уровней —
+ * свойство документа (шапка src/data/modules.ts).
+ */
+function versionCount(version: MapVersion): string {
+  return version.modules === undefined
+    ? ru.overview.stagesCount(version.stages)
+    : ru.overview.modulesCount(version.modules);
+}
+
 export interface OverviewHeaderProps {
   /** map.title — заголовок берётся из данных, а не из i18n. */
   title: string;
   stagesCount: number;
+  /**
+   * Число модулей — только у корня ТРЁХУРОВНЕВОЙ карты (ModulesOverview,
+   * process-map-9mn.16). Задано — бейдж «5 модулей» вместо «20 этапов»: на
+   * этом экране нарисованы карточки модулей, а этапов нет ни одного.
+   * Не задано — бейдж этапов, как у двухуровневых карт.
+   */
+  modulesCount?: number;
   /** map.updatedAt в виде ISO-строки. */
   updatedAt: string;
   /** SPEC §4.5: шапка 44 px, дата обновления снята (артборд A4). */
@@ -41,6 +65,7 @@ export interface OverviewHeaderProps {
 export function OverviewHeader({
   title,
   stagesCount,
+  modulesCount,
   updatedAt,
   compact = false,
   imported = false,
@@ -56,7 +81,11 @@ export function OverviewHeader({
   return (
     <header className={compact ? `${styles.header} ${styles.compact}` : styles.header}>
       <h1 className={styles.title}>{title}</h1>
-      <span className={styles.badge}>{ru.overview.stagesBadge(stagesCount)}</span>
+      <span className={styles.badge}>
+        {modulesCount === undefined
+          ? ru.overview.stagesBadge(stagesCount)
+          : ru.overview.modulesBadge(modulesCount)}
+      </span>
       {/* ПРИЗНАК ПОДМЕНЫ. Смена заголовка признаком не является: он сменился бы
           и при переходе на вторую ВСТРОЕННУЮ карту, а читателю вики важно
           отличить «другая карта проекта» от «чужой файл поверх этой страницы».
@@ -84,7 +113,7 @@ export function OverviewHeader({
                 type="button"
                 className={active ? `${styles.version} ${styles.versionActive}` : styles.version}
                 aria-pressed={active}
-                title={ru.overview.versionHint(label, version.stages)}
+                title={ru.overview.versionHint(label, versionCount(version))}
                 onClick={() => {
                   onSelectVersion(version.id);
                 }}
@@ -105,7 +134,7 @@ export function OverviewHeader({
         <span className={styles.announcement} role="status">
           {selected === undefined
             ? ''
-            : ru.overview.versionAnnouncement(versionLabel(selected), selected.stages)}
+            : ru.overview.versionAnnouncement(versionLabel(selected), versionCount(selected))}
         </span>
       )}
       {/* Дата обновления в компактном режиме не рисуется (артборд A4): в 44 px
