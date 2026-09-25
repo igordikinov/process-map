@@ -22,14 +22,27 @@ vi.mock('@xyflow/react', async (importOriginal) => {
   return { ...actual, useReactFlow: () => ({ ...actual.useReactFlow(), fitView }) };
 });
 
+// Страница из фикстур (process-map-9mn.34) — для второго describe: клик по
+// переключателю требует двух версий, а есть ли вторая версия у настоящей
+// страницы юнит-тестов, решает сборка. Порядок и форма — дословно из шапки
+// tests/fixtures/pageMocks.ts. Первому describe подмена безразлична: он рендерит
+// RefitViewport без данных карты.
+vi.mock('@map/process.json', async () =>
+  (await import('./fixtures/pageMocks')).defaultVersionModule(),
+);
+vi.mock('@map-alt/process.json', async () =>
+  (await import('./fixtures/pageMocks')).altVersionModule(),
+);
+
 const { RefitViewport } = await import('../src/components/Overview/RefitViewport');
 const { ReactFlowProvider } = await import('@xyflow/react');
 const { default: App } = await import('../src/App');
-const { DEFAULT_VERSION_ID, listVersions, resetSelectedVersion } =
-  await import('../src/data/versions');
+const { resetSelectedVersion } = await import('../src/data/versions');
+const { loadBaseProcessMap } = await import('../src/data/loader');
 const { refreshProcessMap } = await import('../src/hooks/useProcessMap');
 const { createInitialState, useProcessStore } = await import('../src/store/useProcessStore');
 const { ru } = await import('../src/i18n/ru');
+const { FIXTURE_ALT_ID, fixtureAltVersion } = await import('./fixtures/pageMocks');
 
 const OPTIONS = { padding: 0.1 };
 
@@ -95,24 +108,27 @@ describe('обзор просит пересчитать вид при смен�
   });
 
   it('клик по второй версии вызывает fitView', async () => {
-    const alt = listVersions().find((version) => version.id !== DEFAULT_VERSION_ID);
-    expect(alt).toBeDefined();
     await act(async () => {
       render(<App />);
     });
     fitView.mockClear();
 
+    // У id фикстуры нет подписи владельца в i18n — кнопка подписана заголовком
+    // карты (tests/versionSwitcher.test.tsx, «переключатель версий на экране»).
     await act(async () => {
       fireEvent.click(
         within(screen.getByRole('group', { name: ru.overview.versionGroup })).getByRole('button', {
-          name: ru.overview.versionLabels[(alt as { id: string }).id] as string,
+          name: fixtureAltVersion().title,
         }),
       );
     });
 
+    // Клик действительно сменил версию: иначе fitView, вызванный по другой
+    // причине, выдал бы себя за пересчёт после смены версии.
+    expect(loadBaseProcessMap().id).toBe(FIXTURE_ALT_ID);
     expect(
       fitView,
-      'после смены версии вид не пересчитан: десять карточек останутся за кадром',
+      'после смены версии вид не пересчитан: семь карточек вместо четырёх останутся за кадром',
     ).toHaveBeenCalled();
   });
 });
