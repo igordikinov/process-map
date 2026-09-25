@@ -273,9 +273,9 @@ export const ModuleSchema = z.object({
   // ЗАМЕНА ЧАСТИЧНАЯ, а не полная: у ProcessMap.moduleLabel две роли — подпись
   // рамки (overviewGraph.ts) И корень хлебных крошек (StageDetail.tsx:
   // Breadcrumbs rootLabel={map.moduleLabel}). Это поле берёт на себя только
-  // первую. Чем становится корень крошек на трёхуровневой карте — вопрос задачи
-  // process-map-9mn.17, и moduleLabel до её решения остаётся обязательным
-  // свойством документа.
+  // первую. Корень крошек и на трёхуровневой карте — map.moduleLabel («Все
+  // процессы In.Plan», process-map-9mn.17); среднее звено — module.shortTitle
+  // («DP · Планирование спроса», решение process-map-9mn.31 п. 3).
   label: z.string(),
   // Верхняя граница та же, что у Stage.keyOutputs: карточка уровня 1 устроена
   // как карточка этапа. Нижней нет намеренно — у MRP на слайде обзора
