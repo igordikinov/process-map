@@ -103,19 +103,19 @@ describe('фикстура трёхуровневой карты', () => {
     expect([...systemCodesInExternalIO(map)].sort()).toEqual([...IO_SYSTEM_CODES].sort());
   });
 
-  it('различает уровни: модули с разным числом фаз, у фаз есть узлы', () => {
-    // При двух модулях по две фазы «фазы модуля B» и «фазы, кроме модуля A» —
-    // одно множество, и ошибка выбора модуля неотличима от правильного ответа
-    // (stagesOfModule, задача process-map-9mn.10).
+  it('различает уровни: модули с разным числом этапов, у этапов есть узлы', () => {
+    // При двух модулях по два этапа «этапы модуля B» и «этапы, кроме модуля A»
+    // — одно множество, и ошибка выбора модуля неотличима от правильного
+    // ответа (stagesOfModule, задача process-map-9mn.10).
     const map = parseThreeLevelProcessMap();
     const counts = map.modules.map((module) => module.stageIds.length);
 
     expect(map.modules.length, 'модулей больше одного').toBeGreaterThan(1);
-    expect(Math.min(...counts), 'у каждого модуля больше одной фазы').toBeGreaterThan(1);
-    expect(new Set(counts).size, 'числа фаз различаются').toBeGreaterThan(1);
+    expect(Math.min(...counts), 'у каждого модуля больше одного этапа').toBeGreaterThan(1);
+    expect(new Set(counts).size, 'числа этапов различаются').toBeGreaterThan(1);
     expect(
       map.stages.every((stage) => stage.nodes.length > 0),
-      'у фаз есть узлы',
+      'у этапов есть узлы',
     ).toBe(true);
   });
 
@@ -183,7 +183,7 @@ describe('ModuleSchema', () => {
     expect(validateIntegrity(parsed)).toEqual([]);
   });
 
-  it('отвергает модуль без единой фазы', () => {
+  it('отвергает модуль без единого этапа', () => {
     const map = buildThreeLevelProcessMap();
     map.modules[0]!.stageIds = [];
     expect(() => ProcessMapSchema.parse(map)).toThrow();
@@ -459,7 +459,7 @@ describe('validateIntegrity: модули', () => {
     expect(problems.some((problem) => problem.includes('Дублирующийся id ребра'))).toBe(true);
   });
 
-  it('находит дублирующийся id узла между фазами РАЗНЫХ модулей', () => {
+  it('находит дублирующийся id узла между этапами РАЗНЫХ модулей', () => {
     // Уникальность id узлов глобальна, и модули её не ослабляют: два шага под
     // одним id в разных модулях — это один и тот же узел React Flow на двух
     // экранах и один и тот же ключ overrides.
