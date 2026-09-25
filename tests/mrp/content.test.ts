@@ -10,6 +10,7 @@
 // Числа 4 / 12 / 5 / 13 / 4 — та сверка с презентацией, которую CLAUDE.md
 // требует от роли data-migrator.
 import { describe, expect, it } from 'vitest';
+import { hasModules } from '../../src/data/modules.ts';
 import { ProcessMapSchema, type ProcessNode } from '../../src/data/schema.ts';
 import processJson from '../../src/data/mrp/process.json';
 
@@ -23,6 +24,14 @@ describe('карта MRP: четыре этапа', () => {
     // причине, что и у SNP: четвёрка — свойство слайда 8, а не контракта карты.
     expect(map.stages).toHaveLength(4);
     expect(map.stages.map((stage) => stage.number)).toEqual([1, 2, 3, 4]);
+  });
+
+  it('карта двухуровневая: модулей нет', () => {
+    // Приёмка process-map-9mn.10; почему здесь, а не в контракте карты, — см.
+    // тот же тест в tests/snp/content.test.ts. Слайд 8 — один процесс без
+    // верхнего уровня, и modules в этом файле означали бы не тот профиль
+    // импортёра.
+    expect(hasModules(map)).toBe(false);
   });
 });
 

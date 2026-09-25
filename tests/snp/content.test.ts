@@ -5,6 +5,7 @@
 // не дублируются. Разделение проведено по одному признаку: можно ли направить
 // проверку на вторую карту и ожидать зелёного. Если нет — она здесь.
 import { describe, expect, it } from 'vitest';
+import { hasModules } from '../../src/data/modules.ts';
 import { ProcessMapSchema } from '../../src/data/schema.ts';
 import processJson from '../../src/data/snp/process.json';
 import requiredNodeIds from '../fixtures/snp/required-nodes.json';
@@ -19,6 +20,21 @@ describe('карта SNP: содержание', () => {
     // Сторож не ослаб: обрезанный разбор презентации по-прежнему красит тест.
     expect(map.stages).toHaveLength(4);
     expect(map.stages.map((stage) => stage.number)).toEqual([1, 2, 3, 4]);
+  });
+
+  it('карта двухуровневая: модулей нет', () => {
+    // Приёмка process-map-9mn.10. Утверждение про ЭТУ карту, а не контракт
+    // любой: в tests/mapContract.test.ts его нет намеренно — шапка того файла
+    // обещает, что новая карта не потребует там ни строчки, а таблица «сколько
+    // уровней у каждой карты» это обещание нарушала бы.
+    //
+    // Ловит одну ошибку из двух, и это честно: modules, по недосмотру
+    // доехавшие до process.json SNP (не тот профиль импортёра), дали бы карте
+    // экран уровня 1, которого в презентации нет. Обратная ошибка — карта,
+    // задуманная трёхуровневой, потеряла modules по дороге на диск, — место
+    // тесту содержания ТОЙ карты с hasModules === true (карта inplan, задача
+    // process-map-9mn.15), а не общей таблице.
+    expect(hasModules(map)).toBe(false);
   });
 
   it('содержит не менее 40 узлов суммарно по всем этапам', () => {

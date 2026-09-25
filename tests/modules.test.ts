@@ -7,30 +7,44 @@
 // карты и собственных её вариантов, поэтому живёт отдельным файлом — как
 // tests/moduleSchema.test.ts для схемы.
 //
-// Реальные карты с диска этот файл не читает. Проверка «объявленное число
-// уровней совпадает с hasModules» стоит в tests/mapContract.test.ts, где карты
-// и обнаруживаются: это факт про данные, а не про механику.
+// Реальные карты с диска этот файл не читает. Факт «сегодня все три карты
+// двухуровневые» записан в тестах содержания каждой карты
+// (tests/snp/content.test.ts, tests/mrp/content.test.ts,
+// tests/bpmnMapFile.test.ts): это свойство конкретной карты, а не механики. В
+// tests/mapContract.test.ts стоит только общая связность уровня 1, верная для
+// любой карты.
 //
 // ПОЧЕМУ ВАРИАНТЫ ФИКСТУРЫ ЖИВУТ ЗДЕСЬ, А НЕ В tests/fixtures/. Общая фикстура
 // (tests/fixtures/three-level-process.ts) — канонический ПРАВИЛЬНЫЙ документ,
-// её читают как образец. Варианты ниже нарочно неудобны: у одного модуля
-// stageIds в обратном порядке, у другого состав чересполосный. Экспортировать
-// их значило бы пригласить чужой тест схватить неудобную форму по ошибке.
+// её читают как образец. Варианты ниже нарочно неудобны. Экспортировать их
+// значило бы пригласить чужой тест схватить неудобную форму по ошибке.
 //
-// ЗАЧЕМ ВАРИАНТЫ ВООБЩЕ. Общая фикстура НЕ РАЗЛИЧАЕТ главную функцию, и это
-// измерено мутацией, а не выведено рассуждением: составы модулей идут подряд
-// ({1,2} {3,4,5} {6,7}), поэтому «этапы по диапазону номеров», «срез
-// документа», «все, кроме чужих» и «свои в порядке документа» дают на ней тот
-// же ответ, что правильная реализация. Убивают их только два свойства,
-// которых у канонической фикстуры нет:
-//   - ОБРАТНЫЙ ПОРЯДОК stageIds — убивает всё, что возвращает порядок
-//     документа, включая самую правдоподобную ошибку
-//     map.stages.filter((s) => mine.has(s.id)): множество она даёт верное;
-//   - ЧЕРЕСПОЛОСНОЕ ВЛАДЕНИЕ — убивает всё, что ищет модуль по диапазону
-//     номеров или сканирует документ подряд.
-// Ни один из двух не заменяет другого: «все, кроме чужих» на любой целостной
-// карте тождественно «мои» как множество и ловится только порядком, а
-// диапазонные реализации порядком не ловятся вовсе.
+// ЗАЧЕМ ВАРИАНТЫ ВООБЩЕ. Общая фикстура НЕ РАЗЛИЧАЕТ порядок, и это закреплено
+// тестом-предпосылкой ниже, а не только рассуждением: у неё совпадают ТРИ
+// порядка сразу — объявленный (module.stageIds), документа (map.stages) и
+// номеров (stage.number), — а id этапа несёт его номер (stage-3 ↔ 3). На такой
+// карте «этапы в порядке документа», «по диапазону номеров», «отсортированные по
+// номеру» и «найденные по номеру из id» дают тот же ответ, что правильная
+// реализация. Разводят их только два варианта:
+//   - ОБРАТНЫЙ ПОРЯДОК stageIds у модуля SNP ({5,4,3}): объявленный порядок
+//     расходится и с документом, и с номерами. Убивает всё, что возвращает
+//     порядок документа, включая самую правдоподобную ошибку
+//     map.stages.filter((s) => own.has(s.id)) — множество она даёт верное, — и
+//     всё, что сортирует по номеру.
+//   - ПЕРЕСТАВЛЕННЫЕ НОМЕРА у stage-6 и stage-7 (номер 7 у stage-6, 6 у
+//     stage-7): объявленный порядок совпадает с документом, но расходится с
+//     номерами, а номер в id перестаёт быть номером этапа. Убивает сортировку
+//     по номеру НЕЗАВИСИМО от первого варианта и — один из всех — поиск этапа
+//     по номеру, извлечённому из id: на обратном порядке такая реализация
+//     зеленеет, потому что там id и номер по-прежнему совпадают.
+//
+// ПОЧЕМУ НЕТ «ЧЕРЕСПОЛОСНОГО» ВАРИАНТА (модуль A заявляет stage-1 и stage-3).
+// Задача process-map-9mn.32 вводит инвариант, утверждённый владельцем
+// (решение 9mn.24, вариант «а»): номера этапов модуля образуют непрерывный
+// блок, и блоки упорядочены по module.number. Чересполосица станет НЕВАЛИДНОЙ
+// картой, и тесты на ней закрепляли бы поведение на данных, которых не бывает.
+// Оба оставшихся варианта этот инвариант переживают: МНОЖЕСТВА номеров у
+// модулей остаются сплошными ({3,4,5} и {6,7}), меняется только порядок внутри.
 import { describe, expect, it } from 'vitest';
 import {
   currentScreen,
@@ -46,6 +60,7 @@ import {
   validateIntegrity,
   type Module,
   type ProcessMap,
+  type Stage,
 } from '../src/data/schema.ts';
 import { buildSampleProcessMap } from './fixtures/sample-process.ts';
 import {
@@ -65,9 +80,10 @@ import {
  * БРОСАЕТ, а не возвращает список проблем. Вариант, не прошедший
  * validateIntegrity, — это не «не оправдавшееся ожидание», а сломанная
  * предпосылка, на которой бессмысленны все тесты вокруг: они продолжали бы
- * зеленеть на карте, которую сам проект считает битой. Именно такой сторож
- * поймал первую редакцию чересполосного варианта, где обзорные рёбра остались
- * кросс-модульными.
+ * зеленеть на карте, которую сам проект считает битой. Когда
+ * process-map-9mn.32 добавит в validateIntegrity новые инварианты, первым
+ * покраснеет именно этот сторож — с именем варианта и списком проблем, а не
+ * загадочный тест далеко от причины.
  */
 function buildVariant(name: string, edit: (map: ThreeLevelProcessMap) => void): ProcessMap {
   const draft = buildThreeLevelProcessMap();
@@ -82,26 +98,34 @@ function buildVariant(name: string, edit: (map: ThreeLevelProcessMap) => void): 
   return map;
 }
 
-function moduleOf(map: ThreeLevelProcessMap, moduleId: string): Module {
-  const module = map.modules.find((candidate) => candidate.id === moduleId);
+function moduleOf(map: ProcessMap, moduleId: string): Module {
+  const module = map.modules?.find((candidate) => candidate.id === moduleId);
   if (module === undefined) {
-    throw new Error(`В фикстуре нет модуля "${moduleId}"`);
+    throw new Error(`В карте нет модуля "${moduleId}"`);
   }
   return module;
 }
 
-function rewireOverviewEdge(
-  map: ThreeLevelProcessMap,
-  edgeId: string,
-  source: string,
-  target: string,
-): void {
-  const edge = map.overviewEdges.find((candidate) => candidate.id === edgeId);
-  if (edge === undefined) {
-    throw new Error(`В фикстуре нет обзорного ребра "${edgeId}"`);
+function stageOf(map: ProcessMap, stageId: string): Stage {
+  const stage = map.stages.find((candidate) => candidate.id === stageId);
+  if (stage === undefined) {
+    throw new Error(`В карте нет этапа "${stageId}"`);
   }
-  edge.source = source;
-  edge.target = target;
+  return stage;
+}
+
+/**
+ * Номера этапов модуля в ОБЪЯВЛЕННОМ порядке.
+ *
+ * Читается напрямую из документа, мимо stagesOfModule: предпосылки и
+ * самопроверки вариантов не имеют права стоять на функции, которую проверяют.
+ */
+function declaredNumbers(map: ProcessMap, moduleId: string): number[] {
+  return moduleOf(map, moduleId).stageIds.map((stageId) => stageOf(map, stageId).number);
+}
+
+function ascending(numbers: readonly number[]): number[] {
+  return [...numbers].sort((a, b) => a - b);
 }
 
 /** Каноническая трёхуровневая карта: три модуля, составы {1,2} {3,4,5} {6,7}. */
@@ -114,9 +138,9 @@ const twoLevelMap: ProcessMap = ProcessMapSchema.parse(buildSampleProcessMap());
  * Обратный порядок stageIds у модуля SNP: {5,4,3} вместо {3,4,5}.
  *
  * Схема и validateIntegrity такой документ пропускают — порядок ссылок они не
- * проверяют, и это законная сегодня форма (расхождение stageIds с порядком
- * номеров разбирает задача process-map-wuv). Здесь он служит различителем:
- * любая реализация, отдающая этапы в порядке map.stages, краснеет.
+ * проверяют, и инвариант process-map-9mn.32 его тоже не запретит: множество
+ * номеров {3,4,5} остаётся сплошным. Здесь он служит различителем: любая
+ * реализация, отдающая этапы в порядке map.stages или по номерам, краснеет.
  *
  * Модуль из ТРЁХ этапов, а не из двух: на двух «обратный порядок» неотличим от
  * поворота, а indexOf в бейдже «Этап k из n» на трёх даёт три разных ответа.
@@ -132,22 +156,39 @@ const reversedOrderMap: ProcessMap = buildVariant(
 const REVERSED_SUPPLY_STAGE_IDS = ['stage-5', 'stage-4', 'stage-3'];
 
 /**
- * Чересполосное владение: DP заявляет 1 и 3, SNP — 2, 4, 5.
+ * Переставленные номера: у stage-6 номер 7, у stage-7 — номер 6.
  *
- * ОБЗОРНЫЕ РЁБРА ПЕРЕВЯЗАНЫ, и без этого вариант был бы невалидным: ребро
- * stage-1 → stage-2 после передела становится кросс-модульным, а такое ребро
- * validateIntegrity запрещает поимённо («соединяет этапы разных модулей»).
- * Перевязка — часть варианта, а не косметика: тесты обязаны стоять на карте,
- * которую проект считает правильной.
+ * Состав модуля PP и его stageIds не тронуты (['stage-6', 'stage-7']), порядок
+ * map.stages тоже — меняется только нумерация. Поэтому объявленный порядок
+ * совпадает с порядком документа, а с порядком номеров расходится, и номер,
+ * записанный в id, перестаёт быть номером этапа.
+ *
+ * ExternalIO.stage — это НОМЕР этапа, а не id, поэтому у stage-7 он
+ * переписывается вместе с номером; у stage-6 входов и выходов нет вовсе
+ * (фикстура оставила его пустым нарочно). validateIntegrity это поле сегодня не
+ * сверяет, но вариант обязан быть согласованным документом, а не документом,
+ * который случайно проходит сегодняшние проверки.
+ *
+ * Сплошной блок номеров {6,7} сохраняется — вариант переживает инвариант
+ * process-map-9mn.32 при любой его формулировке, кроме «stageIds перечислены по
+ * возрастанию номеров». Эта формулировка — вариант «б» задачи 9mn.24, и
+ * утверждён не он, а вариант «а» (process-map-9mn.31).
  */
-const INTERLEAVED_DEMAND_STAGE_IDS = ['stage-1', 'stage-3'];
-const INTERLEAVED_SUPPLY_STAGE_IDS = ['stage-2', 'stage-4', 'stage-5'];
-const interleavedMap: ProcessMap = buildVariant('чересполосное владение этапами', (map) => {
-  moduleOf(map, MODULE_DEMAND).stageIds = [...INTERLEAVED_DEMAND_STAGE_IDS];
-  moduleOf(map, MODULE_SUPPLY).stageIds = [...INTERLEAVED_SUPPLY_STAGE_IDS];
-  rewireOverviewEdge(map, 'overview-edge-1', 'stage-1', 'stage-3');
-  rewireOverviewEdge(map, 'overview-edge-2', 'stage-2', 'stage-4');
-});
+const swappedNumbersMap: ProcessMap = buildVariant(
+  'переставленные номера stage-6 и stage-7',
+  (map) => {
+    const six = stageOf(map, 'stage-6');
+    const seven = stageOf(map, 'stage-7');
+    [six.number, seven.number] = [seven.number, six.number];
+    for (const stage of [six, seven]) {
+      for (const io of [...stage.inputs, ...stage.outputs]) {
+        io.stage = stage.number;
+      }
+    }
+  },
+);
+
+const PRODUCTION_STAGE_IDS = ['stage-6', 'stage-7'];
 
 /**
  * Единственный модуль, забравший все этапы, и НИ ОДНОГО ребра уровня 1.
@@ -174,6 +215,45 @@ const singleModuleMap: ProcessMap = buildVariant(
  * тестов. Здесь краснеет hasModules без проверки длины.
  */
 const emptyModulesMap: ProcessMap = { ...twoLevelMap, modules: [] };
+
+describe('предпосылка: каноническая фикстура слепа к порядку', () => {
+  // Эти тесты не про modules.ts, а про то, ПОЧЕМУ тестам modules.ts нужны
+  // варианты. Каждый закрепляет одно совпадение, из-за которого на
+  // канонической фикстуре неотличима от правильной какая-то неверная
+  // реализация (шапка файла). Покраснел — совпадение исчезло, и шапку вместе с
+  // набором вариантов пора пересмотреть: возможно, различающую силу теперь даёт
+  // сама фикстура.
+  it.each([...MODULE_IDS])('stageIds модуля "%s" идут по возрастанию stage.number', (moduleId) => {
+    const numbers = declaredNumbers(baseMap, moduleId);
+    expect(numbers).toEqual(ascending(numbers));
+  });
+
+  it('map.stages идут по возрастанию stage.number: порядок документа = порядок номеров', () => {
+    const numbers = baseMap.stages.map((stage) => stage.number);
+    expect(numbers).toEqual(ascending(numbers));
+  });
+
+  it('id этапа несёт его номер: stage-N ↔ N', () => {
+    expect(
+      baseMap.stages.filter((stage) => stage.id !== `stage-${stage.number}`).map((s) => s.id),
+    ).toEqual([]);
+  });
+});
+
+describe('варианты фикстуры: заявленное свойство действительно есть', () => {
+  // Без этих проверок вариант, правка которого однажды перестанет доезжать до
+  // карты (копия вместо ссылки, переименованный этап), молча превратился бы в
+  // каноническую фикстуру, и тесты порядка зеленели бы на ней вхолостую.
+  it('обратный порядок: объявленные номера SNP — 5, 4, 3', () => {
+    expect(declaredNumbers(reversedOrderMap, MODULE_SUPPLY)).toEqual([5, 4, 3]);
+  });
+
+  it('переставленные номера: stageIds PP прежние, номера по ним — 7, 6', () => {
+    expect(moduleOf(swappedNumbersMap, MODULE_PRODUCTION).stageIds).toEqual(PRODUCTION_STAGE_IDS);
+    expect(declaredNumbers(swappedNumbersMap, MODULE_PRODUCTION)).toEqual([7, 6]);
+    expect(stageOf(swappedNumbersMap, 'stage-7').outputs.map((io) => io.stage)).toEqual([6]);
+  });
+});
 
 describe('hasModules: сколько у карты уровней', () => {
   it('трёхуровневая карта: да', () => {
@@ -226,9 +306,9 @@ describe('moduleById', () => {
   });
 
   it('неизвестный id — undefined: это и есть признак «модуль не найден»', () => {
-    // На нём стоит вторая защита экрана уровня 2 (process-map-9mn.16), а не на
-    // пустом результате stagesOfModule: пустым он бывает и у существующего
-    // модуля с висящими stageIds.
+    // Единственный признак. На нём стоит вторая защита экрана уровня 2
+    // (process-map-9mn.16), а не на пустом результате stagesOfModule: пустым
+    // он бывает и у существующего модуля с висящими stageIds.
     expect(moduleById(baseMap, 'no-such-module')).toBeUndefined();
   });
 
@@ -258,13 +338,12 @@ describe('moduleOfStage', () => {
     ]);
   });
 
-  it('чересполосный состав: владелец берётся из stageIds, а не из соседства номеров', () => {
-    // На канонической фикстуре «модуль по диапазону номеров» неотличим от
-    // правильного ответа, здесь — краснеет.
-    expect(moduleOfStage(interleavedMap, 'stage-1')?.id, 'stage-1').toBe(MODULE_DEMAND);
-    expect(moduleOfStage(interleavedMap, 'stage-2')?.id, 'stage-2').toBe(MODULE_SUPPLY);
-    expect(moduleOfStage(interleavedMap, 'stage-3')?.id, 'stage-3').toBe(MODULE_DEMAND);
-    expect(moduleOfStage(interleavedMap, 'stage-4')?.id, 'stage-4').toBe(MODULE_SUPPLY);
+  it('единственный модуль владеет всеми этапами', () => {
+    expect(
+      singleModuleMap.stages.filter(
+        (stage) => moduleOfStage(singleModuleMap, stage.id) === undefined,
+      ),
+    ).toEqual([]);
   });
 
   it('неизвестный этап — undefined', () => {
@@ -297,15 +376,14 @@ describe('stagesOfModule', () => {
     ]);
   });
 
-  it('чересполосный состав: отдаются заявленные этапы, а не диапазон и не срез', () => {
-    expect(
-      stagesOfModule(interleavedMap, MODULE_DEMAND).map((stage) => stage.id),
-      MODULE_DEMAND,
-    ).toEqual(INTERLEAVED_DEMAND_STAGE_IDS);
-    expect(
-      stagesOfModule(interleavedMap, MODULE_SUPPLY).map((stage) => stage.id),
-      MODULE_SUPPLY,
-    ).toEqual(INTERLEAVED_SUPPLY_STAGE_IDS);
+  it('переставленные номера: этапы в порядке stageIds, а не номеров и не по номеру из id', () => {
+    // Здесь объявленный порядок совпадает с порядком документа, поэтому этот
+    // тест держит два мутанта, которых не держит обратный порядок выше:
+    // сортировку по номеру — независимо от него — и поиск этапа по номеру,
+    // извлечённому из id (stage-6 → этап №6, то есть stage-7).
+    const stages = stagesOfModule(swappedNumbersMap, MODULE_PRODUCTION);
+    expect(stages.map((stage) => stage.id)).toEqual(PRODUCTION_STAGE_IDS);
+    expect(stages.map((stage) => stage.number)).toEqual([7, 6]);
   });
 
   it('позиция этапа внутри модуля считается по stageIds: бейдж «Этап k из n»', () => {
@@ -324,25 +402,32 @@ describe('stagesOfModule', () => {
     expect(stages.map((stage) => stage.number)).toEqual([5, 4, 3]);
   });
 
-  it('неизвестный модуль — пусто, а не все этапы карты', () => {
+  it('неизвестный модуль на трёхуровневой карте — пусто, а не все этапы карты', () => {
+    // Пустой массив здесь — следствие, а не сигнал: «модуль не найден»
+    // сообщает только moduleById (см. выше).
     expect(stagesOfModule(baseMap, 'no-such-module')).toEqual([]);
   });
 
-  it('null на трёхуровневой карте — пусто: экран у этого состояния другой', () => {
-    expect(stagesOfModule(baseMap, null)).toEqual([]);
-    expect(currentScreen(baseMap, { currentModuleId: null, currentStageId: null })).toBe('modules');
+  it('null на трёхуровневой карте — весь документ ТОЙ ЖЕ ССЫЛКОЙ: фильтра нет', () => {
+    // null значит «модуль не выбран → не фильтровать» на карте любой формы.
+    // Какой экран при этом рисовать, решает currentScreen ('modules'), а не
+    // эта функция. Ссылка, а не toEqual: копия всех этапов тоже «все этапы»,
+    // но это уже фильтр, который случайно пропустил всё.
+    expect(stagesOfModule(baseMap, null)).toBe(baseMap.stages);
   });
 
   it('двухуровневая карта — map.stages ТОЙ ЖЕ ССЫЛКОЙ, при любом moduleId', () => {
     // Две разные вещи в одном тесте намеренно: обе про одну строку кода —
     // ранний выход по hasModules ДО поиска модуля.
     //
-    // 1. Ссылка: результат уходит в useMemo построения графа (Overview.tsx),
-    //    новый массив пересобирал бы граф на каждый рендер.
+    // 1. Ссылка: фильтра нет, копировать нечего — потребитель получает ровно
+    //    тот массив, из которого Overview строит граф сегодня.
     // 2. Мусорный moduleId: залипшее от прошлой карты значение или ?module= в
     //    адресе иначе оставили бы обзор двухуровневой карты пустым полотном.
+    //    Корень двухуровневой карты не бывает пустым.
     expect(stagesOfModule(twoLevelMap, null), 'null').toBe(twoLevelMap.stages);
     expect(stagesOfModule(twoLevelMap, MODULE_DEMAND), 'чужой модуль').toBe(twoLevelMap.stages);
+    expect(stagesOfModule(twoLevelMap, 'no-such-module'), 'мусорный id').toBe(twoLevelMap.stages);
     expect(stagesOfModule(emptyModulesMap, MODULE_DEMAND), 'modules: []').toBe(
       emptyModulesMap.stages,
     );
@@ -364,26 +449,29 @@ describe('overviewEdgesOf', () => {
   });
 
   it('интеграционное ребро, где СИСТЕМА ИСТОЧНИК, остаётся на экране модуля', () => {
-    // Проверка отдельная от «системы приёмником» ниже, и обе обязаны падать по
-    // отдельности: реализация filter((e) => own.has(e.target)) выбросила бы
-    // ровно эти рёбра, и на экране модуля пропала бы входящая стрелка от
-    // системы — экран при этом выглядел бы рабочим.
+    // У этих рёбер свой этап стоит только в target: overview-edge-5 (DP →
+    // stage-1) и overview-edge-7 (ERP → stage-4). Их выбрасывает
+    // односторонняя реализация filter((e) => own.has(e.source)), самая
+    // правдоподобная из неверных: исходящие стрелки она оставляет, и экран
+    // модуля выглядит рабочим, а входящая стрелка от системы пропадает.
+    // Проверка отдельная от «системы приёмником» ниже: каждая из двух падает
+    // на своём одностороннем мутанте и зеленеет на чужом.
     expect(
       overviewEdgesOf(baseMap, MODULE_DEMAND).map((edge) => edge.id),
-      'DP ← DP',
+      'DP → этап модуля DP',
     ).toContain('overview-edge-5');
     expect(
       overviewEdgesOf(baseMap, MODULE_SUPPLY).map((edge) => edge.id),
-      'SNP ← ERP',
+      'ERP → этап модуля SNP',
     ).toContain('overview-edge-7');
   });
 
   it('интеграционное ребро, где СИСТЕМА ПРИЁМНИК, остаётся на экране модуля', () => {
-    // Зеркало предыдущей: её одну оставляет зелёной односторонняя реализация
-    // filter((e) => own.has(e.source)), самая правдоподобная из неверных.
+    // Зеркало предыдущей: у overview-edge-6 (stage-5 → PS) свой этап стоит
+    // только в source, и выбрасывает его filter((e) => own.has(e.target)).
     expect(
       overviewEdgesOf(baseMap, MODULE_SUPPLY).map((edge) => edge.id),
-      'SNP → PS',
+      'этап модуля SNP → PS',
     ).toContain('overview-edge-6');
   });
 
@@ -400,14 +488,20 @@ describe('overviewEdgesOf', () => {
     }
   });
 
-  it('неизвестный модуль — пусто, а не все рёбра карты', () => {
+  it('неизвестный модуль на трёхуровневой карте — пусто, а не все рёбра карты', () => {
     expect(overviewEdgesOf(baseMap, 'no-such-module')).toEqual([]);
-    expect(overviewEdgesOf(baseMap, null)).toEqual([]);
+  });
+
+  it('null на трёхуровневой карте — все рёбра ТОЙ ЖЕ ССЫЛКОЙ: фильтра нет', () => {
+    expect(overviewEdgesOf(baseMap, null)).toBe(baseMap.overviewEdges);
   });
 
   it('двухуровневая карта — map.overviewEdges ТОЙ ЖЕ ССЫЛКОЙ, при любом moduleId', () => {
     expect(overviewEdgesOf(twoLevelMap, null), 'null').toBe(twoLevelMap.overviewEdges);
     expect(overviewEdgesOf(twoLevelMap, MODULE_DEMAND), 'чужой модуль').toBe(
+      twoLevelMap.overviewEdges,
+    );
+    expect(overviewEdgesOf(twoLevelMap, 'no-such-module'), 'мусорный id').toBe(
       twoLevelMap.overviewEdges,
     );
   });

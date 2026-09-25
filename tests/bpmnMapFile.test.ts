@@ -21,6 +21,8 @@ import { describe, expect, it } from 'vitest';
 import { BPMN_MAP, bpmnSourceHash, buildBpmnMap } from '../scripts/bpmnMap.ts';
 import { serialize } from '../scripts/layout.ts';
 import { mapJsonPath } from '../scripts/mapTarget.ts';
+import { hasModules } from '../src/data/modules.ts';
+import { ProcessMapSchema } from '../src/data/schema.ts';
 
 const REGENERATE = `npm run data -- --map ${BPMN_MAP.id}`;
 
@@ -62,6 +64,27 @@ describe(`карта ${BPMN_MAP.id} собрана из ${BPMN_MAP.sourceFile}`,
     expect(map.stages).toHaveLength(10);
     expect(map.stages.reduce((sum, stage) => sum + stage.nodes.length, 0)).toBe(454);
     expect(map.overviewEdges).toHaveLength(18);
+  });
+
+  /*
+   * Приёмка process-map-9mn.10; почему здесь, а не в контракте карты, — см. тот
+   * же тест в tests/snp/content.test.ts.
+   *
+   * ЛОВУШКА В СЛОВАХ, ради которой тест стоит именно тут. Этапы этой карты
+   * названы именами модулей In.Plan (DP, SNP, PS, …), а разбор модели живёт в
+   * src/data/bpmn/modules.ts — и всё же уровня модулей у карты НЕТ: подпроцесс
+   * модели становится ЭТАПОМ (решение владельца, шапка того файла). Адаптер,
+   * который однажды «заодно» начнёт писать ещё и modules, дал бы этой версии
+   * экран уровня 1, которого не заказывали.
+   *
+   * Читается файл С ДИСКА через схему — то, что получает приложение, а не
+   * вывод генератора: совпадение одного с другим сторожит первый тест.
+   */
+  it('карта двухуровневая: модулей нет', () => {
+    const onDisk = ProcessMapSchema.parse(
+      JSON.parse(readFileSync(mapJsonPath(BPMN_MAP.id), 'utf8')),
+    );
+    expect(hasModules(onDisk)).toBe(false);
   });
 
   /*
