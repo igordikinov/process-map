@@ -261,7 +261,9 @@ class MapSpec:
     # Навигационные слайды (0-based) — разделители между модулями. Разбору
     # содержания не мешают, но это единственное место, где код модуля, его
     # русское название и порядок записаны явно, поэтому профиль, которому они
-    # нужны, перечисляет их здесь, а не ищет эвристикой.
+    # нужны, перечисляет их здесь, а не ищет эвристикой. Читает их
+    # read_module_index (process-map-9mn.14.2); слайд детализации модуля —
+    # следующий за навигационным.
     nav_slides: tuple[int, ...] = ()
 
 
@@ -916,6 +918,11 @@ class SlideReport:
     # None — полосу фаз на этом слайде не искали: ни один из двух собранных
     # профилей этого не делает, ярусы нужны третьему (process-map-9mn.13).
     phase_band_rule: str | None = None
+    # Реестр модулей с навигационных слайдов (read_module_index,
+    # process-map-9mn.14.2): порядок кнопок навигации рядом с порядком колоды
+    # и строки реестра. Пусто — навигационных слайдов не читали: у презентаций
+    # SNP и MRP их нет, реестр нужен только трёхуровневой карте.
+    module_index: list[str] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         if self.role not in SLIDE_ROLES:
@@ -1811,6 +1818,293 @@ def split_tiers(shapes: Sequence[Shape], band: PhaseBand) -> TierSplit:
         step_keys=step_keys,
         detail_key=detail_key,
     )
+
+
+# --------------------------------------------------------------------------------------
+# Реестр модулей трёхуровневой карты: навигационные слайды (process-map-9mn.14.2)
+# --------------------------------------------------------------------------------------
+#
+# Колода «In.Plan L2 Обзор и E2E demo» поделена на модули слайдами-разделителями
+# (MapSpec.nav_slides). Это ЕДИНСТВЕННОЕ место колоды, где у модуля записаны
+# сразу код, русское название и место в ряду модулей. Слайды детализации для
+# реестра не годятся: названия там свои и расходятся с навигацией («Процесс
+# Планирования спроса», «Планирование производства и Графикование» против кнопки
+# «Производственное планирование и графикование»), а кода у части из них нет.
+#
+# ЗАМЕР ПО КОЛОДЕ (навигационные слайды 2/4/6/8/10):
+#   · заголовок — текстбокс, в котором после пропуска пустых абзацев остаются
+#     два: русское название и английское с кодом в скобках — «Планирование
+#     спроса» / «Demand Planning (DP)». Хвостовые пробелы есть и у заголовков
+#     (слайды 2 и 10), и у кнопки DP на всех пяти слайдах — normalize_text их
+#     срезает, иначе заголовок не нашёл бы своей кнопки. Переноса a:br (он же
+#     \x0b) на навигационных слайдах нет — проверено по XML; хвостовой перенос
+#     у названия MEIO стоит в заголовке слайда ДЕТАЛИЗАЦИИ 5, а не здесь;
+#   · кнопки — пять автофигур с текстом ОДНИМ РЯДОМ (верх у всех 5.04in), слева
+#     направо: 0.55in, 2.66, 4.80, 6.84, 8.99. Текст кнопки — русское название
+#     модуля; КОДА НА КНОПКЕ НЕТ, поэтому кнопка связывается с модулем только
+#     через русское название его заголовка;
+#   · других фигур с текстом на этих слайдах нет.
+#
+# ЗАЛИВКА НЕ ЧИТАЕТСЯ ВОВСЕ. Кнопка «своего» модуля выделена, но цвет выделения
+# у каждого модуля свой (DP — accent1, MEIO — accent2, SNP — accent3, PS —
+# accent4, MRP — снова accent1), а у неактивных кнопок — 7F7F7F или bg1 с
+# lumMod 50000. Ни кнопку, ни модуль по заливке не опознать.
+#
+# ПОРЯДОК КОЛОДЫ И ПОРЯДОК КНОПОК РАЗНЫЕ. Колода идёт DP, MEIO, SNP, MRP, PS
+# (MRP на слайдах 8/9 раньше PS на 10/11), кнопки — DP, MEIO, SNP, PS, MRP.
+# Номер модуля и порядок реестра берутся ПО КНОПКАМ — решение владельца
+# process-map-9mn.31, п. 2. Отчёт печатает оба порядка рядом, чтобы
+# расхождение было видно, а не угадывалось по номерам.
+
+# Код модуля — латинские заглавные (и цифры) в скобках в конце абзаца:
+# «Demand Planning (DP)», «Multi-Echelon Inventory Optimization (MEIO)». Из
+# кода получается id модуля (ModuleRef.id), поэтому знаков вне [A-Z0-9] в нём
+# быть не может: «(FP&A)» с титульного слайда кодом модуля не считается.
+NAV_CODE_RE = re.compile(r"\(([A-Z][A-Z0-9]*)\)$")
+
+
+@dataclass(frozen=True)
+class ModuleRef:
+    """
+    Модуль трёхуровневой карты — строка реестра, прочитанного с навигационных
+    слайдов (read_module_index).
+
+    Номера слайдов 0-based, как в MapSpec.nav_slides: по ним индексируется
+    список слайдов. В отчёт и сообщения они идут с единицы, как их видит
+    человек в PowerPoint.
+    """
+
+    code: str          # 'DP', 'MEIO', … — из скобок в последнем абзаце заголовка
+    title: str         # русское название — ПЕРВЫЙ абзац заголовка (решение владельца 9mn.6)
+    number: int        # место кнопки модуля в ряду навигации, с 1 (решение 9mn.31, п. 2)
+    nav_slide: int     # навигационный слайд модуля, 0-based
+    detail_slide: int  # слайд детализации — следующий за навигационным, 0-based
+
+    @property
+    def id(self) -> str:
+        """
+        id модуля — код строчными. Свойство, а не поле: храни его отдельно, и
+        ему было бы где разойтись с кодом.
+        """
+        return self.code.lower()
+
+
+def nav_title(shapes: Sequence[Shape], slide_no: int) -> tuple[str, str]:
+    """
+    (код, русское название) модуля по заголовку навигационного слайда.
+
+    Заголовок — ЕДИНСТВЕННЫЙ текстбокс, последний абзац которого кончается
+    кодом в скобках (NAV_CODE_RE). Ни одного — остановка: модуль без кода не
+    получит id. Больше одного — тоже: какой из них заголовок, решать догадкой
+    нельзя.
+
+    Название — ПЕРВЫЙ абзац, а не последний: последний английский и несёт код,
+    а кнопки навигации подписаны по-русски, и связать модуль с кнопкой можно
+    только русским названием.
+    """
+    # Абзацы нормализуются и пустые выбрасываются ДО поиска кода — так же, как
+    # в read_paragraphs. Для фигур из презентации это уже сделано; здесь — для
+    # фигур, собранных не из неё: пустой хвостовой абзац иначе спрятал бы код.
+    textboxes = [
+        (s, [p for p in (normalize_text(raw) for raw in s.paragraphs) if p])
+        for s in shapes
+        if s.kind == "textbox"
+    ]
+    found = [
+        (s, paragraphs)
+        for s, paragraphs in textboxes
+        if paragraphs and NAV_CODE_RE.search(paragraphs[-1])
+    ]
+    if not found:
+        raise SystemExit(
+            f"слайд {slide_no}: нет текстбокса, последний абзац которого кончается кодом "
+            f"модуля в скобках, например «Demand Planning (DP)». Без кода у модуля нет id — "
+            f"навигационный ли это слайд? (MapSpec.nav_slides)"
+        )
+    if len(found) > 1:
+        listed = ", ".join(f"[{s.sid}] «{s.text[:60]}»" for s, _ in found)
+        raise SystemExit(
+            f"слайд {slide_no}: несколько текстбоксов с кодом модуля в последнем абзаце — "
+            f"{listed}. Какой из них заголовок модуля, по слайду не понять."
+        )
+    title, paragraphs = found[0]
+    if len(paragraphs) < 2:
+        raise SystemExit(
+            f"слайд {slide_no}: у заголовка модуля [{title.sid}] «{title.text}» один абзац — "
+            f"код есть, а русского названия над ним нет. Название модуля берётся из первого "
+            f"абзаца заголовка (решение владельца process-map-9mn.6)."
+        )
+    match = NAV_CODE_RE.search(paragraphs[-1])
+    assert match is not None  # отобрано по этому же выражению выше
+    return match.group(1), paragraphs[0]
+
+
+def nav_buttons(shapes: Sequence[Shape], slide_no: int) -> tuple[str, ...]:
+    """
+    Тексты кнопок навигации слева направо.
+
+    Кнопки — ВСЕ автофигуры с текстом на слайде, и лежать они обязаны одним
+    рядом: у рядов нет общей горизонтали — остановка. Так лишняя автофигура с
+    текстом (заголовок, сноска) не становится шестым модулем молча.
+
+    «Один ряд» — это прямая, пересекающая все кнопки (самый низкий верх выше
+    самой высокой нижней кромки), а не допуск по верхам: порога, который
+    пришлось бы замерять и защищать, здесь нет.
+
+    Порядок — по левой кромке, а не по Shape.sort_key: сортировка слайда идёт
+    сперва по верху, и кнопка, поставленная на пару EMU выше соседей, уехала бы
+    в начало ряда.
+    """
+    buttons = [s for s in shapes if s.kind == "auto" and s.has_text]
+    if not buttons:
+        raise SystemExit(
+            f"слайд {slide_no}: кнопок навигации нет — ни одной автофигуры с текстом. "
+            f"Навигационный ли это слайд? (MapSpec.nav_slides)"
+        )
+    if max(s.box.top for s in buttons) >= min(s.box.bottom for s in buttons):
+        listed = ", ".join(f"[{s.sid}] «{s.text[:40]}»" for s in buttons)
+        raise SystemExit(
+            f"слайд {slide_no}: кнопки навигации не лежат одним рядом — {listed}. "
+            f"Автофигуры с текстом на навигационном слайде обязаны быть кнопками, и "
+            f"все в один ряд: иначе порядок модулей по слайду не прочитать."
+        )
+    ordered = sorted(buttons, key=lambda s: (s.box.left, s.sid))
+    return tuple(normalize_text(s.text) for s in ordered)
+
+
+def read_module_index(
+    slides: Sequence[Sequence[Shape]], spec: MapSpec, report: SlideReport
+) -> tuple[ModuleRef, ...]:
+    """
+    Реестр модулей карты с навигационных слайдов spec.nav_slides — в порядке
+    КНОПОК, с номерами по кнопкам (решение владельца process-map-9mn.31, п. 2).
+
+    `slides` — фигуры каждого слайда колоды по порядку, как их отдаёт
+    read_slide (индекс — 0-based номер слайда). Фигуры, а не слайды
+    python-pptx, чтобы самопроверка могла подать синтетику без презентации.
+
+    ПОКА НЕ ВЫЗЫВАЕТСЯ НИКАКИМ ПОСТРОИТЕЛЕМ: build_three_tier_map — заглушка,
+    подключит реестр подзадача process-map-9mn.14.6. До тех пор его держит
+    самопроверка (пункт 14), а на настоящей колоде он проверен разовым зондом.
+
+    ОСТАНОВКИ, а не догадки:
+      · кнопки на навигационных слайдах разные (не тот набор или не тот
+        порядок) — номер модуля зависел бы от того, с какого слайда его читать;
+      · заголовки и кнопки не взаимно однозначны — у модуля нет кнопки (нет
+        номера), у кнопки нет навигационного слайда (модуль потерян) или двум
+        слайдам досталась одна кнопка;
+      · код модуля повторяется — два модуля получили бы один id;
+      · за навигационным слайдом нет слайда детализации, или им оказался другой
+        навигационный.
+
+    Строки для отчёта — порядок кнопок рядом с порядком колоды и сам реестр —
+    кладутся в report.module_index; печатает их print_report.
+    """
+    nav = sorted(spec.nav_slides)
+    if not nav:
+        raise SystemExit(
+            f"карта «{spec.key}»: MapSpec.nav_slides пуст — реестр модулей читать не с чего"
+        )
+    if len(set(nav)) != len(nav):
+        raise SystemExit(f"карта «{spec.key}»: в MapSpec.nav_slides повторяются слайды: {nav}")
+    for index in nav:
+        if not 0 <= index < len(slides) - 1:
+            raise SystemExit(
+                f"карта «{spec.key}»: за навигационным слайдом {index + 1} нет слайда "
+                f"детализации — в колоде {len(slides)} слайдов"
+            )
+        if index + 1 in nav:
+            raise SystemExit(
+                f"карта «{spec.key}»: слайд детализации {index + 2} модуля со слайда "
+                f"{index + 1} сам объявлен навигационным (MapSpec.nav_slides)"
+            )
+
+    # Кнопки первого по колоде навигационного слайда — эталон, с которым
+    # сверяются остальные. Какой слайд эталонный, неважно: расхождение с любым
+    # из них — остановка.
+    reference = nav_buttons(slides[nav[0]], nav[0] + 1)
+    read: list[tuple[int, str, str]] = []  # (слайд, код, название) — порядок колоды
+    for index in nav:
+        buttons = nav_buttons(slides[index], index + 1)
+        if buttons != reference:
+            raise SystemExit(
+                f"кнопки навигации на слайде {index + 1} не такие, как на слайде {nav[0] + 1}:\n"
+                f"  слайд {nav[0] + 1}: {' | '.join(reference)}\n"
+                f"  слайд {index + 1}: {' | '.join(buttons)}\n"
+                f"Номер модуля — место его кнопки в ряду (решение владельца "
+                f"process-map-9mn.31, п. 2), и при разных рядах он зависел бы от того, "
+                f"с какого слайда читать. Выровняйте кнопки в презентации."
+            )
+        code, title = nav_title(slides[index], index + 1)
+        read.append((index, code, title))
+
+    by_code: dict[str, list[int]] = {}
+    for index, code, _ in read:
+        by_code.setdefault(code, []).append(index + 1)
+    repeated = {code: numbers for code, numbers in by_code.items() if len(numbers) > 1}
+    if repeated:
+        listed = "; ".join(
+            f"{code} — слайды {', '.join(map(str, numbers))}" for code, numbers in repeated.items()
+        )
+        raise SystemExit(
+            f"код модуля повторяется: {listed}. Из кода получается id модуля, и два модуля "
+            f"с одним кодом слились бы в один."
+        )
+
+    titles = Counter(title for _, _, title in read)
+    buttons_count = Counter(reference)
+    problems = [
+        f"заголовок «{title}» (слайд {index + 1}) — кнопки с таким текстом нет"
+        for index, _, title in read
+        if title not in buttons_count
+    ]
+    problems += [
+        f"кнопка «{button}» — навигационного слайда с таким заголовком нет"
+        for button in reference
+        if button not in titles
+    ]
+    problems += [f"заголовок «{title}» на {count} слайдах" for title, count in titles.items() if count > 1]
+    problems += [
+        f"кнопка «{button}» в ряду {count} раза" for button, count in buttons_count.items() if count > 1
+    ]
+    if problems:
+        raise SystemExit(
+            "заголовки навигационных слайдов и кнопки навигации не взаимно однозначны:\n"
+            + "\n".join(f"  · {item}" for item in problems)
+            + "\nНомер модуля — место его кнопки в ряду, а кнопка находится по русскому "
+            "названию из заголовка: без пары один к одному модуль останется без номера или "
+            "потеряется."
+        )
+
+    modules = tuple(
+        sorted(
+            (
+                ModuleRef(
+                    code=code,
+                    title=title,
+                    number=reference.index(title) + 1,
+                    nav_slide=index,
+                    detail_slide=index + 1,
+                )
+                for index, code, title in read
+            ),
+            key=lambda module: module.number,
+        )
+    )
+
+    button_order = ", ".join(module.code for module in modules)
+    deck_order = ", ".join(code for _, code, _ in read)
+    report.module_index.append(f"порядок кнопок навигации: {button_order}")
+    report.module_index.append(
+        f"порядок колоды:           {deck_order}"
+        + (" — совпадает с кнопками" if deck_order == button_order else " — РАСХОДИТСЯ с кнопками")
+    )
+    for module in modules:
+        report.module_index.append(
+            f"{module.number}. {module.code} (id {module.id}) «{module.title}» — навигация: "
+            f"слайд {module.nav_slide + 1}, детализация: слайд {module.detail_slide + 1}"
+        )
+    return modules
 
 
 def rotate_point(point: tuple[float, float], cx: float, cy: float, degrees: float) -> tuple[float, float]:
@@ -3248,6 +3542,10 @@ def build_three_tier_map(
     готовят для него разбор слайдов); эта функция только останавливает импорт с
     понятным сообщением. Почему профиль всё же зарегистрирован, а не оставлен
     неизвестным, — см. PROFILE_BUILDERS.
+
+    Готово для него: реестр модулей с навигационных слайдов — read_module_index
+    (process-map-9mn.14.2). Отсюда он пока НЕ вызывается: заглушка
+    останавливает импорт раньше первого чтения презентации.
     """
     raise SystemExit(
         f"Профиль «three-tier» (карта «{spec.key}») объявлен, но его построитель ещё "
@@ -3719,6 +4017,22 @@ def print_report(
         print("  Ветку выбирает сам слайд, и по готовой карте её уже не видно.")
         for slide_no, rule in band_rules:
             print(f"    · слайд {slide_no}: {rule}")
+
+    # Реестр модулей (process-map-9mn.14.2). Печатается, только если его
+    # читали, — по той же причине, что и блок полосы фаз выше. Порядок колоды
+    # стоит рядом с порядком кнопок потому, что они расходятся (MRP в колоде
+    # раньше PS), а номер модуля берётся по кнопкам: без обоих порядков на виду
+    # «модуль 4 — PS» выглядело бы ошибкой нумерации.
+    modules = [item for report in reports for item in report.module_index]
+    if modules:
+        print("\n" + "=" * 78)
+        print("МОДУЛИ КАРТЫ — НОМЕР ПО КНОПКАМ НАВИГАЦИИ, А НЕ ПО ПОРЯДКУ КОЛОДЫ")
+        print("=" * 78)
+        print("  Номер модуля — место его кнопки в ряду навигационного слайда (решение")
+        print("  владельца process-map-9mn.31, п. 2); название — первый абзац заголовка")
+        print("  навигационного слайда (решение владельца process-map-9mn.6).")
+        for item in modules:
+            print(f"    · {item}")
 
     # Узлы, ставшие интеграциями не по заливке, а по коду системы (7v1).
     promoted = [item for report in reports for item in report.promoted_integrations]
@@ -5374,6 +5688,301 @@ def run_self_test() -> int:
         check(True, "")
     else:
         check(False, "SlideReport принял неизвестную роль слайда")
+
+    # 14. Реестр модулей с навигационных слайдов (read_module_index,
+    #     process-map-9mn.14.2). Презентация не нужна: слайды собраны из фигур.
+    #
+    #     Фикстура повторяет колоду L2 там, где на этом держится правило:
+    #       · навигационные слайды 2/4/6/8/10 идут в порядке колоды DP, MEIO,
+    #         SNP, MRP, PS — НЕ в порядке кнопок DP, MEIO, SNP, PS, MRP. Совпади
+    #         порядки, нумерация по колоде была бы неотличима от нумерации по
+    #         кнопкам;
+    #       · кнопки стоят на замеренных абсциссах колоды, их текст — русское
+    #         название модуля без кода;
+    #       · заливка активной кнопки своя на каждом слайде и у разных модулей
+    #         повторяется (DP и MRP — accent1), как в колоде: правило, опознающее
+    #         модуль по заливке, на этой фикстуре ошибётся.
+    #     И отступает от колоды там, где та слишком удобна:
+    #       · фигуры перечислены НЕ слева направо, а кнопка MRP поднята на
+    #         30000 EMU над соседями: порядок по Shape.sort_key (сперва верх)
+    #         поставил бы её первой;
+    #       · у русских названий в заголовках хвостовые \x0b и пробел, а у
+    #         кнопки MEIO — мягкий перенос \x0b ПОСЕРЕДИНЕ, как бывает на узкой
+    #         кнопке. В колоде всё это схлопывает ещё read_paragraphs, здесь —
+    #         обязан сам разбор, иначе заголовки MEIO и PS не найдут своих
+    #         кнопок. Перенос именно посередине: хвостовой у кнопки срезал бы
+    #         уже Shape.text (strip), и нормализация кнопок осталась бы
+    #         непроверенной.
+    inch = 914_400
+    nav_top = 5 * inch
+
+    def _nav_shape(
+        sid: int, kind: str, left: int, top: int, paragraphs: Sequence[str], fill_key: str | None = None
+    ) -> Shape:
+        return Shape(
+            sid=sid,
+            kind=kind,
+            box=Box(left, top, 2 * inch, 400_000),
+            paragraphs=list(paragraphs),
+            fill=None if fill_key is None else fill_key.split("|")[0],
+            flip_h=False,
+            flip_v=False,
+            rot=0.0,
+            head_arrow=False,
+            tail_arrow=False,
+            fill_key=fill_key,
+        )
+
+    # Ряд кнопок колоды: текст и левая кромка в дюймах, слева направо.
+    button_row: tuple[tuple[str, float], ...] = (
+        ("Планирование спроса ", 0.55),
+        ("Мультиэшелонная\x0bоптимизация запасов", 2.66),
+        ("Планирование сети поставок", 4.80),
+        ("Производственное планирование и графикование", 6.84),
+        ("Планирование потребности в материалах", 8.99),
+    )
+    # Слайд (0-based) → абзацы заголовка и заливка активной кнопки. Пустой
+    # абзац между русским и английским названием — как на слайдах 2/4/6/8
+    # колоды; пустой ХВОСТОВОЙ у SNP — чтобы код искался в последнем НЕПУСТОМ
+    # абзаце, а не в последнем по счёту.
+    nav_titles: dict[int, tuple[tuple[str, ...], str]] = {
+        1: (("Планирование спроса", "", "Demand Planning (DP)"), "scheme:accent1"),
+        3: (
+            ("Мультиэшелонная оптимизация запасов\x0b", "Multi-Echelon Inventory Optimization (MEIO)"),
+            "scheme:accent2",
+        ),
+        5: (("Планирование сети поставок", "Supply Network Planning (SNP)", " "), "scheme:accent3"),
+        7: (
+            ("Планирование потребности в материалах", "Material Requirement Planning (MRP)"),
+            "scheme:accent1",
+        ),
+        9: (
+            ("Производственное планирование и графикование ", "Production Scheduling (PS)"),
+            "scheme:accent4",
+        ),
+    }
+
+    def _nav_deck(
+        titles: Mapping[int, tuple[tuple[str, ...], str]] | None = None,
+        rows: Mapping[int, tuple[tuple[str, float], ...]] | None = None,
+        extra: Mapping[int, Sequence[Shape]] | None = None,
+    ) -> list[list[Shape]]:
+        """Колода из 11 слайдов; titles/rows/extra подменяют отдельные навигационные слайды."""
+        deck: list[list[Shape]] = [[] for _ in range(11)]
+        deck[0] = [_nav_shape(2, "placeholder", 0, 0, ["Типовой процесс интегрированного планирования"])]
+        for index, (paragraphs, active_fill) in {**nav_titles, **(titles or {})}.items():
+            row = (rows or {}).get(index, button_row)
+            buttons = [
+                _nav_shape(
+                    10 + position,
+                    "auto",
+                    round(left * inch),
+                    # Кнопка MRP чуть выше соседей — см. шапку пункта.
+                    nav_top - 30_000 if "материалах" in text else nav_top,
+                    [text],
+                    active_fill
+                    if normalize_text(text) == normalize_text(paragraphs[0])
+                    else "srgb:7F7F7F",
+                )
+                for position, (text, left) in enumerate(row)
+            ]
+            # Как в XML колоды: первая слева кнопка перечислена предпоследней.
+            listed = buttons[1:4] + buttons[:1] + buttons[4:]
+            title = _nav_shape(8, "textbox", round(0.49 * inch), round(3.09 * inch), paragraphs, "noFill")
+            deck[index] = [title, *listed, *(extra or {}).get(index, ())]
+            # Слайд детализации навигацией не читается; фигура на нём — чтобы он
+            # не был пустым списком, который прошёл бы за «слайда нет».
+            deck[index + 1] = [_nav_shape(3, "auto", 0, inch, [f"шаг модуля со слайда {index + 1}"])]
+        return deck
+
+    nav_spec = replace(
+        MAPS["snp"], key="inplan-probe", profile="three-tier", slides=11, nav_slides=(1, 3, 5, 7, 9)
+    )
+
+    def _module_stop(slides: Sequence[Sequence[Shape]], spec: MapSpec = nav_spec) -> str | None:
+        """Сообщение остановки read_module_index или None, если она не остановилась."""
+        try:
+            read_module_index(slides, spec, SlideReport(slide_no=2))
+        except SystemExit as error:
+            return str(error)
+        return None
+
+    nav_report = SlideReport(slide_no=2)
+    try:
+        modules = read_module_index(_nav_deck(), nav_spec, nav_report)
+    except SystemExit as error:
+        check(False, f"реестр модулей не прочитан с исправной колоды: {error}")
+        raise  # недостижимо: check(False, …) уже остановил самопроверку
+    # Порядок и номер — ПО КНОПКАМ (решение владельца 9mn.31, п. 2). Порядок
+    # колоды дал бы здесь MRP четвёртым, а PS пятым.
+    check(
+        [module.code for module in modules] == ["DP", "MEIO", "SNP", "PS", "MRP"],
+        f"реестр модулей не в порядке кнопок навигации: {[module.code for module in modules]}",
+    )
+    check(
+        [(module.code, module.number) for module in modules]
+        == [("DP", 1), ("MEIO", 2), ("SNP", 3), ("PS", 4), ("MRP", 5)],
+        f"номер модуля — не место его кнопки в ряду: "
+        f"{[(module.code, module.number) for module in modules]}",
+    )
+    check(
+        [module.id for module in modules] == ["dp", "meio", "snp", "ps", "mrp"],
+        f"id модулей: {[module.id for module in modules]}",
+    )
+    # Название — ПЕРВЫЙ абзац заголовка, русский, и без хвостов \x0b и пробела.
+    check(
+        [module.title for module in modules]
+        == [
+            "Планирование спроса",
+            "Мультиэшелонная оптимизация запасов",
+            "Планирование сети поставок",
+            "Производственное планирование и графикование",
+            "Планирование потребности в материалах",
+        ],
+        f"названия модулей: {[module.title for module in modules]}",
+    )
+    check(
+        [(module.nav_slide, module.detail_slide) for module in modules]
+        == [(1, 2), (3, 4), (5, 6), (9, 10), (7, 8)],
+        f"слайды модулей (навигация, детализация): "
+        f"{[(module.nav_slide, module.detail_slide) for module in modules]}",
+    )
+    # Отчёт: порядок кнопок рядом с порядком колоды — и на печати тоже.
+    check(
+        "порядок кнопок навигации: DP, MEIO, SNP, PS, MRP" in nav_report.module_index
+        and any(
+            "DP, MEIO, SNP, MRP, PS — РАСХОДИТСЯ" in line for line in nav_report.module_index
+        ),
+        f"отчёт не показывает порядок колоды рядом с порядком кнопок: {nav_report.module_index}",
+    )
+    modules_text = _report_text(nav_report)
+    check(
+        "НОМЕР ПО КНОПКАМ НАВИГАЦИИ" in modules_text
+        and all(line in modules_text for line in nav_report.module_index),
+        "print_report не напечатал реестр модулей",
+    )
+    check(
+        "НОМЕР ПО КНОПКАМ НАВИГАЦИИ" not in _report_text(SlideReport(slide_no=2)),
+        "блок реестра модулей напечатан в отчёте, где навигацию не читали",
+    )
+
+    # Кнопки разошлись между навигационными слайдами — остановка. Оба случая
+    # другими сторожами НЕ ловятся: эталон — кнопки слайда 2, и с ним заголовки
+    # сходятся один к одному. Без сверки рядов номер модуля тихо зависел бы от
+    # того, какой слайд взят эталоном.
+    #   · тот же набор, другой порядок: на слайде 4 PS и MRP поменялись местами;
+    #   · другой текст: на слайде 10 кнопка SNP подписана, как на титуле колоды.
+    swapped = (*button_row[:3], (button_row[4][0], 6.84), (button_row[3][0], 8.99))
+    renamed = (
+        *button_row[:2],
+        ("Планирование сети поставок и производства", 4.80),
+        *button_row[3:],
+    )
+    for rows, slide_no in (({3: swapped}, 4), ({9: renamed}, 10)):
+        stop = _module_stop(_nav_deck(rows=rows))
+        check(
+            stop is not None and f"кнопки навигации на слайде {slide_no} не такие, как на слайде 2" in stop,
+            f"кнопки слайда {slide_no} разошлись с кнопками слайда 2, а импорт не остановлен: {stop}",
+        )
+
+    # Заголовки и кнопки не взаимно однозначны — три формы одной беды.
+    #   · у заголовка нет кнопки (SNP назван, как на титуле колоды);
+    stop = _module_stop(
+        _nav_deck(
+            titles={
+                5: (
+                    ("Планирование сети поставок и производства", "Supply Network Planning (SNP)"),
+                    "scheme:accent3",
+                )
+            }
+        )
+    )
+    check(
+        stop is not None
+        and "не взаимно однозначны" in stop
+        and "«Планирование сети поставок и производства» (слайд 6) — кнопки с таким текстом нет"
+        in stop,
+        f"заголовок без кнопки не остановил импорт: {stop}",
+    )
+    #   · у кнопки нет навигационного слайда (модуль PS потерян из nav_slides);
+    stop = _module_stop(_nav_deck(), replace(nav_spec, nav_slides=(1, 3, 5, 7)))
+    check(
+        stop is not None
+        and "«Производственное планирование и графикование» — навигационного слайда" in stop,
+        f"кнопка без навигационного слайда не остановила импорт: {stop}",
+    )
+    #   · двум слайдам одна кнопка (слайд MRP подписан, как PS, код свой).
+    stop = _module_stop(
+        _nav_deck(
+            titles={
+                7: (
+                    ("Производственное планирование и графикование", "Material Requirement Planning (MRP)"),
+                    "scheme:accent1",
+                )
+            }
+        )
+    )
+    check(
+        stop is not None
+        and "«Производственное планирование и графикование» на 2 слайдах" in stop,
+        f"одна кнопка на два навигационных слайда не остановила импорт: {stop}",
+    )
+
+    # Код повторяется, а заголовки и кнопки при этом сходятся: два модуля с
+    # одним id.
+    stop = _module_stop(
+        _nav_deck(
+            titles={3: (("Мультиэшелонная оптимизация запасов", "Demand Planning (DP)"), "scheme:accent2")}
+        )
+    )
+    check(
+        stop is not None and "код модуля повторяется: DP — слайды 2, 4" in stop,
+        f"повтор кода модуля не остановил импорт: {stop}",
+    )
+
+    # Заголовок без кода, без русского абзаца, два заголовка с кодом.
+    for titles, extra, expected, what in (
+        (
+            {1: (("Планирование спроса", "Demand Planning"), "scheme:accent1")},
+            {},
+            "слайд 2: нет текстбокса",
+            "заголовок без кода в скобках",
+        ),
+        (
+            {1: (("Demand Planning (DP)",), "scheme:accent1")},
+            {},
+            "слайд 2: у заголовка модуля [8]",
+            "заголовок из одного абзаца с кодом",
+        ),
+        (
+            {},
+            {1: [_nav_shape(40, "textbox", 0, 0, ["Сноска", "см. Demand Planning (DP)"])]},
+            "слайд 2: несколько текстбоксов с кодом",
+            "второй текстбокс с кодом",
+        ),
+    ):
+        stop = _module_stop(_nav_deck(titles=titles, extra=extra))
+        check(stop is not None and expected in stop, f"{what} не остановил импорт: {stop}")
+
+    # Лишняя автофигура с текстом выше ряда — не шестая кнопка, а остановка.
+    stop = _module_stop(_nav_deck(extra={5: [_nav_shape(41, "auto", 0, inch, ["Шапка"])]}))
+    check(
+        stop is not None and "слайд 6: кнопки навигации не лежат одним рядом" in stop,
+        f"автофигура вне ряда кнопок не остановила импорт: {stop}",
+    )
+
+    # Устройство nav_slides: пусто; за последним слайдом колоды детализации нет;
+    # слайд детализации сам навигационный.
+    for nav_slides, expected in (
+        ((), "nav_slides пуст"),
+        ((1, 3, 5, 7, 10), "за навигационным слайдом 11 нет слайда детализации"),
+        ((1, 2, 5, 7, 9), "слайд детализации 3 модуля со слайда 2 сам объявлен навигационным"),
+    ):
+        stop = _module_stop(_nav_deck(), replace(nav_spec, nav_slides=nav_slides))
+        check(
+            stop is not None and expected in stop,
+            f"nav_slides={nav_slides} не остановил импорт: {stop}",
+        )
 
     print(f"САМОПРОВЕРКА ПРОЙДЕНА: {checks} проверок")
     return 0
