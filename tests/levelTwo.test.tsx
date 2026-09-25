@@ -285,6 +285,25 @@ describe('Breadcrumbs: экран этапа (3 уровня, уровень 3)'
       currentStageId: null,
     });
   });
+
+  /*
+   * ТО ЖЕ ДЛЯ ЗВЕНА МОДУЛЯ. Тесты выше начинают с модулем уже в store, и из
+   * этого состояния navigateToModule(module.id) и голый back() дают один и
+   * тот же store — обработчик звена ими не различим. Различает только этап
+   * без модуля: back() увёл бы на экран всех модулей (currentModuleId: null),
+   * а звено «SNP · …» обещает экран SNP.
+   */
+  it('звено модуля ведёт к этапам модуля-владельца и тогда, когда модуля нет в store', () => {
+    useProcessStore.getState().navigateToStage(STAGE_4.id);
+    expect(useProcessStore.getState().currentModuleId).toBeNull();
+    renderStageCrumbs();
+    fireEvent.click(screen.getByRole('button', { name: SUPPLY.shortTitle }));
+
+    expect(useProcessStore.getState()).toMatchObject({
+      currentModuleId: MODULE_SUPPLY,
+      currentStageId: null,
+    });
+  });
 });
 
 describe('Breadcrumbs: двухуровневая карта — побайтово прежняя форма', () => {
@@ -446,6 +465,69 @@ describe('экран этапа трёхуровневой карты в при�
     await click(screen.getByRole('button', { name: THREE.moduleLabel }));
 
     expect(screen.getByRole('region', { name: ru.overview.allModulesCanvasLabel })).toBeVisible();
+  });
+
+  /*
+   * DEEP-LINK ?stage=N БЕЗ ?module=. useDeepLink зовёт navigateToStage(id) без
+   * модуля, и store приходит на уровень 3 с currentModuleId === null. Это
+   * единственный путь, на котором «модуль из store» и «модуль-владелец по
+   * документу» расходятся, поэтому только он проверяет, ОТКУДА StageDetail
+   * берёт модуль для крошек (moduleOfStage). Возьми он модуль из store —
+   * крошки ушли бы в двухуровневую форму: корень-<span>, «Этап 4» вместо
+   * «Этап 2 из 3», ни звена модуля, «Назад к обзору процесса» с back() на
+   * корень вместо этапов модуля-владельца.
+   */
+  describe('deep-link ?stage=N без модуля', () => {
+    async function openStage4ByLink() {
+      window.history.replaceState({}, '', `/?stage=${STAGE_4.number}`);
+      const result = await renderApp();
+      // Предпосылка: адрес привёл на этап, а модуля в store нет.
+      expect(useProcessStore.getState()).toMatchObject({
+        currentModuleId: null,
+        currentStageId: STAGE_4.id,
+      });
+      return result;
+    }
+
+    it('крошки на три звена по модулю-владельцу: «Этап 2 из 3», подпись уровня 3', async () => {
+      const { container } = await openStage4ByLink();
+
+      expect(
+        screen.getByRole('region', { name: ru.stageDetail.moduleStageCanvasLabel }),
+      ).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: SUPPLY.shortTitle })).toBeInTheDocument();
+      expect(headerIn(container).textContent).toBe(
+        `${THREE.moduleLabel}›${SUPPLY.shortTitle}›${STAGE_4.title}` +
+          `${ru.breadcrumbs.stageOfModuleBadge(2, 3)}${counterOf(STAGE_4)}`,
+      );
+      expect(screen.queryByRole('button', { name: ru.breadcrumbs.backAriaLabel })).toBeNull();
+    });
+
+    it('«Назад к этапам модуля» — на экран модуля-владельца, а не на корень', async () => {
+      await openStage4ByLink();
+      await click(screen.getByRole('button', { name: ru.breadcrumbs.backToModuleStages }));
+
+      expect(
+        screen.getByRole('region', { name: ru.overview.moduleCanvasLabel }),
+      ).toBeInTheDocument();
+      expect(useProcessStore.getState()).toMatchObject({
+        currentModuleId: MODULE_SUPPLY,
+        currentStageId: null,
+      });
+    });
+
+    it('звено модуля — на экран модуля-владельца', async () => {
+      await openStage4ByLink();
+      await click(screen.getByRole('button', { name: SUPPLY.shortTitle }));
+
+      expect(
+        screen.getByRole('region', { name: ru.overview.moduleCanvasLabel }),
+      ).toBeInTheDocument();
+      expect(useProcessStore.getState()).toMatchObject({
+        currentModuleId: MODULE_SUPPLY,
+        currentStageId: null,
+      });
+    });
   });
 });
 

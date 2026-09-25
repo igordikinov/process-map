@@ -18,6 +18,8 @@ import {
   LANE_IN_ID,
   LANE_OUT_ID,
   SYSTEMS_BADGE_ID,
+  stageSystemsEdgeId,
+  stageSystemsNodeId,
   systemNodeId,
 } from '../src/components/Overview/overviewGraph';
 import { STAGE_HANDLE } from '../src/components/nodes/StageNode';
@@ -197,5 +199,42 @@ describe('обратная связь решается по индексу на 
         STAGE_HANDLE.bottom,
       );
     }
+  });
+
+  /*
+   * КОМПАКТНЫЙ РЕЖИМ — тот же вопрос с другой стороны. Карточка систем этапа
+   * (pushCompactSystems) тоже встаёт по индексу в показанном массиве, и
+   * стоять она обязана под СВОЕЙ карточкой этапа. Расставь её цикл по
+   * порядку номеров — на модуле {5, 4, 3} системы этапа 3 встали бы под
+   * карточкой этапа 5 и наоборот, а пунктир «этап → его системы» пошёл бы
+   * по диагонали через полотно.
+   *
+   * Проверка — одно и то же смещение «карточка систем − карточка этапа» по
+   * всем рёбрам «этап → его системы»: одинаковое смещение и значит «строго
+   * под своим этапом», каким бы ни было само число.
+   */
+  it('компактно: карточка систем стоит под своим этапом и на обратном stageIds', () => {
+    const { nodes, edges } = buildOverviewGraph(
+      levelTwoView(reversedSupply(false), MODULE_SUPPLY),
+      true,
+      true,
+    );
+    const byId = new Map(nodes.map((node) => [node.id, node]));
+    const owned = (MODULE_STAGE_IDS[MODULE_SUPPLY] ?? []).filter((stageId) =>
+      edges.some((edge) => edge.id === stageSystemsEdgeId(stageId)),
+    );
+
+    // Предпосылка: карточек систем хотя бы две, иначе одно смещение совпадает
+    // само с собой и тест ничего не различает.
+    expect(owned.length).toBeGreaterThanOrEqual(2);
+    const offsets = owned.map((stageId) => {
+      const card = byId.get(stageId);
+      const systems = byId.get(stageSystemsNodeId(stageId));
+      if (card === undefined || systems === undefined) {
+        throw new Error(`${stageId}: нет карточки этапа или карточки систем`);
+      }
+      return `${systems.position.x - card.position.x}:${systems.position.y > card.position.y}`;
+    });
+    expect(new Set(offsets).size, offsets.join(', ')).toBe(1);
   });
 });
