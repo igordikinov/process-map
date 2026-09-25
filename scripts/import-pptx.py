@@ -2176,6 +2176,10 @@ LANE_MIN_COLUMNS = 3
 # как есть), а id полосы собирается из букв кода отдельно.
 LANE_CODE_RE = re.compile(r"\(([^()]+)\)$")
 
+# Русский ли абзац — есть ли в нём хоть одна буква кириллицы (lanes_from_slide1:
+# подпись полосы — «код · РУССКИЙ первый абзац», решение 9mn.31, п. 5).
+CYRILLIC_RE = re.compile(r"[А-Яа-яЁё]")
+
 
 @dataclass(frozen=True)
 class ModuleColumn:
@@ -2227,7 +2231,17 @@ class ModuleTransfer:
     source: str | None   # id модуля-источника (левая колонка)
     target: str | None   # id модуля-приёмника (правая колонка)
     label: str
-    box: Box             # коробка плашки на слайде 1 — её slidePosition (подзадача 14.6)
+    # Коробка плашки на слайде 1 — её slidePosition (подзадача 14.6). КОПИЯ
+    # коробки фигуры, а не она сама (classify_transfer): правка одной не должна
+    # молча менять другую.
+    #
+    # ИЗ ХЕША ИСКЛЮЧЕНА (hash=False). Box — обычный изменяемый dataclass, а
+    # такие не хешируются; с коробкой в хеше hash() передачи — и ModulesSlide,
+    # который их держит, — падал бы TypeError'ом, хотя frozen-класс обязан
+    # хешироваться: построитель вправе класть передачи в множество или ключом
+    # словаря. В сравнении (==) коробка участвует по-прежнему, поэтому равные
+    # передачи имеют равный хеш — хеш просто считается по остальным полям.
+    box: Box = field(hash=False)
     sid: int
 
 
@@ -2241,7 +2255,8 @@ class ModuleLane:
     id: str      # буквы кода строчными: «FP&A» → 'fpa'
     title: str   # «код · первый абзац»: «FP&A · Финансовое планирование и анализ»
     code: str
-    box: Box
+    # Копия коробки полосы и вне хеша — по той же причине, что у ModuleTransfer.
+    box: Box = field(hash=False)
     sid: int
 
 
@@ -2514,11 +2529,19 @@ def check_transfer_arrows(shapes: Sequence[Shape], report: SlideReport) -> None:
     сторож, а не разбор: развёрнутая стрелка значит, что прочтение по положению
     разошлось с рисунком, и собирать передачи задом наперёд молча нельзя.
 
-    «Слева направо» — смещение от начала к концу по x положительно и больше, чем
-    по y: вертикальная или крутая стрелка прочтения «левая — источник» не
-    подтверждает. Стрелки на обоих концах — тоже остановка: направления у такой
-    линии нет. Начало и конец — line_endpoints, с отражениями и поворотом, как
-    везде в импортёре.
+    «Слева направо» — ровно то, что сказано в задаче (process-map-9mn.14.3):
+    стрелка указывает в сторону +x, то есть смещение от начала к концу по x
+    строго положительно. Наклон НЕ ограничен: диагональ вниз-вправо тоже ведёт
+    слева направо, и останавливать из-за неё весь импорт значило бы добавить
+    к задаче правило, которого в ней нет. Вертикальная линия (смещение по x
+    ноль) и линия справа налево — остановка: в сторону +x они не указывают.
+    На колоде все пять линий горизонтальны, так что граница здесь — не замер,
+    а формулировка задачи.
+
+    Стрелки на обоих концах — тоже остановка, и это не добавка к задаче, а она
+    же: у такой линии одна из двух стрелок указывает в сторону −x, и
+    направления, которое подтверждало бы прочтение, у неё нет. Начало и конец —
+    line_endpoints, с отражениями и поворотом, как везде в импортёре.
     """
     arrows = [s for s in shapes if s.kind == "line" and (s.head_arrow or s.tail_arrow)]
     wrong: list[str] = []
@@ -2530,7 +2553,7 @@ def check_transfer_arrows(shapes: Sequence[Shape], report: SlideReport) -> None:
         )
         if line.head_arrow and line.tail_arrow:
             wrong.append(f"{where} — стрелки на обоих концах")
-        elif end[0] - start[0] <= abs(end[1] - start[1]):
+        elif end[0] - start[0] <= 0:
             wrong.append(f"{where} — ведёт не слева направо")
     if wrong:
         raise SystemExit(
@@ -2561,10 +2584,10 @@ def classify_transfer(shape: Shape, row: ChevronRow, report: SlideReport) -> Mod
     Плашка над рядом модулей → передача между двумя СОСЕДНИМИ колонками:
     источник — левая колонка, приёмник — правая.
 
-    ПОЧЕМУ «ЛЕВАЯ — ИСТОЧНИК». Так нарисовано: каждая плашка сидит на стыке двух
-    шевронов, а все стрелки между плашками ведут слева направо. Это прочтение
-    держит сторож check_transfer_arrows: развернись хоть одна стрелка — импорт
-    остановится, а не прочитает передачу задом наперёд.
+    ПОЧЕМУ «ЛЕВАЯ — ИСТОЧНИК». Так нарисовано: каждая плашка-передача сидит на
+    стыке двух шевронов, а все стрелки между плашками ведут слева направо. Это
+    прочтение держит сторож check_transfer_arrows: развернись хоть одна стрелка —
+    импорт остановится, а не прочитает передачу задом наперёд.
 
     ИСХОДЫ:
       · две соседние колонки, обе в реестре — передача модуль → модуль;
@@ -2617,8 +2640,13 @@ def classify_transfer(shape: Shape, row: ChevronRow, report: SlideReport) -> Mod
     else:
         effect = f"{right.name} вне реестра: только выход {left.name}, ребра модулей нет"
     report.module_transfers.append(f"{where}: {left.name} → {right.name} — {effect}")
+    # replace() без полей — копия коробки: передача не делит Box с фигурой.
     return ModuleTransfer(
-        source=left.module, target=right.module, label=label, box=shape.box, sid=shape.sid
+        source=left.module,
+        target=right.module,
+        label=label,
+        box=replace(shape.box),
+        sid=shape.sid,
     )
 
 
@@ -2640,9 +2668,19 @@ def lanes_from_slide1(
     по одному примеру. title — «код · первый абзац» (решение владельца
     process-map-9mn.31, п. 5): «FP&A · Финансовое планирование и анализ».
 
-    ОСТАНОВКИ: в последнем абзаце нет кода в скобках или перед ним нет русского
-    абзаца — полосу не назвать; в коде нет букв — не из чего собрать id; id
-    повторяется или совпадает с id модуля — два узла уровня 1 с одним id.
+    ОСТАНОВКИ:
+      · в конце последнего абзаца нет кода в скобках — полосу не назвать;
+      · абзац один (код есть, а названия над ним нет) — так же, как у заголовка
+        модуля в nav_title;
+      · в первом абзаце нет ни одной кириллической буквы — он не русский.
+        Подпись полосы — «код · РУССКИЙ первый абзац» (решение 9mn.31, п. 5), и
+        английское название, поставленное первым, молча стало бы подписью
+        («FP&A · Financial Planning»). «Русский» здесь — «есть хоть одна буква
+        кириллицы», а не «нет латиницы»: в русских названиях латиница бывает
+        (коды систем, аббревиатуры), и запрещать её значило бы выдумывать
+        правило;
+      · в коде нет латинских букв — не из чего собрать id;
+      · id повторяется или совпадает с id модуля — два узла уровня 1 с одним id.
     """
     slide_no = report.slide_no
     modules = row.module_ranges()
@@ -2655,12 +2693,22 @@ def lanes_from_slide1(
         where = f"слайд {slide_no}: полоса [{shape.sid}] «{shape.text[:60]}»"
         paragraphs = [p for p in (normalize_text(raw) for raw in shape.paragraphs) if p]
         code = LANE_CODE_RE.search(paragraphs[-1]) if paragraphs else None
-        if code is None or len(paragraphs) < 2:
+        if code is None:
+            problem = "в конце последнего абзаца нет кода в скобках"
+        elif len(paragraphs) < 2:
+            problem = "абзац один — код есть, а названия над ним нет"
+        elif not CYRILLIC_RE.search(paragraphs[0]):
+            problem = f"первый абзац «{paragraphs[0][:40]}» не русский — кириллицы в нём нет"
+        else:
+            problem = None
+        if problem is not None:
             raise SystemExit(
-                f"{where}: нужны русское название первым абзацем и код в скобках в конце "
-                f"последнего, например «Financial Planning and Analysis (FP&A)». Подпись "
-                f"полосы — «код · название» (решение владельца process-map-9mn.31, п. 5)."
+                f"{where}: {problem}. Нужны русское название первым абзацем и код в скобках "
+                f"в конце последнего, например «Financial Planning and Analysis (FP&A)». "
+                f"Подпись полосы — «код · русское название» (решение владельца "
+                f"process-map-9mn.31, п. 5)."
             )
+        assert code is not None  # problem is None только при найденном коде
         lane_id = re.sub(r"[^A-Za-z]", "", code.group(1)).lower()
         if not lane_id:
             raise SystemExit(
@@ -2677,7 +2725,7 @@ def lanes_from_slide1(
             id=lane_id,
             title=f"{code.group(1)} · {paragraphs[0]}",
             code=code.group(1),
-            box=shape.box,
+            box=replace(shape.box),
             sid=shape.sid,
         )
         lanes.append(lane)
@@ -4821,8 +4869,9 @@ def print_report(
             "Ряд модулей — ряд автофигур с текстом, где больше всего коробок опознано по",
             "реестру. Правило опознания: 'exact' — первый абзац равен названию модуля с",
             "навигационного слайда; 'prefix' — начинается с него на границе слова;",
-            "'code' — абзац «(КОД)» или сам код. Колонка вне реестра (TPM) остаётся",
-            "колонкой: над ней лежат плашки, но узлов она не даёт.",
+            "'code' — абзац «(КОД)», абзац, кончающийся «(КОД)», или сам код. Колонка",
+            "вне реестра (TPM) остаётся колонкой: над ней лежат плашки, но узлов она",
+            "не даёт.",
         ),
         [item for report in reports for item in report.module_columns],
     )
@@ -7104,8 +7153,11 @@ def run_self_test() -> int:
     )
 
     s1_report = SlideReport(slide_no=1)
+    # Фигуры — в переменной, а не прямо в вызове: ниже проверяется, что
+    # передачи и полосы держат КОПИИ их коробок, а не сами коробки.
+    slide1_shapes = _slide1()
     try:
-        slide1 = read_modules_slide(_slide1(), modules, s1_report)
+        slide1 = read_modules_slide(slide1_shapes, modules, s1_report)
     except SystemExit as error:
         check(False, f"слайд 1 не прочитан с исправной фикстуры: {error}")
         raise  # недостижимо: check(False, …) уже остановил самопроверку
@@ -7137,6 +7189,24 @@ def run_self_test() -> int:
         },
         f"полосы модулей по x: {slide1.row.module_ranges()}",
     )
+    # Границы ряда по вертикали — то, по чему построитель и сам разбор отделяют
+    # «над рядом» (плашки) от «под рядом» (списки, полосы). Верх — САМЫЙ ВЫСОКИЙ
+    # верх в ряду (MRP [35] ниже соседей на 66751 — верх ряда не его), низ —
+    # САМЫЙ НИЗКИЙ низ (MRP короче соседей — низ ряда тоже не его). На колоде
+    # перепутанные min/max колонок, передач и полос не меняют, поэтому границы
+    # проверяются сами, и в отчёте тоже: человек сверяет их в PowerPoint.
+    check(
+        (slide1.row.top, slide1.row.bottom) == (row_top, row_top + 1_080_000),
+        f"границы ряда модулей по y: {slide1.row.top}–{slide1.row.bottom}, ждали "
+        f"{row_top}–{row_top + 1_080_000}",
+    )
+    check(
+        any(
+            "верх 1.74in — коробок 6, опознано модулей 5 — РЯД МОДУЛЕЙ" in line
+            for line in s1_report.module_columns
+        ),
+        f"отчёт о ряде модулей не называет его верх 1.74in: {s1_report.module_columns}",
+    )
     # Передачи: источник — левая колонка. [37] над TPM и DP — ТОЛЬКО вход DP;
     # [32] над PS и MRP, хотя под MRP ниже лежит DRP/TLB; [42] над одним TPM не
     # импортируется.
@@ -7155,6 +7225,20 @@ def run_self_test() -> int:
         slide1.transfers[0].box == Box(1_753_814, 884_886, 1_451_441, 430_887),
         f"коробка передачи — не коробка плашки на слайде 1: {slide1.transfers[0].box}",
     )
+    # Коробки передач и полос — копии: у фигуры и у результата не один Box на
+    # двоих. И результат хешируется — frozen-классы обязаны, а Box сам по себе
+    # не хешируется (см. ModuleTransfer.box). hash(ModulesSlide) задевает всё
+    # сразу: ряд, передачи, полосы.
+    shape_boxes = {id(s.box) for s in slide1_shapes}
+    check(
+        not any(id(t.box) in shape_boxes for t in slide1.transfers)
+        and not any(id(lane.box) in shape_boxes for lane in slide1.lanes),
+        "передача или полоса держит коробку фигуры, а не её копию",
+    )
+    try:
+        hash(slide1)
+    except TypeError as error:
+        check(False, f"результат слайда 1 не хешируется: {error}")
     check(
         "слайд 1: [42] «История промо» — над одной колонкой TPM: передачи между двумя модулями "
         "нет, не импортируется" in s1_report.module_transfers,
@@ -7193,28 +7277,49 @@ def run_self_test() -> int:
         f"отчёт о колонках не называет правило, ряд или порядок: {s1_report.module_columns}",
     )
     # Ряд модулей — тот, где опознано больше всего, а не верхний; плашка — с
-    # заливкой, а не любой текстбокс над рядом. На колоде оба правила совпадают
-    # с более простыми (верхний ряд автофигур с текстом и есть ряд модулей,
-    # текстбоксов без заливки над рядом нет), поэтому различие видно только на
-    # добавленных фигурах: шапка-автофигура над рядом и подпись без заливки.
+    # заливкой, а не любой текстбокс над рядом, и ЦЕЛИКОМ ВЫШЕ ряда, а не любой
+    # текстбокс с заливкой. На колоде эти правила совпадают с более простыми
+    # (верхний ряд автофигур с текстом и есть ряд модулей, текстбоксов без
+    # заливки над рядом нет, текстбоксов с заливкой в ряду и под ним — тоже),
+    # поэтому различие видно только на добавленных фигурах:
+    #   · [95] шапка-автофигура над рядом;
+    #   · [96] подпись без заливки над рядом;
+    #   · [97] текстбокс С ЗАЛИВКОЙ под рядом над DP и MEIO — без условия «выше
+    #     ряда» он стал бы передачей DP → MEIO, выдуманной из подписи внизу;
+    #   · [98] текстбокс с заливкой, залезающий на ряд (верх выше верха ряда,
+    #     низ ниже) над MEIO и SNP — «целиком выше» значит по НИЖНЕЙ кромке, а
+    #     не по верхней: плашка, наползшая на шевроны, передачей не считается.
     header = _s1(95, "auto", (0, 400_000, 3 * inch, 300_000), ["Шапка слайда"], "scheme:accent1")
     caption = _s1(96, "textbox", (4_500_000, 1_300_000, 600_000, 200_000), ["Подпись"], "noFill")
+    filled_below = _s1(
+        97, "textbox", (4 * inch, 6 * inch, int(2.5 * inch), 300_000), ["Сноска внизу"], plate_fill
+    )
+    straddling = _s1(
+        98,
+        "textbox",
+        (int(6.5 * inch), row_top - 200_000, 2 * inch, 400_000),
+        ["На ряду"],
+        plate_fill,
+    )
     extras_report = SlideReport(slide_no=1)
     try:
-        with_extras = read_modules_slide(_slide1(extra=[header, caption]), modules, extras_report)
+        with_extras = read_modules_slide(
+            _slide1(extra=[header, caption, filled_below, straddling]), modules, extras_report
+        )
     except SystemExit as error:
-        check(False, f"шапка над рядом или подпись без заливки сломали разбор слайда 1: {error}")
+        check(False, f"фигуры вне правил плашки и ряда сломали разбор слайда 1: {error}")
         raise  # недостижимо
     check(
         [c.sid for c in with_extras.row.columns] == [41, 33, 23, 24, 34, 35]
         and [t.sid for t in with_extras.transfers] == [37, 21, 22, 36, 32],
-        f"шапка над рядом или подпись без заливки изменили колонки или передачи: "
+        f"шапка, подпись, плашка под рядом или на ряду изменили колонки или передачи: "
         f"{[c.sid for c in with_extras.row.columns]}, {[t.sid for t in with_extras.transfers]}",
     )
     check(
         sorted(line.split("]")[0] for line in extras_report.text_skipped)
-        == ["слайд 1: [38", "слайд 1: [95", "слайд 1: [96"],
-        f"шапка и подпись не попали в пропущенные фигуры: {extras_report.text_skipped}",
+        == ["слайд 1: [38", "слайд 1: [95", "слайд 1: [96", "слайд 1: [97", "слайд 1: [98"],
+        f"шапка, подпись, плашки под рядом и на ряду не попали в пропущенные фигуры: "
+        f"{extras_report.text_skipped}",
     )
 
     # Списков действий у результата нет — ни одного поля, за которое их можно
@@ -7272,13 +7377,18 @@ def run_self_test() -> int:
     # Сторож стрелок: любая стрелка, не ведущая слева направо, — остановка.
     # Идёт через read_modules_slide целиком: сторож, которого перестали звать,
     # краснеет здесь так же, как сломанное условие.
+    # «Слева направо» — смещение по x строго больше нуля, и только оно: у
+    # вертикальной линии оно ноль (остановка — граница «> 0», а не «≥ 0»), а
+    # крутая диагональ вниз-вправо проходит (наклон задача не ограничивает).
     line_box = (3_296_920, 1_115_718, 619_760, 0)
     steep_box = (3_296_920, 800_000, 100_000, 619_760)
+    vertical_box = (3_296_920, 800_000, 0, 619_760)
     for variant, what in (
         (_s1(25, "line", line_box, tail=True, flip_h=True), "отражённая линия (справа налево)"),
         (_s1(25, "line", line_box, head=True), "стрелка на начале линии (справа налево)"),
         (_s1(25, "line", line_box, head=True, tail=True), "стрелки на обоих концах"),
-        (_s1(25, "line", steep_box, tail=True), "крутая линия (вниз)"),
+        (_s1(25, "line", steep_box, tail=True, flip_h=True), "диагональ справа налево (вниз)"),
+        (_s1(25, "line", vertical_box, tail=True), "вертикальная линия"),
     ):
         stop = _slide1_stop(_slide1(replaced={25: variant}))
         check(
@@ -7287,6 +7397,32 @@ def run_self_test() -> int:
             and "[25]" in stop,
             f"{what} не остановила импорт: {stop}",
         )
+    steep_report = SlideReport(slide_no=1)
+    stop = None
+    try:
+        read_modules_slide(
+            _slide1(replaced={25: _s1(25, "line", steep_box, tail=True)}), modules, steep_report
+        )
+    except SystemExit as error:
+        stop = str(error)
+    check(
+        stop is None
+        and any(
+            "линий со стрелкой 5, все ведут слева направо" in line
+            for line in steep_report.module_transfers
+        ),
+        f"крутая диагональ вниз-вправо (в сторону +x) остановила импорт или не попала в "
+        f"отчёт: {stop or steep_report.module_transfers}",
+    )
+    # Линий со стрелкой нет вовсе — не остановка, но и не молчание: направление
+    # передач рисунком не подтверждено, и отчёт обязан это сказать.
+    no_arrows_report = SlideReport(slide_no=1)
+    read_modules_slide([s for s in _slide1() if s.kind != "line"], modules, no_arrows_report)
+    check(
+        "слайд 1: линий со стрелкой нет — направление передач рисунком не подтверждено, "
+        "передачи прочитаны только по положению плашек" in no_arrows_report.module_transfers,
+        f"слайд без линий со стрелкой не описан в отчёте: {no_arrows_report.module_transfers}",
+    )
 
     # Плашка над тремя колонками (DP, MEIO, SNP) — остановка.
     wide_box = (3_916_680, 848_469, 3_500_000, 577_081)
@@ -7362,6 +7498,38 @@ def run_self_test() -> int:
         output_only is not None and (output_only.source, output_only.target) == ("dp", None),
         f"плашка над DP и колонкой вне реестра — не только выход DP: {output_only}",
     )
+    # Касание кромкой — не перекрытие (columns_under). Фигуры, притянутые в
+    # PowerPoint к направляющим, встают кромка в кромку сплошь и рядом: с
+    # «≥ 0» плашка над DP и MEIO, коснувшаяся SNP, остановила бы импорт (три
+    # колонки), а плашка над одним MEIO, коснувшаяся SNP, стала бы передачей.
+    # Колонки DP и MEIO перекрываются, как шевроны на слайде; MEIO и SNP —
+    # кромка в кромку.
+    touch_row = _row(
+        _column(1, "DP", 0, 2, "dp"),
+        _column(2, "MEIO", 1.5, 4, "meio"),
+        _column(3, "SNP", 4, 6, "snp"),
+    )
+    try:
+        touching = classify_transfer(_plate(1, 4), touch_row, SlideReport(slide_no=1))
+    except SystemExit as error:
+        touching = None
+        check(False, f"плашка, коснувшаяся SNP кромкой, остановила импорт: {error}")
+    check(
+        touching is not None and (touching.source, touching.target) == ("dp", "meio"),
+        f"плашка над DP и MEIO, коснувшаяся SNP кромкой, — не передача DP → MEIO: {touching}",
+    )
+    touch_report = SlideReport(slide_no=1)
+    single = classify_transfer(_plate(2.5, 4), touch_row, touch_report)
+    check(
+        single is None
+        and touch_report.module_transfers
+        == [
+            "слайд 1: [91] «Плашка» — над одной колонкой MEIO: передачи между двумя модулями "
+            "нет, не импортируется"
+        ],
+        f"плашка над одним MEIO, коснувшаяся SNP кромкой, стала передачей или ушла в отчёт "
+        f"не так: {single}, {touch_report.module_transfers}",
+    )
 
     # Ряд модулей не сходится с реестром: модуля нет в ряду; модуль в ряду
     # дважды; не опознано ничего; два ряда поровну.
@@ -7401,11 +7569,37 @@ def run_self_test() -> int:
         """Подмена полосы FP&A [44] для _slide1."""
         return {44: _s1(44, "auto", box, paragraphs, "srgb:00B050")}
 
-    stop = _slide1_stop(_slide1(replaced=_lane(fpa_box, "Финансовое планирование и анализ")))
-    check(
-        stop is not None and "полоса [44]" in stop and "код в скобках" in stop,
-        f"полоса без кода не остановила импорт: {stop}",
-    )
+    # Каждая остановка — своей причиной в сообщении: одна общая фраза «нужны
+    # название и код» пропустила бы подмену одного условия другим.
+    for lane_paragraphs, reason, what in (
+        (
+            ("Финансовое планирование и анализ",),
+            "в конце последнего абзаца нет кода в скобках",
+            "полоса без кода",
+        ),
+        (
+            ("Financial Planning and Analysis (FP&A)",),
+            "абзац один — код есть, а названия над ним нет",
+            "полоса одним абзацем с кодом",
+        ),
+        # Английское название первым: подписью стало бы «FP&A · Financial
+        # Planning», а подпись — код и РУССКОЕ название (решение 9mn.31, п. 5).
+        (
+            ("Financial Planning", "Financial Planning and Analysis (FP&A)"),
+            "первый абзац «Financial Planning» не русский",
+            "полоса с английским первым абзацем",
+        ),
+        (
+            ("Финансовое планирование и анализ", "Financial Planning and Analysis (1&2)"),
+            "в коде «1&2» нет латинских букв",
+            "полоса с кодом без букв",
+        ),
+    ):
+        stop = _slide1_stop(_slide1(replaced=_lane(fpa_box, *lane_paragraphs)))
+        check(
+            stop is not None and "полоса [44]" in stop and reason in stop,
+            f"{what} не остановила импорт или остановила не той причиной: {stop}",
+        )
     narrow_report = SlideReport(slide_no=1)
     narrow = read_modules_slide(
         _slide1(
@@ -7433,9 +7627,12 @@ def run_self_test() -> int:
 
     # Сверка списков действий — только отчёт. Шаги MEIO записаны через «е», а
     # список — через «ё»; шаги DP — заглавными: ни то, ни другое не расхождение.
-    # Шагов PS не передано: сверка обязана сказать это, а не промолчать.
+    # Шагов PS не передано: сверка обязана сказать это, а не промолчать. Список
+    # [92] правее MRP не лежит ни под одной колонкой: его нельзя приписать
+    # ближайшей колонке (MRP) — перекрытия с ней нет, есть только расстояние.
+    stray_list = _s1(92, "textbox", (12_140_000, 2_808_658, 50_000, 300_000), ["Заметка"], "noFill")
     reconcile_activity_lists(
-        _slide1(),
+        _slide1(extra=[stray_list]),
         slide1.row,
         {
             "dp": ["Ведение новинки", "СЕГМЕНТАЦИЯ", "Обогащение прогноза"],
@@ -7464,6 +7661,7 @@ def run_self_test() -> int:
             f"{unlisted_steps} 1",
             "слайд 1: список [30] под колонкой PS — шаги слайда детализации модуля не "
             "переданы, не сверяется",
+            "слайд 1: список [92] «Заметка» не лежит ни под одной колонкой — не сверяется",
             "слайд 1: MRP — списка действий под колонкой нет, сверять нечего",
         ],
         f"сверка списков действий: {s1_report.activity_check}",
