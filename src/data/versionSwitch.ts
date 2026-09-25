@@ -13,14 +13,19 @@ import { getSelectedVersionId, hasVersion, setSelectedVersionId } from './versio
 /**
  * Показать другую версию карты.
  *
- * ПОРЯДОК ОБЯЗАТЕЛЕН, и `back()` здесь не косметика — довод дословно тот же,
- * что в mapSwitch.ts::applyImportedMap: `currentStageId` это id этапа ТЕКУЩЕЙ
- * версии, в другой такого этапа нет, а `StageDetail` при неизвестном этапе
- * возвращает `null` — и крошки с кнопкой «Назад» рендерятся НИЖЕ этого return.
- * На экране не осталось бы ничего.
+ * ПОРЯДОК ОБЯЗАТЕЛЕН, и `resetLevel()` здесь не косметика — довод дословно
+ * тот же, что в mapSwitch.ts::applyImportedMap: `currentStageId` это id этапа
+ * ТЕКУЩЕЙ версии, в другой такого этапа нет, а `StageDetail` при неизвестном
+ * этапе возвращает `null` — и крошки с кнопкой «Назад» рендерятся НИЖЕ этого
+ * return. На экране не осталось бы ничего.
  *
- * `back()` идёт ДО подмены: иначе между подменой и сбросом уровня успевает
- * пройти рендер с чужим `currentStageId`.
+ * `resetLevel()`, а не `back()` — тоже как в mapSwitch.ts (process-map-9mn.12):
+ * `back()` поднимает ровно на один уровень, и после переключения с уровня
+ * шагов `currentModuleId` указывал бы на модуль прежней версии. Версии
+ * различаются составом модулей так же, как составом этапов.
+ *
+ * `resetLevel()` идёт ДО подмены: иначе между подменой и сбросом уровня
+ * успевает пройти рендер с чужими `currentModuleId`/`currentStageId`.
  *
  * `clearImportedMap()` — честное прочтение действия «показать эту встроенную
  * версию»: пока поверх лежит файл пользователя, показана не версия. Интерфейс
@@ -37,8 +42,9 @@ export function selectVersion(id: string): boolean {
   if (id === getSelectedVersionId() && !isImportedActive()) {
     return true;
   }
-  // Проверка выше не меняет ничего именно затем, чтобы подмена шла ПОСЛЕ back().
-  useProcessStore.getState().back();
+  // Проверка выше не меняет ничего именно затем, чтобы подмена шла ПОСЛЕ
+  // resetLevel().
+  useProcessStore.getState().resetLevel();
   setSelectedVersionId(id);
   clearImportedMap();
   refreshProcessMap();

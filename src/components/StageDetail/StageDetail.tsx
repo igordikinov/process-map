@@ -72,7 +72,7 @@ const proOptions = { hideAttribution: true };
 
 export function StageDetail() {
   const currentStageId = useProcessStore((state) => state.currentStageId);
-  const back = useProcessStore((state) => state.back);
+  const resetLevel = useProcessStore((state) => state.resetLevel);
   const showIntegrations = useProcessStore((state) => state.showIntegrations);
   const selectedNodeId = useProcessStore((state) => state.selectedNodeId);
 
@@ -90,7 +90,7 @@ export function StageDetail() {
   );
 
   /*
-   * РАССИНХРОН УРОВНЯ И ДАННЫХ — сам возвращает на обзор (process-map-70e.8).
+   * РАССИНХРОН УРОВНЯ И ДАННЫХ — сам возвращает на корень (process-map-70e.8).
    *
    * Раньше здесь стоял голый `return null` с комментарием, что пользователь
    * выйдет кнопкой «Назад» в крошках. Это было НЕВЕРНО: крошки рендерятся ниже
@@ -105,12 +105,21 @@ export function StageDetail() {
    *
    * Возврат делается эффектом, а не прямо в теле: смена состояния во время
    * рендера — это рендер во время рендера, и React на этом ругается.
+   *
+   * resetLevel(), а не back() (process-map-9mn.12): с тремя уровнями back()
+   * поднимает ровно на один, то есть с уровня шагов снял бы этап и оставил
+   * модуль — пользователь оказался бы на экране этапов модуля, выбранного
+   * вместе с несуществующим этапом. Раз этап пришёл от чужой карты, модуль,
+   * скорее всего, оттуда же, и экран модуля стал бы следующим тупиком: его
+   * закрывает своя защита («модуль не найден», process-map-9mn.16), но это
+   * был бы второй прыжок через промежуточный экран. Защита обязана вести в
+   * одно известное место одним прыжком, а корень есть у карты любой формы.
    */
   useEffect(() => {
     if (stage === undefined) {
-      back();
+      resetLevel();
     }
-  }, [stage, back]);
+  }, [stage, resetLevel]);
 
   if (stage === undefined || graph === undefined) {
     return null;
