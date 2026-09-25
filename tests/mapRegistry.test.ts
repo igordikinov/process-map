@@ -335,4 +335,35 @@ describe('CI: самопроверка импортёра блокирует д�
     });
     expect(at, 'шаги job build идут не в том порядке').toEqual([...at].sort((a, b) => a - b));
   });
+
+  // Шаг, который есть и стоит на месте, всё ещё можно выключить, не удаляя:
+  // `continue-on-error: true` оставляет job зелёным при упавшей самопроверке,
+  // а `if:` не даёт шагу запуститься вовсе. Тест выше этого не видит — он
+  // ищет только строку `- run:`. Поэтому шаг самопроверки обязан быть голым
+  // (без соседних ключей), а continue-on-error в job build не допускается нигде:
+  // он выключил бы и npm run check, от которого деплой зависит так же.
+  it('шаг самопроверки не отключён ни if:, ни continue-on-error', () => {
+    const job = buildJob();
+    expect(job, 'continue-on-error в job build: упавший шаг не остановит деплой').not.toMatch(
+      /^\s+continue-on-error:/m,
+    );
+    const lines = job.split('\n');
+    const at = lines.findIndex((line) =>
+      /^\s+- run: python scripts\/import-pptx\.py --self-test$/.test(line),
+    );
+    expect(at, 'в job build нет шага самопроверки').toBeGreaterThanOrEqual(0);
+    // Ключи шага идут следующими строками с бо́льшим отступом, чем «- ».
+    const stepIndent = (lines[at] ?? '').indexOf('-');
+    const siblings: string[] = [];
+    for (const line of lines.slice(at + 1)) {
+      if (line.trim() === '' || line.trim().startsWith('#')) break;
+      const indent = line.length - line.trimStart().length;
+      if (indent <= stepIndent) break;
+      siblings.push(line.trim());
+    }
+    expect(
+      siblings,
+      'у шага самопроверки появились ключи — он может не блокировать деплой',
+    ).toEqual([]);
+  });
 });
