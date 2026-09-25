@@ -223,7 +223,15 @@ class MapSpec:
     # (устройство презентации SNP). Профиль 'single-slide' вводит process-map-3wh.9,
     # 'three-tier' — process-map-9mn.14. Значение обязано быть ключом
     # PROFILE_BUILDERS (построитель) и PROFILE_READS (какие таблицы решений
-    # владельца профиль читает); иначе импорт останавливается ДО сборки.
+    # владельца профиль читает), но сторожа у двух реестров разные:
+    #   · нет построителя — импорт останавливается ДО сборки (builder_for в main());
+    #   · нет объявления чтения — main() до сборки НЕ останавливается:
+    #     unread_decisions считает такой профиль «ничего не читающим» и ругается
+    #     лишь на записи таблиц для его карт, а decisions_for падает только на
+    #     первом чтении таблицы, то есть уже посреди сборки (построитель, не
+    #     читающий таблиц, не упал бы вовсе). До сборки это расхождение ловит
+    #     самопроверка: ключи двух реестров обязаны совпадать, а она идёт первым
+    #     шагом npm run data и в CI.
     profile: str
     slides: int
     # Индекс рабочего слайда для профиля 'single-slide' (0-based). У профиля
@@ -3995,7 +4003,11 @@ def print_layout_required(process_map: dict, in_pipeline: bool) -> None:
     if without_slide:
         print(f"  ВНИМАНИЕ: узлов без slidePosition: {without_slide} — это ошибка импортёра")
     if not in_pipeline:
-        print("\n  одной командой:   npm run data     (import-pptx.py → layout.ts)")
+        # Цепочка — та же, что в usage() и шапке файла: самопроверка — первый
+        # шаг npm run data (решение владельца по process-map-ngw). Строка
+        # печатается только вне конвейера, поэтому вывод npm run data от её
+        # правки не меняется.
+        print("\n  одной командой:   npm run data     (самопроверка → import-pptx.py → layout.ts)")
         print("  сторож в тестах:  tests/mapContract.test.ts сверяет координаты,")
         print("                    так что незавершённый конвейер делает npm run check красным")
 
@@ -4436,9 +4448,19 @@ def run_self_test() -> int:
             f"{sorted(reads - set(DECISION_TABLES))}",
         )
     # Решение владельца (process-map-9mn.31, вариант (а) задачи 9mn.25) — дословно.
+    # Четыре имени перечислены явно, а не через set(DECISION_TABLES), — по той же
+    # причине, что и в самом PROFILE_READS: пятая таблица (скажем, только для
+    # three-tier) не должна заставлять объявлять её прочитанной профилем, чей
+    # код её не открывает. Сравнение со всем реестром требовало бы именно этой лжи.
     check(
-        PROFILE_READS["overview+details"] == set(DECISION_TABLES),
-        "профиль overview+details обязан читать все четыре таблицы решений",
+        PROFILE_READS["overview+details"]
+        == {
+            "OWNER_DECISION_EDGES",
+            "STAGE_INPUT_ENRICHMENT",
+            "OWNER_DECISION_EXTERNAL_IO",
+            "STAGE_GROUP_SPLIT",
+        },
+        "профиль overview+details обязан читать ровно четыре таблицы решений 9mn.31",
     )
     check(PROFILE_READS["single-slide"] == frozenset(), "профиль single-slide таблиц не читает")
     check(
@@ -5058,15 +5080,19 @@ def run_self_test() -> int:
 
     # 12. main() целиком: командная строка, сторожа до сборки, --dry-run.
     #
-    #     main() гоняется на подставных реестрах (параметры maps/tables/builders),
-    #     потому что проверяется ПОРЯДОК шагов — сторож стоит до сборки, запись
-    #     идёт только без --dry-run, — а по отдельным функциям он не виден.
+    #     main() гоняется на подставных реестрах (параметры maps/tables/builders
+    #     и self_test), потому что проверяется ПОРЯДОК шагов — сторож стоит до
+    #     сборки, запись идёт только без --dry-run, справка раньше самопроверки,
+    #     — а по отдельным функциям он не виден.
     #     Вместо разбора презентации — построители-зонды: зонд бросает _Reached,
     #     и по нему видно, что main() дошла до сборки, куда не должна была. Зонд
     #     вызывается раньше первой записи файла, так что даже сломанный main()
     #     здесь ничего не пишет.
     class _Reached(Exception):
-        """Построитель вызван: main() дошла до сборки. args[0] — профиль зонда."""
+        """
+        Зонд вызван: main() дошла до шага, до которого не должна была. args[0] —
+        чей зонд: профиль построителя или "--self-test" (зонд самопроверки).
+        """
 
     def _probe(profile: str) -> Builder:
         def build(collisions: dict[str, int] | None, spec: MapSpec):
@@ -5075,6 +5101,9 @@ def run_self_test() -> int:
         return build
 
     probes = {profile: _probe(profile) for profile in PROFILE_BUILDERS}
+
+    def _self_test_probe() -> int:
+        raise _Reached("--self-test")
 
     def _fixture_builder(collisions: dict[str, int] | None, spec: MapSpec):
         return _fresh_fixture(), [SlideReport(slide_no=1)], [], Counter()
@@ -5142,6 +5171,32 @@ def run_self_test() -> int:
         "справка --help не перечисляет флаги или карты",
     )
 
+    # --help побеждает ВСЁ, включая запрет смешивать --self-test с --map (см.
+    # parse_args): справка ничего не пишет, и отказывать в ней из-за соседнего
+    # флага незачем. Сначала — сам разбор...
+    try:
+        with_help = parse_args(["--self-test", "--map", "snp", "--help"])
+    except SystemExit as error:
+        check(False, f"--help не победил сочетание --self-test с --map: {error}")
+    else:
+        check(with_help.help, f"--help потерян в сочетании с --self-test и --map: {with_help}")
+    # ...потом порядок в main(): при --self-test --help печатается справка, а
+    # самопроверка не запускается. Вместо неё — зонд: настоящая run_self_test
+    # при сломанном порядке вызвала бы здесь саму себя (см. main()).
+    help_out, outcome = _run(["--self-test", "--help"], self_test=_self_test_probe)
+    check(
+        outcome == 0 and "Использование:" in help_out,
+        f"--self-test --help не напечатал справку, а дошёл до: {outcome!r}",
+    )
+    # Контроль зонда: без --help main() отдаёт --self-test именно самопроверке.
+    # Без него проверка выше была бы зелёной и при main(), которая
+    # самопроверку не зовёт вовсе.
+    _, outcome = _run(["--self-test"], self_test=_self_test_probe)
+    check(
+        isinstance(outcome, _Reached) and outcome.args == ("--self-test",),
+        f"main() с --self-test не запустила самопроверку: {outcome!r}",
+    )
+
     with tempfile.TemporaryDirectory() as tmp:
         # Карта-фикстура целиком во временном каталоге: презентации нет, файлы
         # карты и фикстуры пишутся (или не пишутся) туда же.
@@ -5207,9 +5262,43 @@ def run_self_test() -> int:
             },
             builders=probes,
         )
+        # Сообщение сверяется и по имени записи, и по словам ИМЕННО этого сторожа:
+        # decision_map тоже бросает SystemExit с именем задачи (например, на
+        # карте, которой нет в реестре), и проверка «имя записи в сообщении»
+        # приняла бы чужую остановку за эту.
+        def _unread_stop(outcome: object, task: str) -> bool:
+            return (
+                isinstance(outcome, SystemExit)
+                and task in str(outcome)
+                and "PROFILE_READS" in str(outcome)
+                and "не применятся никогда" in str(outcome)
+            )
+
         check(
-            isinstance(outcome, SystemExit) and "self-test-unread" in str(outcome),
+            _unread_stop(outcome, "self-test-unread"),
             f"main() не остановилась на непрочитанном решении до сборки: {outcome!r}",
+        )
+
+        # Проверяются ВСЕ карты реестра, а не только собираемая (unread_decisions):
+        # собирается probe (overview+details, таблицу читает), а непрочитанная
+        # запись принадлежит соседней probe-other (single-slide). main(), сверяющая
+        # только собираемую карту, дошла бы до зонда probe.
+        _, outcome = _run(
+            ["--dry-run", "--map", "probe"],
+            maps={
+                "probe": probe_spec,
+                "probe-other": replace(probe_spec, key="probe-other", profile="single-slide"),
+            },
+            tables={
+                "OWNER_DECISION_EDGES": (
+                    {"map": "probe-other", "task": "self-test-unread-other", "stage": 1},
+                )
+            },
+            builders=probes,
+        )
+        check(
+            _unread_stop(outcome, "self-test-unread-other"),
+            f"main() не заметила непрочитанное решение соседней карты: {outcome!r}",
         )
 
         # --dry-run: собирает и печатает отчёт, но не пишет ни карты, ни фикстуры.
@@ -5224,13 +5313,34 @@ def run_self_test() -> int:
 
         # Контроль: тот же прогон без --dry-run пишет оба файла. Без него проверка
         # выше была бы зелёной и при пути, по которому main() не пишет никогда.
-        _, outcome = _run(["--map", "probe"], maps=probe_maps, tables={}, builders=fixture_builders)
+        alone_out, outcome = _run(
+            ["--map", "probe"], maps=probe_maps, tables={}, builders=fixture_builders
+        )
         check(outcome == 0, f"обычный прогон на фикстуре вернул не 0, а {outcome!r}")
         check(all(path.exists() for path in written), "обычный прогон не записал файлы карты")
         check(
             json.loads(probe_spec.required_nodes.read_text(encoding="utf-8"))
             == collect_required_node_ids(_fresh_fixture()),
             "обычный прогон записал не ту фикстуру required-nodes",
+        )
+
+        # --in-pipeline доходит до финального блока (print_layout_required): вне
+        # конвейера — требование прогнать раскладку, из scripts/data.ts — «шаг 1
+        # из 2». Флаг ни на что больше не влияет, поэтому потерять его по дороге
+        # от разбора до печати можно незаметно для всех прочих проверок: данные
+        # те же, меняется только текст, который человек читает.
+        check(
+            "КОНВЕЙЕР НЕ ЗАВЕРШЁН" in alone_out and "ШАГ 1 ИЗ 2" not in alone_out,
+            "прогон без --in-pipeline не потребовал раскладку",
+        )
+        pipeline_out, outcome = _run(
+            ["--in-pipeline", "--map", "probe"], maps=probe_maps, tables={}, builders=fixture_builders
+        )
+        check(outcome == 0, f"прогон с --in-pipeline вернул не 0, а {outcome!r}")
+        check(
+            "ШАГ 1 ИЗ 2" in pipeline_out and "КОНВЕЙЕР НЕ ЗАВЕРШЁН" not in pipeline_out,
+            "main() не донесла --in-pipeline до финального блока — конвейер пугает раскладкой, "
+            "которую сам запускает следом",
         )
 
         # --dry-run не трогает и уже существующий файл: содержимое-маркер,
@@ -5419,6 +5529,7 @@ def main(
     maps: Mapping[str, MapSpec] = MAPS,
     tables: Mapping[str, Sequence[dict]] = DECISION_TABLES,
     builders: Mapping[str, Builder] = PROFILE_BUILDERS,
+    self_test: Callable[[], int] = run_self_test,
 ) -> int:
     """
     Точка входа. Именованные параметры — ТОЛЬКО для самопроверки: она гоняет
@@ -5426,6 +5537,11 @@ def main(
     построитель-фикстура), чтобы проверить порядок шагов, а не отдельные
     функции, — подмена глобалей в этом файле не практикуется (см. пункт 1d
     самопроверки). Рабочий путь зовёт main(sys.argv[1:]).
+
+    `self_test` подставляется по той же причине: самопроверка проверяет, что
+    `--self-test --help` печатает справку, а не запускает самопроверку. Настоящая
+    run_self_test на этом месте при сломанном порядке вызвала бы саму себя, и
+    вместо названной проверки прогон упал бы переполнением стека.
     """
     # Отчёт содержит кириллицу и стрелки: на консоли с cp866/cp1251 печать иначе
     # падает с UnicodeEncodeError уже после записи файлов.
@@ -5434,11 +5550,13 @@ def main(
             stream.reconfigure(encoding="utf-8", errors="replace")
 
     cli = parse_args(list(argv))
+    # --help — ДО --self-test: справка побеждает всё (см. parse_args), и
+    # `--self-test --help` обязан только напечатать её.
     if cli.help:
         print(usage(maps))
         return 0
     if cli.self_test:
-        return run_self_test()
+        return self_test()
 
     # Решения владельца, которые не применятся никогда (process-map-9mn.25,
     # вариант (а)). ДО сборки и до чтения чего-либо с диска: такая запись —
