@@ -1,6 +1,5 @@
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import type { MapId } from '../../scripts/mapTarget.ts';
 import {
   ProcessNodeSchema,
   ProcessMapSchema,
@@ -9,6 +8,16 @@ import {
 } from '../../src/data/schema.ts';
 import { ru } from '../../src/i18n/ru.ts';
 import processJson from '../../src/data/snp/process.json';
+import {
+  DECISION_TABLES,
+  readDecisionTable,
+  readGroupSplit,
+  readImporterSource,
+  readInputEnrichment,
+  readOwnerDecisionEdges,
+  readOwnerExternalIo,
+  readPythonTuple,
+} from '../helpers/importerSource.ts';
 
 // Контракт между scripts/import-pptx.py и src/data/schema.ts (задача process-map-2dj).
 //
@@ -37,59 +46,26 @@ import processJson from '../../src/data/snp/process.json';
 //
 // Что здесь НЕ покрыто (покрыто --self-test): сам перенос по id, различение
 // `screen: null` и отсутствия ключа, отчёт о потерянных узлах, идемпотентность.
-
-// import.meta.url под vitest+jsdom — не file:-URL (см. scripts/layout.ts::jsonPath),
-// поэтому путь берётся от корня прогона. Отсутствие файла уронит тест на
-// readFileSync — это и есть нужное поведение, молча пропускать нечего.
-const IMPORTER_PATH = resolve(process.cwd(), 'scripts', 'import-pptx.py');
-const importerSource = readFileSync(IMPORTER_PATH, 'utf8');
-
-/** Читает python-кортеж строковых констант верхнего уровня по имени. */
-function readPythonTuple(name: string): string[] {
-  const match = new RegExp(`^${name}\\s*=\\s*\\(([^)]*)\\)`, 'm').exec(importerSource);
-  if (match === null) {
-    throw new Error(`В scripts/import-pptx.py не найдена константа ${name}`);
-  }
-  return [...match[1]!.matchAll(/"([^"]+)"/g)].map((item) => item[1]!);
-}
-
-interface OwnerDecision {
-  task: string;
-  stage: number;
-  source: string;
-  targets: string[];
-}
+//
+// Исходник импортёра разбирает tests/helpers/importerSource.ts — один разборщик
+// на все таблицы (process-map-n6h); его собственные тесты, на синтетическом
+// исходнике двух карт, — tests/importerSource.test.ts.
+const importerSource = readImporterSource();
 
 /**
- * Читает OWNER_DECISION_EDGES из scripts/import-pptx.py — объявление рёбер,
- * которых в презентации НЕТ (задача process-map-7bz). Разбор регуляркой, а не
- * запуском Python: тест обязан работать там, где интерпретатора нет.
+ * Карта, чьи решения владельца сверяются здесь с src/data/snp/process.json.
+ *
+ * Таблицы решений общие для всех карт, а запись относится к одной (ключ map,
+ * process-map-9mn.13). Сверять запись другой карты с данными SNP — значит
+ * гарантированно покраснеть: её этапа и её узлов в этом файле нет. Записи
+ * других карт проверяют тесты их карт.
  */
-function readOwnerDecisionEdges(): OwnerDecision[] {
-  // Разбор ограничен объявлением верхнего уровня: похожие литералы в других
-  // местах файла (например, фикстура самопроверки) сюда попасть не должны.
-  const block = /^OWNER_DECISION_EDGES[^\n]*=\s*\(\n([\s\S]*?)\n\)\n/m.exec(importerSource);
-  // Пустой список вместо исключения — намеренно: «объявление исчезло» должно
-  // ронять ИМЕНОВАННУЮ проверку ниже, а не сборку файла. Падение на этапе
-  // сбора унесло бы вместе с собой и остальные тесты этого файла, и стало бы
-  // непонятно, какое именно условие нарушено.
-  if (block === null) {
-    return [];
-  }
-  const pattern =
-    /"task":\s*"([^"]+)",\s*"stage":\s*(\d+),\s*"source":\s*"([^"]+)",\s*"targets":\s*\(([\s\S]*?)\)/g;
-  return [...block[1]!.matchAll(pattern)].map((match) => ({
-    task: match[1]!,
-    stage: Number(match[2]!),
-    source: match[3]!,
-    targets: [...match[4]!.matchAll(/"([^"]+)"/g)].map((item) => item[1]!),
-  }));
-}
+const THIS_MAP = 'snp' satisfies MapId;
 
-const nodeKeyOrder = readPythonTuple('NODE_KEY_ORDER');
-const stageKeyOrder = readPythonTuple('STAGE_KEY_ORDER');
-const preservedNodeFields = readPythonTuple('PRESERVED_NODE_FIELDS');
-const preservedStageFields = readPythonTuple('PRESERVED_STAGE_FIELDS');
+const nodeKeyOrder = readPythonTuple(importerSource, 'NODE_KEY_ORDER');
+const stageKeyOrder = readPythonTuple(importerSource, 'STAGE_KEY_ORDER');
+const preservedNodeFields = readPythonTuple(importerSource, 'PRESERVED_NODE_FIELDS');
+const preservedStageFields = readPythonTuple(importerSource, 'PRESERVED_STAGE_FIELDS');
 
 const map = ProcessMapSchema.parse(processJson);
 
@@ -179,23 +155,30 @@ describe('import-pptx.py: контракт переноса ручных пол�
 //   · объявлено, но в JSON нет — значит, объявление перестало применяться;
 //   · в JSON есть, а объявления нет — значит, ребро дописали руками, и оно
 //     не переживёт следующей перегенерации.
+//
+// ТАБЛИЦЫ РАЗБИРАЮТСЯ ВНУТРИ it, А НЕ В ТЕЛЕ describe — здесь и во всех блоках
+// решений ниже. Разборщик на пропавшей или испорченной таблице бросает
+// исключение (process-map-n6h), а исключение при сборе файла унесло бы с собой
+// все остальные проверки этого файла, и стало бы непонятно, какое именно
+// условие нарушено. Внутри it оно роняет ИМЕНОВАННУЮ проверку.
 describe('import-pptx.py: рёбра по решению владельца процесса', () => {
-  const decisions = readOwnerDecisionEdges();
+  const decisions = () => readOwnerDecisionEdges(importerSource, THIS_MAP);
 
   it('объявление не потеряно и называет задачу-основание', () => {
+    const declared = decisions();
     expect(
-      decisions.length,
-      'OWNER_DECISION_EDGES в scripts/import-pptx.py пуст или не найден — ' +
+      declared.length,
+      'в OWNER_DECISION_EDGES (scripts/import-pptx.py) нет записей карты snp — ' +
         'решения владельца процесса не переживут следующий npm run data',
     ).toBeGreaterThan(0);
-    for (const decision of decisions) {
+    for (const decision of declared) {
       expect(decision.task, 'источник решения').toMatch(/^process-map-/);
       expect(decision.targets.length).toBeGreaterThan(0);
     }
   });
 
   it('каждое объявленное ребро есть в process.json и его концы — узлы того же этапа', () => {
-    for (const decision of decisions) {
+    for (const decision of decisions()) {
       const stage = map.stages.find((candidate) => candidate.number === decision.stage);
       expect(stage, `этап ${decision.stage}`).toBeDefined();
       const nodeIds = new Set(stage!.nodes.map((node) => node.id));
@@ -222,54 +205,26 @@ describe('import-pptx.py: рёбра по решению владельца пр
   });
 });
 
-/**
- * Читает OWNER_DECISION_EXTERNAL_IO — внешние системы этапа, названные
- * владельцем, а не выведенные из текста (process-map-vjz.5). Разбор регуляркой
- * по той же причине, что и у соседних таблиц: интерпретатора Python в CI нет.
- */
-function readOwnerExternalIo(): OwnerExternalIo[] {
-  const block = new RegExp(
-    '^OWNER_DECISION_EXTERNAL_IO[^\\n]*=\\s*\\(\\n([\\s\\S]*?)\\n\\)\\n',
-    'm',
-  ).exec(importerSource);
-  if (block === null) {
-    return [];
-  }
-  const entries =
-    /"task":\s*"([^"]+)",\s*"stage":\s*(\d+),\s*"system":\s*"([^"]+)",\s*"label":\s*"([^"]+)",\s*"direction":\s*"([^"]+)"/g;
-  return [...block[1]!.matchAll(entries)].map((match) => ({
-    task: match[1]!,
-    stage: Number(match[2]!),
-    system: match[3]!,
-    label: match[4]!,
-    direction: match[5]!,
-  }));
-}
-
-interface OwnerExternalIo {
-  task: string;
-  stage: number;
-  system: string;
-  label: string;
-  direction: string;
-}
-
-// Внешняя система, которую автоматика взять не могла: ExternalIO собирается,
-// только когда в тексте нашлись И код системы, И направление, а во фразе
-// «Управление транзакционными данными» нет ни того, ни другого — код назвал
-// владелец. Тест сторожит, что объявление не потерялось и доехало в данные:
-// импортёр пересобирает process.json с нуля, и правка прямо в JSON не пережила
-// бы следующий npm run data.
+// Внешняя система, которую автоматика взять не могла (OWNER_DECISION_EXTERNAL_IO,
+// process-map-vjz.5): ExternalIO собирается, только когда в тексте нашлись И
+// код системы, И направление, а во фразе «Управление транзакционными данными»
+// нет ни того, ни другого — код назвал владелец. Тест сторожит, что объявление
+// не потерялось и доехало в данные: импортёр пересобирает process.json с нуля,
+// и правка прямо в JSON не пережила бы следующий npm run data.
+//
+// Именно в эту таблицу следующими придут записи карты In.Plan — отбор по
+// THIS_MAP здесь не формальность.
 describe('import-pptx.py: внешние системы по решению владельца', () => {
-  const declared = readOwnerExternalIo();
+  const declared = () => readOwnerExternalIo(importerSource, THIS_MAP);
 
   it('объявление не потеряно и называет задачу-основание', () => {
+    const entries = declared();
     expect(
-      declared.length,
-      'OWNER_DECISION_EXTERNAL_IO в scripts/import-pptx.py пуст или не найден — ' +
+      entries.length,
+      'в OWNER_DECISION_EXTERNAL_IO (scripts/import-pptx.py) нет записей карты snp — ' +
         'названный владельцем источник данных не переживёт следующий npm run data',
     ).toBeGreaterThan(0);
-    for (const entry of declared) {
+    for (const entry of entries) {
       expect(entry.task, 'источник решения').toMatch(/^process-map-/);
       expect(['in', 'out']).toContain(entry.direction);
     }
@@ -279,13 +234,13 @@ describe('import-pptx.py: внешние системы по решению вл
     // Прямая связка Python ↔ TypeScript: код, названный владельцем, обязан
     // существовать в SystemCode. Без этой проверки рассинхрон всплыл бы уже
     // падением разбора process.json, то есть позже и невнятнее.
-    for (const entry of declared) {
+    for (const entry of declared()) {
       expect(SystemCodeSchema.options as readonly string[]).toContain(entry.system);
     }
   });
 
   it('объявленная система доехала в process.json своим этапом и направлением', () => {
-    for (const entry of declared) {
+    for (const entry of declared()) {
       const stage = map.stages.find((candidate) => candidate.number === entry.stage);
       expect(stage, `этап ${entry.stage}`).toBeDefined();
       const bucket = entry.direction === 'in' ? stage!.inputs : stage!.outputs;
@@ -296,63 +251,32 @@ describe('import-pptx.py: внешние системы по решению вл
   });
 });
 
-/**
- * Читает STAGE_INPUT_ENRICHMENT из scripts/import-pptx.py — входы этапа, взятые
- * со слайда ОБЗОРА вместо слайда детализации (задача process-map-qjl). Разбор
- * регуляркой по той же причине, что и у OWNER_DECISION_EDGES: интерпретатора
- * Python в CI нет.
- */
-function readInputEnrichment(): InputEnrichment[] {
-  const block = /^STAGE_INPUT_ENRICHMENT[^\n]*=\s*\(\n([\s\S]*?)\n\)\n/m.exec(importerSource);
-  // Пустой список вместо исключения — как и выше: «объявление исчезло» обязано
-  // ронять именованную проверку, а не сбор файла целиком.
-  if (block === null) {
-    return [];
-  }
-  const entries =
-    /"task":\s*"([^"]+)",[\s\S]*?"stage":\s*(\d+),[\s\S]*?"add":\s*\(([\s\S]*?)\),\s*(?:#[^\n]*\n\s*)*"expand":\s*\(([\s\S]*?)\n\s*\),/g;
-  return [...block[1]!.matchAll(entries)].map((match) => ({
-    task: match[1]!,
-    stage: Number(match[2]!),
-    add: [...match[3]!.matchAll(/"([^"]+)"/g)].map((item) => item[1]!),
-    expand: [...match[4]!.matchAll(/\(\s*"([^"]+)",\s*"([^"]+)",?\s*\)/g)].map((item) => ({
-      short: item[1]!,
-      full: item[2]!,
-    })),
-  }));
-}
-
-interface InputEnrichment {
-  task: string;
-  stage: number;
-  add: string[];
-  expand: { short: string; full: string }[];
-}
-
-// Входы, взятые со слайда обзора (process-map-qjl). Причина отдельного
-// объявления та же, что у рёбер выше: импортёр пересобирает process.json с
-// нуля, и правка подписи прямо в JSON не пережила бы следующий npm run data.
+// Входы, взятые со слайда ОБЗОРА вместо слайда детализации
+// (STAGE_INPUT_ENRICHMENT, process-map-qjl). Причина отдельного объявления та
+// же, что у рёбер выше: импортёр пересобирает process.json с нуля, и правка
+// подписи прямо в JSON не пережила бы следующий npm run data.
 // Тест сторожит связь в ОБЕ стороны: объявленное обязано быть в JSON, а
 // заменённая короткая формулировка — из JSON исчезнуть. Без второй половины
 // проверка осталась бы зелёной, даже если бы замена перестала применяться и в
 // файле лежали ОБА варианта строки.
 describe('import-pptx.py: входы по слайду обзора', () => {
-  const enrichments = readInputEnrichment();
+  const enrichments = () => readInputEnrichment(importerSource, THIS_MAP);
 
   it('объявление не потеряно и называет задачу-основание', () => {
+    const entries = enrichments();
     expect(
-      enrichments.length,
-      'STAGE_INPUT_ENRICHMENT в scripts/import-pptx.py пуст или не найден — ' +
+      entries.length,
+      'в STAGE_INPUT_ENRICHMENT (scripts/import-pptx.py) нет записей карты snp — ' +
         'решения владельца по формулировкам не переживут следующий npm run data',
     ).toBeGreaterThan(0);
-    for (const entry of enrichments) {
+    for (const entry of entries) {
       expect(entry.task, 'источник решения').toMatch(/^process-map-/);
       expect(entry.add.length + entry.expand.length).toBeGreaterThan(0);
     }
   });
 
   it('добавленные строки доехали в process.json входами своего этапа', () => {
-    for (const entry of enrichments) {
+    for (const entry of enrichments()) {
       const stage = map.stages.find((candidate) => candidate.number === entry.stage);
       expect(stage, `этап ${entry.stage}`).toBeDefined();
       const inputs = stage!.nodes.filter((node) => node.type === 'data' && node.direction === 'in');
@@ -367,7 +291,7 @@ describe('import-pptx.py: входы по слайду обзора', () => {
   });
 
   it('переформулированные строки заменены, а не продублированы', () => {
-    for (const entry of enrichments) {
+    for (const entry of enrichments()) {
       const stage = map.stages.find((candidate) => candidate.number === entry.stage);
       expect(stage, `этап ${entry.stage}`).toBeDefined();
       const labels = new Set(stage!.nodes.map((node) => node.label));
@@ -382,53 +306,29 @@ describe('import-pptx.py: входы по слайду обзора', () => {
   });
 });
 
-/**
- * Читает STAGE_GROUP_SPLIT из scripts/import-pptx.py — деление узлов этапа на
- * группы, которого на слайде детализации нет (задача process-map-028).
- */
-function readGroupSplit(): GroupSplit[] {
-  const block = /^STAGE_GROUP_SPLIT[^\n]*=\s*\(\n([\s\S]*?)\n\)\n/m.exec(importerSource);
-  if (block === null) {
-    return [];
-  }
-  const entries =
-    /"task":\s*"([^"]+)",\s*"stage":\s*(\d+),\s*"label":\s*"([^"]+)",\s*"nodes":\s*\(([\s\S]*?)\),/g;
-  return [...block[1]!.matchAll(entries)].map((match) => ({
-    task: match[1]!,
-    stage: Number(match[2]!),
-    label: match[3]!,
-    nodes: [...match[4]!.matchAll(/"([^"]+)"/g)].map((item) => item[1]!),
-  }));
-}
-
-interface GroupSplit {
-  task: string;
-  stage: number;
-  label: string;
-  nodes: string[];
-}
-
-// Деление группы по решению владельца (process-map-028). Причина отдельного
-// объявления та же, что у рёбер и входов выше: импортёр пересобирает
-// process.json с нуля. Тест сторожит связь в ОБЕ стороны — объявленные узлы
-// обязаны лежать в новой группе, а сама группа обязана существовать у этапа.
+// Деление узлов этапа на группы, которого на слайде детализации нет
+// (STAGE_GROUP_SPLIT, process-map-028). Причина отдельного объявления та же,
+// что у рёбер и входов выше: импортёр пересобирает process.json с нуля. Тест
+// сторожит связь в ОБЕ стороны — объявленные узлы обязаны лежать в новой
+// группе, а сама группа обязана существовать у этапа.
 describe('import-pptx.py: деление группы по решению владельца', () => {
-  const splits = readGroupSplit();
+  const splits = () => readGroupSplit(importerSource, THIS_MAP);
 
   it('объявление не потеряно и называет задачу-основание', () => {
+    const entries = splits();
     expect(
-      splits.length,
-      'STAGE_GROUP_SPLIT в scripts/import-pptx.py пуст или не найден — ' +
+      entries.length,
+      'в STAGE_GROUP_SPLIT (scripts/import-pptx.py) нет записей карты snp — ' +
         'деление групп не переживёт следующий npm run data',
     ).toBeGreaterThan(0);
-    for (const split of splits) {
+    for (const split of entries) {
       expect(split.task, 'источник решения').toMatch(/^process-map-/);
       expect(split.nodes.length).toBeGreaterThan(0);
     }
   });
 
   it('новая группа есть у этапа, и объявленные узлы лежат именно в ней', () => {
-    for (const split of splits) {
+    for (const split of splits()) {
       const stage = map.stages.find((candidate) => candidate.number === split.stage);
       expect(stage, `этап ${split.stage}`).toBeDefined();
 
@@ -509,7 +409,7 @@ describe('import-pptx.py: заголовок блока не становитс�
 // всплыл бы только после того, как новый код уже попал в process.json и уронил
 // ProcessMapSchema.parse. Этот тест ловит его раньше и без Python (process-map-32r).
 describe('import-pptx.py: коды систем согласованы со схемой', () => {
-  const fromPython = readPythonTuple('SYSTEM_CODES');
+  const fromPython = readPythonTuple(importerSource, 'SYSTEM_CODES');
   const fromSchema = [...SystemCodeSchema.options];
 
   it('списки совпадают по составу', () => {
@@ -538,17 +438,6 @@ describe('import-pptx.py: коды систем согласованы со сх
   });
 });
 
-/**
- * Тело объявления таблицы решений владельца по имени — тем же способом, каким
- * его читают разборщики выше.
- */
-function readDecisionBlock(name: string): string {
-  const block = new RegExp(`^${name}[^\\n]*=\\s*\\(\\n([\\s\\S]*?)\\n\\)\\n`, 'm').exec(
-    importerSource,
-  );
-  return block?.[1] ?? '';
-}
-
 // Ключ `map` в таблицах решений владельца (process-map-9mn.13).
 //
 // Решение владельца относится к ОДНОЙ карте. Пока карта была одна, таблицы
@@ -557,30 +446,18 @@ function readDecisionBlock(name: string): string {
 // сборку («этапа 3 нет в презентации»), либо — хуже — применится к ней молча,
 // совпав номером этапа.
 //
-// Проверка считает ключи, а не разбирает записи: ровно так же, как разборщики
-// выше, она смотрит на ИСХОДНИК, потому что Python в CI не запускается. Счёт
-// 'map' против 'task' ловит забытый ключ в любой из четырёх таблиц, не требуя
-// пятой регулярки, которую пришлось бы чинить при каждой правке формата.
+// Проверка — у ВСЕХ записей таблицы, какой бы карте они ни относились: блоки
+// выше читают только записи SNP и чужую запись без ключа не увидели бы вовсе.
+// Раньше здесь сравнивалось число вхождений "map": и "task": (process-map-9mn.13);
+// теперь запись разбирается целиком, и readDecisionTable бросает на записи, у
+// которой map не ПЕРВЫЙ ключ, — с именем таблицы, задачей и строкой импортёра
+// (process-map-n6h). Первым — потому что так же требует самопроверка
+// импортёра, а она в CI не запускается.
 describe('import-pptx.py: решения владельца привязаны к карте', () => {
-  const tables = [
-    'OWNER_DECISION_EDGES',
-    'STAGE_INPUT_ENRICHMENT',
-    'OWNER_DECISION_EXTERNAL_IO',
-    'STAGE_GROUP_SPLIT',
-  ];
-
-  it('у каждой записи каждой таблицы есть ключ map', () => {
-    const counted = tables.map((name) => {
-      const body = readDecisionBlock(name);
-      expect(body, `${name} в scripts/import-pptx.py пуст или не найден`).not.toBe('');
-      const tasks = [...body.matchAll(/"task":/g)].length;
-      expect(tasks, `в ${name} нет ни одной записи`).toBeGreaterThan(0);
-      return { name, tasks, maps: [...body.matchAll(/"map":/g)].length };
-    });
-    const broken = counted.filter((item) => item.maps !== item.tasks);
-    expect(
-      broken.map((item) => `${item.name}: записей ${item.tasks}, ключей map ${item.maps}`),
-      'решение владельца без ключа map относилось бы ко всем картам сразу',
-    ).toEqual([]);
+  it.each(DECISION_TABLES)('%s: у каждой записи ключ map стоит первым', (table) => {
+    // Нарушение — исключение из readDecisionTable с именем таблицы и строкой;
+    // здесь остаётся явно сказать, что таблица вообще не пуста.
+    const records = readDecisionTable(importerSource, table);
+    expect(records.length, `в ${table} нет ни одной записи`).toBeGreaterThan(0);
   });
 });
