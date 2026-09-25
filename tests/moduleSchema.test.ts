@@ -50,9 +50,11 @@ function systemCodesInExternalIO(map: ThreeLevelProcessMap): Set<string> {
 /**
  * Владелец каждого этапа — прямо из module.stageIds.
  *
- * Мимо moduleOfStage из src/data/modules.ts намеренно: сторожа фикстуры
- * охраняют различающую силу тестов этой функции и не имеют права стоять на
- * ней самой.
+ * Мимо src/data/modules.ts намеренно — мимо ЛЮБОЙ его функции, moduleOfStage
+ * в том числе. Сторожа, которые зовут этот помощник (цепочка этап → этап у
+ * каждого модуля, система концом обзорного ребра), охраняют различающую силу
+ * тестов overviewEdgesOf из того же модуля и не имеют права стоять на нём
+ * самом: ошибка в src/data/modules.ts ослепила бы и тесты, и их сторожа.
  */
 function moduleIdByStageId(map: ThreeLevelProcessMap): Map<string, string> {
   return new Map(
@@ -465,6 +467,11 @@ describe('validateIntegrity: модули', () => {
     // зелёным вхолостую (так он и был устроен до process-map-9mn.29). «Ошибка
     // в трёхуровневой карте» — тоже не на слово: то же ребро в трёхуровневой
     // фикстуре соединяет этапы DP и SNP, и проверка на нём срабатывает.
+    //
+    // Эта вторая половина опирается на СОСТАВ модулей фикстуры: stage-2 — в DP,
+    // stage-3 — в SNP. Сдвинь границу — и тест покраснеет, свалив вину на
+    // validateIntegrity; настоящий диагноз даст тест «состав модулей 2 / 3 / 2
+    // — литералом…» выше, который краснеет в том же прогоне.
     const map = ProcessMapSchema.parse(buildSampleProcessMap());
     const edge = map.overviewEdges.find(
       (candidate) => candidate.source === 'stage-2' && candidate.target === 'stage-3',
