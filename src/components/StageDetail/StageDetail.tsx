@@ -18,6 +18,7 @@ import { DataEdge, EdgeMarkers, IntegrationEdge, ProcessEdge, ProcessInnerEdge }
 import { Legend } from '../Legend';
 import { NodeDrawer } from '../NodeDrawer';
 import { DataNode } from '../nodes/DataNode';
+import { DetailNode } from '../nodes/DetailNode';
 import { GroupNode } from '../nodes/GroupNode';
 import { StepNode } from '../nodes/StepNode';
 import { WarningNode } from '../nodes/WarningNode';
@@ -53,6 +54,10 @@ const nodeTypes = {
   gateway: StepNode,
   event: StepNode,
   subprocess: StepNode,
+  // Подробность под шагом (process-map-9mn.32): пока заглушка, оформление —
+  // process-map-9mn.36. Без регистрации React Flow нарисовал бы узел по
+  // умолчанию, и тип из схемы молча выглядел бы чужим.
+  detail: DetailNode,
 } satisfies NodeTypes;
 
 const edgeTypes = {

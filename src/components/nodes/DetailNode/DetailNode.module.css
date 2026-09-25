@@ -1,0 +1,26 @@
+/*
+ * Подробность под шагом, уровень 2 (process-map-9mn.32) — заглушка до
+ * process-map-9mn.36. Только var(...) из src/theme/tokens.css (CLAUDE.md
+ * «Кодовые правила»); размер — токены, которые сторожит tests/sizes.test.ts.
+ */
+
+/* overflow НЕ скрыт намеренно: размер временный, и текст, не влезший в него,
+   должен вылезти за рамку на виду, а не пропасть молча. */
+.card {
+  width: var(--pm-detail-node-width);
+  height: var(--pm-detail-node-height);
+  box-sizing: border-box;
+  padding: var(--scp-paddings-m);
+  border: 1px solid var(--pm-node-border);
+  border-radius: var(--scp-border-radius-md);
+  /* Внешняя заливка, как у колонок данных: подробность — пояснение к шагу, а
+     не сам шаг, и не должна спорить с ним фокусной заливкой. */
+  background: var(--pm-node-bg-external);
+  box-shadow: var(--pm-shadow-node-data);
+  color: var(--scp-content-primary);
+  font-size: var(--pm-font-size-12-5);
+  line-height: var(--pm-line-height-15);
+  /* Абзацы склеены через \n (решение владельца, process-map-9mn.31); обрезки
+     многоточием нет намеренно — текст и есть содержание узла. */
+  white-space: pre-line;
+}

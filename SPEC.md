@@ -63,8 +63,12 @@ process-map/
 ## 3. Модель данных (`process.json`)
 
 ```ts
-type NodeType = 'step' | 'data' | 'integration' | 'warning';
-type SystemCode = 'DP' | 'PS' | 'IO' | 'ERP' | 'MRP' | 'INPLAN' | 'BI' | 'EPM';
+// step, data, integration, warning — презентации; gateway, event, subprocess —
+// импорт BPMN (process-map-70e.4); detail — подробность под шагом: блок текста,
+// абзацы склеены через \n (process-map-9mn.32)
+type NodeType =
+  'step' | 'data' | 'integration' | 'warning' | 'gateway' | 'event' | 'subprocess' | 'detail';
+type SystemCode = 'DP' | 'PS' | 'IO' | 'ERP' | 'MRP' | 'INPLAN' | 'BI' | 'EPM' | 'NRM';
 
 interface ScreenLink {
   title: string; // «Планирование поставок › Объёмный план»
@@ -123,16 +127,41 @@ interface Stage {
   outputs: ExternalIO[];
 }
 
+interface Module {
+  // карточка уровня 1 трёхуровневой карты (эпик M8)
+  id: string; // kebab-case, попадает в ?module=<id>
+  number: number;
+  title: string;
+  shortTitle: string;
+  label: string; // подпись рамки потока этапов модуля: «Модуль DP»
+  keyOutputs: string[]; // ≤ 4
+  screen?: ScreenLink;
+  stageIds: string[]; // ссылки на Stage.id, ≥ 1
+}
+
+interface Lane {
+  // полоса уровня 1: не модуль, в цепочку не входит, не кликается
+  id: string; // kebab-case, не совпадает с id модулей
+  title: string; // «FP&A · Финансовое планирование и анализ»
+}
+
 interface ProcessMap {
   version: string;
   id: string; // 'snp' | 'mrp' — имя каталога src/data/<id>/ и ключ overrides
   updatedAt: string;
   title: string;
   moduleLabel: string; // подпись рамки вокруг потока этапов: «Модуль SNP»
+  modules?: Module[]; // есть — карта трёхуровневая; [] невыразим
+  moduleEdges?: Edge[]; // связи уровня 1: модуль→модуль и система→модуль
+  lanes?: Lane[]; // полосы уровня 1, только при modules; [] невыразим
   stages: Stage[];
   overviewEdges: Edge[]; // связи этап→этап и система→этап
 }
 ```
+
+Порядок ключей `ProcessMap` — часть контракта, а не оформление: экспорт прогоняет карту через zod, который пересобирает объект в порядке схемы, и обязан совпадать с файлом побайтово. Поэтому `tests/mapContract.test.ts` для **каждой** карты на диске проверяет round-trip `JSON.stringify(ProcessMapSchema.parse(файл), null, 2) + '\n' === файл` (`process-map-9mn.32`).
+
+**Инварианты целостности** (`validateIntegrity`, `src/data/schema.ts`; каждый нарушенный — отдельной строкой со своим текстом). К ссылочной целостности рёбер, групп и модулей `process-map-9mn.32` добавила пять правил: (1) у обзорного ребра хотя бы один конец — этап, ребро «система → система» запрещено (`process-map-9ow`); (2) конец `moduleEdges`, являющийся кодом системы и совпадающий с `id` модуля этой карты без учёта регистра (`MRP` при модуле `mrp`), — ошибка, source и target проверяются отдельно; то же для `ExternalIO.system` в карте с модулями, где свимлейн — только внешняя система (`process-map-9mn.23`); (3) номера этапов каждого модуля образуют сплошной блок — сплошным обязано быть **множество** номеров, обратный порядок `stageIds` законен, — и блоки идут по возрастанию `module.number`, дыра в номерах модулей (1, 2, 4) законна (`process-map-9mn.24`, вариант «а»); (4) `lanes` без `modules` — ошибка, `id` полос уникальны и не совпадают с `id` модулей, концом `moduleEdges` полоса быть не может; (5) у подробности (`detail`) ровно одно входящее ребро, вида `data`, от узла, который не `data` и не `detail`, и ни одного исходящего.
 
 `id` и `moduleLabel` живут в данных, а не в сборке и не в i18n (process-map-3wh.4): обе строки меняются от карты к карте, а ключ `localStorage` выводится из `id` того файла, который реально попал в бандл — тогда содержание, подпись и ключ не могут разъехаться, а выгруженный `process.json` описывает сам себя.
 

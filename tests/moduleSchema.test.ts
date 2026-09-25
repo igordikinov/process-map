@@ -26,12 +26,14 @@ import {
   buildThreeLevelProcessMap,
   parseThreeLevelProcessMap,
   IO_SYSTEM_CODES,
+  LANE_FPA,
   MODULE_DEMAND,
   MODULE_EDGE_LABEL,
   MODULE_IDS,
   MODULE_PRODUCTION,
   MODULE_STAGE_IDS,
   MODULE_SUPPLY,
+  SYSTEM_COLLIDING_WITH_MODULE,
   SYSTEM_OUTSIDE_IO,
   SYSTEM_OUTSIDE_IO_2,
   type ThreeLevelProcessMap,
@@ -155,7 +157,7 @@ describe('ModuleSchema', () => {
     expect(validateIntegrity(ProcessMapSchema.parse(map))).toEqual([]);
   });
 
-  it('не дописывает отсутствующие modules и moduleEdges в разобранную карту', () => {
+  it('не дописывает отсутствующие modules, moduleEdges и lanes в разобранную карту', () => {
     // То же ключевое свойство, что у необязательных полей узла: zod не
     // добавляет отсутствующие ключи, поэтому расширение схемы не меняет ни
     // байта в экспорте двухуровневых карт (serializeProcessMap нормализует
@@ -163,6 +165,7 @@ describe('ModuleSchema', () => {
     const parsed = ProcessMapSchema.parse(buildSampleProcessMap());
     expect('modules' in parsed).toBe(false);
     expect('moduleEdges' in parsed).toBe(false);
+    expect('lanes' in parsed).toBe(false);
   });
 
   it('отвергает пустой список модулей: «модулей нет» выражается отсутствием поля', () => {
@@ -470,5 +473,221 @@ describe('validateIntegrity: модули', () => {
     acceptor.nodes.push({ ...donor.nodes[0]!, id: donor.nodes[0]!.id });
     const problems = validateIntegrity(map);
     expect(problems.some((problem) => problem.includes('Дублирующийся id узла'))).toBe(true);
+  });
+});
+
+// ─────────────── полосы уровня 1: lanes (process-map-9mn.32) ───────────────
+
+describe('LaneSchema и полосы уровня 1', () => {
+  it('сохраняет lanes при разборе: поле не вычищается схемой', () => {
+    // Если бы zod его отбрасывал, полоса FP&A исчезла бы и с экрана, и из
+    // экспорта — а фикстура обещает её всегда (ThreeLevelProcessMap).
+    const map = parseThreeLevelProcessMap();
+    expect(map.lanes).toEqual([{ id: LANE_FPA, title: 'FP&A · Финансовое планирование и анализ' }]);
+  });
+
+  it('отвергает пустой список полос: «полос нет» выражается отсутствием поля', () => {
+    const map = buildThreeLevelProcessMap();
+    map.lanes = [];
+    expect(() => ProcessMapSchema.parse(map)).toThrow();
+  });
+
+  it('отвергает id полосы вне kebab-case: он живёт в одном пространстве с id модулей', () => {
+    const map = buildThreeLevelProcessMap();
+    map.lanes[0]!.id = 'FP&A';
+    expect(() => ProcessMapSchema.parse(map)).toThrow();
+  });
+
+  it('находит полосы в карте без модулей', () => {
+    // Полоса рисуется только на экране модулей, а у двухуровневой карты его
+    // нет вовсе: без проверки полоса молча нигде бы не появилась.
+    const map = ProcessMapSchema.parse({
+      ...buildSampleProcessMap(),
+      lanes: [{ id: LANE_FPA, title: 'FP&A' }],
+    });
+    expect(validateIntegrity(map)).toEqual([
+      'Полосы уровня 1 заданы, а модулей нет: полосы рисуются только на экране модулей ("fpa")',
+    ]);
+  });
+
+  it('находит дублирующийся id полосы', () => {
+    const map = parseThreeLevelProcessMap();
+    map.lanes.push({ id: LANE_FPA, title: 'Вторая FP&A' });
+    expect(validateIntegrity(map)).toEqual(['Дублирующийся id полосы: "fpa"']);
+  });
+
+  it('находит полосу с id модуля', () => {
+    // Полоса и модуль — узлы одного полотна уровня 1: при совпадении id один
+    // из двух не нарисовался бы.
+    const map = parseThreeLevelProcessMap();
+    map.lanes.push({ id: MODULE_SUPPLY, title: 'Полоса-самозванец' });
+    expect(validateIntegrity(map)).toEqual([`Полоса "${MODULE_SUPPLY}" совпадает по id с модулем`]);
+  });
+
+  it('id полосы не является законным концом ребра модулей', () => {
+    // Полоса в цепочку не входит (решение владельца process-map-9mn.31, п. 5).
+    // Отдельной проверки под это нет и не нужно: держит существующее правило
+    // «конец — id модуля или код системы». Тест закрепляет, что полосы его не
+    // размыли — например, если кто-то решит считать их «почти модулями».
+    const map = parseThreeLevelProcessMap();
+    map.moduleEdges.push({
+      id: 'lane-edge',
+      source: LANE_FPA,
+      target: MODULE_DEMAND,
+      kind: 'process',
+    });
+    expect(validateIntegrity(map)).toEqual([
+      'Ребро модулей "lane-edge": source "fpa" не является ни id модуля, ни кодом системы',
+    ]);
+  });
+});
+
+// ──────────── код системы совпадает с id модуля (process-map-9mn.23) ────────────
+
+describe('validateIntegrity: код системы, совпадающий с id модуля без учёта регистра', () => {
+  // Фикстура несёт модуль 'mrp' — регистровую пару кода системы 'MRP', как у
+  // реальной карты inplan (dp/DP, ps/PS, mrp/MRP). Сама она коллизии не
+  // содержит: её добавляет каждый тест.
+  it('предпосылка: модуль фикстуры и код системы различаются только регистром', () => {
+    expect(SystemCodeSchema.safeParse(SYSTEM_COLLIDING_WITH_MODULE).success).toBe(true);
+    expect(SYSTEM_COLLIDING_WITH_MODULE).not.toBe(MODULE_PRODUCTION);
+    expect(SYSTEM_COLLIDING_WITH_MODULE.toLowerCase()).toBe(MODULE_PRODUCTION);
+    expect(validateIntegrity(parseThreeLevelProcessMap())).toEqual([]);
+  });
+
+  // source и target — ОТДЕЛЬНЫМИ тестами (урок process-map-9mn.11: пока тест на
+  // оба конца был один, выключение одной из веток не роняло ничего). Второй
+  // конец в каждом — настоящий модуль, чтобы не сработало «ни один конец не
+  // модуль», и каждый тест требует РОВНО одну строку про своё ребро.
+  it('находит код системы на месте source ребра модулей', () => {
+    const map = parseThreeLevelProcessMap();
+    map.moduleEdges.push({
+      id: 'collision-source',
+      source: SYSTEM_COLLIDING_WITH_MODULE,
+      target: MODULE_DEMAND,
+      kind: 'integration',
+    });
+    expect(validateIntegrity(map)).toEqual([
+      'Ребро модулей "collision-source": source "MRP" — код системы, совпадающий ' +
+        'с id модуля "mrp" без учёта регистра',
+    ]);
+  });
+
+  it('находит код системы на месте target ребра модулей', () => {
+    const map = parseThreeLevelProcessMap();
+    map.moduleEdges.push({
+      id: 'collision-target',
+      source: MODULE_DEMAND,
+      target: SYSTEM_COLLIDING_WITH_MODULE,
+      kind: 'integration',
+    });
+    expect(validateIntegrity(map)).toEqual([
+      'Ребро модулей "collision-target": target "MRP" — код системы, совпадающий ' +
+        'с id модуля "mrp" без учёта регистра',
+    ]);
+  });
+
+  it('код системы, не совпадающий ни с одним модулем, остаётся законным концом', () => {
+    // Сравнение без учёта регистра не должно превратиться в «код системы
+    // запрещён вообще»: BI — с обеих сторон ребра.
+    const map = parseThreeLevelProcessMap();
+    map.moduleEdges.push(
+      { id: 'bi-source', source: SYSTEM_OUTSIDE_IO, target: MODULE_SUPPLY, kind: 'integration' },
+      { id: 'bi-target', source: MODULE_SUPPLY, target: SYSTEM_OUTSIDE_IO, kind: 'integration' },
+    );
+    expect(SYSTEM_OUTSIDE_IO).toBe('BI');
+    expect(validateIntegrity(map)).toEqual([]);
+  });
+
+  it('находит систему ExternalIO, совпадающую с id модуля', () => {
+    // В карте с модулями обмен между модулями — это moduleEdges, а свимлейн —
+    // только внешняя система (решение владельца process-map-9mn.31, п. 6).
+    const map = parseThreeLevelProcessMap();
+    map.stages[0]!.inputs.push({
+      system: SYSTEM_COLLIDING_WITH_MODULE,
+      label: 'Плановые заказы из MRP',
+      stage: map.stages[0]!.number,
+      direction: 'in',
+    });
+    expect(validateIntegrity(map)).toEqual([
+      'Этап "stage-1": внешняя система "MRP" («Плановые заказы из MRP») совпадает ' +
+        'с id модуля "mrp" без учёта регистра',
+    ]);
+  });
+
+  it('в карте без модулей тот же свимлейн законен', () => {
+    // У snp и mrp свимлейны DP, PS, IO, MRP — настоящие соседние системы.
+    // Проверка обязана включаться наличием модулей, иначе задача сломала бы
+    // обе опубликованные карты.
+    const map = ProcessMapSchema.parse(buildSampleProcessMap());
+    map.stages[0]!.inputs.push({
+      system: SYSTEM_COLLIDING_WITH_MODULE,
+      label: 'Плановые заказы из MRP',
+      stage: map.stages[0]!.number,
+      direction: 'in',
+    });
+    expect(validateIntegrity(map)).toEqual([]);
+  });
+});
+
+// ──────────── этапы модуля — сплошной блок номеров (process-map-9mn.24) ────────────
+
+describe('validateIntegrity: этапы модуля — сплошной блок, блоки по module.number', () => {
+  it('находит чересполосицу: модули делят номера этапов вперемешку', () => {
+    // DP заявляет этапы 1 и 3, SNP — 2, 4 и 5: каждый этап заявлен ровно одним
+    // модулем, сирот нет, — схема и прежние проверки такое пропускали.
+    const map = parseThreeLevelProcessMap();
+    map.modules[0]!.stageIds = ['stage-1', 'stage-3'];
+    map.modules[1]!.stageIds = ['stage-2', 'stage-4', 'stage-5'];
+    const problems = validateIntegrity(map);
+    expect(problems).toContain(
+      `Номера этапов модуля "${MODULE_DEMAND}" не образуют сплошной блок: 1, 3`,
+    );
+    expect(problems).toContain(
+      `Номера этапов модуля "${MODULE_SUPPLY}" не образуют сплошной блок: 2, 4, 5`,
+    );
+  });
+
+  it('обратный порядок stageIds законен: сплошным обязано быть МНОЖЕСТВО номеров', () => {
+    // Вариант «а» задачи 9mn.24, а не «б» («stageIds по возрастанию»):
+    // объявленный порядок остаётся авторитетом для экранов.
+    const map = parseThreeLevelProcessMap();
+    const supply = map.modules[1]!;
+    supply.stageIds = [...supply.stageIds].reverse();
+    expect(supply.stageIds).toEqual(['stage-5', 'stage-4', 'stage-3']);
+    expect(validateIntegrity(map)).toEqual([]);
+  });
+
+  it('находит блоки, идущие не в порядке номеров модулей', () => {
+    // Каждый блок сплошной, но модуль №1 владеет этапами 3–5, а модуль №2 —
+    // этапами 1–2: сквозная нумерация перестаёт делиться на модули по порядку.
+    const map = parseThreeLevelProcessMap();
+    const [demand, supply] = map.modules;
+    [demand!.number, supply!.number] = [supply!.number, demand!.number];
+    expect(validateIntegrity(map)).toEqual([
+      'Блоки этапов модулей идут не в порядке номеров модулей: модуль ' +
+        `"${MODULE_SUPPLY}" (№1) доходит до этапа 5, ` +
+        `а модуль "${MODULE_DEMAND}" (№2) начинается с этапа 1`,
+    ]);
+  });
+
+  it('дыра в номерах модулей законна и для порядка блоков', () => {
+    // Порядок сравнивается по возрастанию module.number, а не по number + 1 и
+    // не по позиции в массиве: у фикстуры номера 1, 2, 4, здесь — ещё и не с
+    // единицы и с дырами шире.
+    const map = parseThreeLevelProcessMap();
+    map.modules.forEach((module, index) => {
+      module.number = [3, 7, 20][index]!;
+    });
+    expect(validateIntegrity(map)).toEqual([]);
+  });
+
+  it('порядок модулей в массиве не обязан совпадать с порядком номеров', () => {
+    // Блоки упорядочены по module.number, а не по позиции в документе: модуль
+    // №4, записанный первым, законен, пока его этапы идут после чужих.
+    const map = parseThreeLevelProcessMap();
+    map.modules.reverse();
+    expect(map.modules.map((module) => module.id)).toEqual([...MODULE_IDS].reverse());
+    expect(validateIntegrity(map)).toEqual([]);
   });
 });

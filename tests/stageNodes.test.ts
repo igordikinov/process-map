@@ -94,4 +94,19 @@ describe('splitStageDataNodes', () => {
     );
     expect(counts).toEqual({ steps: 2, inputs: 1, outputs: 1 });
   });
+
+  it('подробности (detail) не считаются ни шагами, ни входами, ни выходами', () => {
+    // Подробность — текст под шагом (process-map-9mn.32). На колоде L2 она
+    // бывает под каждым шагом, и счётчик «N шагов» в крошках удвоился бы.
+    // Две подробности, а не одна: с одной «вычесть единицу» и «вычесть
+    // подробности» неразличимы.
+    const stage = stageWith(
+      node('in-1', 0, { direction: 'in' }),
+      node('detail-left', 0, { type: 'detail' }),
+      node('detail-right', 200, { type: 'detail' }),
+    );
+    expect(countStageNodes(stage)).toEqual({ steps: 2, inputs: 1, outputs: 0 });
+    const split = splitStageDataNodes(stage);
+    expect([...split.inputs, ...split.outputs].map((n) => n.id)).toEqual(['in-1']);
+  });
 });
