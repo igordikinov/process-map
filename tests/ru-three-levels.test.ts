@@ -112,6 +112,11 @@ describe('тексты владельца — дословно', () => {
     // k ≠ n намеренно: при k = n перестановка аргументов невидима.
     expect(ru.breadcrumbs.stageOfModuleBadge(1, 4)).toBe('Этап 1 из 4');
     expect(ru.breadcrumbs.stageOfModuleBadge(3, 4)).toBe('Этап 3 из 4');
+    // И n ≠ 4: четыре этапа — типичный модуль карты inplan (DP 1–4, MEIO
+    // 5–8), и при одном n = 4 зашитое «из 4» проходило бы vitest. Ловил бы
+    // его только no-unused-vars в eslint, а сторожем текста должен быть
+    // этот тест, а не настройка линтера.
+    expect(ru.breadcrumbs.stageOfModuleBadge(2, 3)).toBe('Этап 2 из 3');
   });
 
   it('подписи «Назад» по уровням', () => {
