@@ -83,7 +83,10 @@ export function listVersions(): readonly MapVersion[] {
   });
 }
 
-/** Есть ли такая версия в этом бандле. Не меняет ничего — нужна до `back()`. */
+/**
+ * Есть ли такая версия в этом бандле. Не меняет ничего — нужна до
+ * `resetLevel()`.
+ */
 export function hasVersion(id: string): boolean {
   return RAW.some((entry) => entry.id === id);
 }

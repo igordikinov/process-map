@@ -177,6 +177,25 @@ describe('useProcessStore: три уровня', () => {
     expect(get().selectedNodeId).toBeNull();
   });
 
+  /*
+   * Та же гарантия во ВТОРОЙ ветке navigateToStage. В store это два разных
+   * объектных литерала, и тест выше проходит только через первый (без модуля).
+   * Ветка с модулем — новый путь deep-link ?module=&stage= и прыжков между
+   * модулями; сбрось она выбор не во всех случаях, Drawer узла прежнего этапа
+   * остался бы открытым поверх чужого экрана, а все прочие тесты зеленели бы
+   * (мутация «убрать selectedNodeId: null из ветки с модулем» проверена).
+   */
+  it('navigateToStage с модулем тоже закрывает Drawer', () => {
+    get().navigateToStage('stage-3', 'module-supply');
+    get().selectNode('stage-3-step-1');
+
+    get().navigateToStage('stage-7', 'module-demand');
+
+    expect(get().currentModuleId).toBe('module-demand');
+    expect(get().currentStageId).toBe('stage-7');
+    expect(get().selectedNodeId).toBeNull();
+  });
+
   it('back с уровня шагов возвращает к этапам того же модуля, а не на корень', () => {
     get().navigateToModule('module-supply');
     get().navigateToStage('stage-3');
@@ -196,6 +215,25 @@ describe('useProcessStore: три уровня', () => {
 
     expect(get().currentModuleId).toBeNull();
     expect(get().currentStageId).toBeNull();
+  });
+
+  /*
+   * Вторая ветка back() тоже сбрасывает выбор — store обещает это «в обеих
+   * ветках». Интерфейс сегодня в это состояние не приходит: selectNode зовут
+   * только узлы уровня шагов, а «Назад» в крошках есть только при открытом
+   * этапе. Но store не знает, какие экраны его вызывают (он и карту не знает),
+   * и гарантия — его собственный контракт, а не следствие сегодняшней вёрстки.
+   * Без этого теста мутация «вторая ветка не трогает selectedNodeId» выживала
+   * бы: во всех прочих вызовах back() без этапа узел просто не выбран.
+   */
+  it('back с этапов модуля тоже сбрасывает выбор узла', () => {
+    get().navigateToModule('module-supply');
+    get().selectNode('stray-node');
+
+    get().back();
+
+    expect(get().currentModuleId).toBeNull();
+    expect(get().selectedNodeId).toBeNull();
   });
 
   it('back поднимает ровно на один уровень: с уровня шагов до корня — два вызова', () => {

@@ -29,8 +29,8 @@
 // значит зависимость может идти только в одну сторону: данные ничего не знают о
 // состоянии интерфейса, а экран приносит сюда два скаляра сам. Поля LevelState
 // названы дословно как поля store, поэтому currentScreen(map,
-// useProcessStore.getState()) скомпилируется без адаптера, когда задача
-// process-map-9mn.12 добавит currentModuleId.
+// useProcessStore.getState()) компилируется без адаптера: currentModuleId
+// store получил в задаче process-map-9mn.12, рядом с прежним currentStageId.
 //
 // МАССИВЫ НА ВЫХОДЕ — readonly, И ЭТО НЕ УКРАШЕНИЕ. Без фильтра (moduleId ===
 // null, двухуровневая карта) функции отдают map.stages и map.overviewEdges ТОЙ
@@ -334,8 +334,9 @@ export function overviewEdgesOf(map: ProcessMap, moduleId: string | null): reado
  * вопрос «какой уровень адресует состояние», а не «валидно ли оно». Так же
  * устроен сегодняшний App.tsx (currentStageId === null ? обзор : детализация),
  * и возврат из тупика живёт эффектом в самом экране (StageDetail.tsx: этап не
- * найден → back()). Проверяй мы существование здесь, тупик чинился бы во время
- * рендера — то есть сменой состояния во время рендера, на что React ругается.
+ * найден → resetLevel()). Проверяй мы существование здесь, тупик чинился бы во
+ * время рендера — то есть сменой состояния во время рендера, на что React
+ * ругается.
  */
 export function currentScreen(map: ProcessMap, level: LevelState): MapScreen {
   if (level.currentStageId !== null) {
