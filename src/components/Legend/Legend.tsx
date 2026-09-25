@@ -47,6 +47,7 @@ import type { NodeType, ProcessMap } from '../../data/schema';
 import { useProcessMap } from '../../hooks/useProcessMap';
 import { ru } from '../../i18n/ru';
 import { useProcessStore } from '../../store/useProcessStore';
+import detailStyles from '../nodes/DetailNode/DetailNode.module.css';
 import styles from './Legend.module.css';
 
 const LEGEND_ICON = iconUrl('tables');
@@ -102,6 +103,24 @@ const BPMN_ITEMS: readonly (LegendItem & { readonly nodeType: NodeType })[] = [
   },
 ];
 
+/**
+ * Подробность под шагом (NodeType 'detail', process-map-9mn.36). Пункт
+ * УСЛОВНЫЙ по тому же правилу, что пункты BPMN выше, и тем же механизмом —
+ * множеством типов, реально присутствующих на этапе: у карт snp и mrp
+ * подробностей нет ни одной, и «Подробность» в их легенде была бы обещанием
+ * того, чего на полотне нет.
+ *
+ * Образец — миниатюра самой карточки (без полоски типа, заливка и рамка
+ * выноски); класс пока живёт рядом с карточкой, в DetailNode.module.css, —
+ * почему там и куда ему переехать, сказано у .legendSwatch.
+ */
+const DETAIL_ITEM: LegendItem & { readonly nodeType: NodeType } = {
+  key: 'detail',
+  nodeType: 'detail',
+  label: ru.legend.detail,
+  swatch: detailStyles.legendSwatch,
+};
+
 /** Пункты, которых не остаётся на полотне при выключенных интеграциях
  *  (см. overviewGraph.ts/stageGraph.ts): «система» есть только в OVERVIEW_ITEMS,
  *  фильтр по обоим уровням общий и просто не найдёт лишний ключ. */
@@ -137,7 +156,9 @@ function modulesItems(map: ProcessMap): readonly LegendItem[] {
 }
 
 /**
- * Типы BPMN, реально присутствующие на открытом этапе.
+ * Типы узлов, реально присутствующие на открытом этапе. По ним включаются
+ * условные пункты легенды: типы BPMN (BPMN_ITEMS) и «Подробность»
+ * (DETAIL_ITEM). Имя хука — от BPMN, ради которых он появился первым.
  *
  * Читает карту, а не данные React Flow: легенда живёт ВНЕ <ReactFlowProvider>
  * (см. шапку файла), и до узлов полотна ей не дотянуться. На обзоре считать
@@ -172,12 +193,14 @@ export function Legend({ compact = false }: LegendProps) {
   const currentStageId = useProcessStore((state) => state.currentStageId);
   const isModulesScreen = currentScreen(map, { currentModuleId, currentStageId }) === 'modules';
 
-  // Типы BPMN добавляются только если такой узел на текущем этапе есть.
-  // Для карт, собранных из презентаций, множество всегда пусто, и легенда
-  // выглядит ровно как раньше.
+  // Типы BPMN и подробность (DETAIL_ITEM) добавляются только если такой узел
+  // на текущем этапе есть. На картах snp и mrp нет ни того, ни другого, и
+  // легенда там выглядит ровно как раньше.
   const present = usePresentBpmnTypes(isOverview);
   const base = isModulesScreen ? modulesItems(map) : isOverview ? OVERVIEW_ITEMS : STAGE_ITEMS;
-  const extra = isOverview ? [] : BPMN_ITEMS.filter((item) => present.has(item.nodeType));
+  const extra = isOverview
+    ? []
+    : [...BPMN_ITEMS, DETAIL_ITEM].filter((item) => present.has(item.nodeType));
   const items = [...base, ...extra].filter(
     (item) => showIntegrations || !HIDDEN_WITHOUT_INTEGRATIONS.has(item.key),
   );

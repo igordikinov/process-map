@@ -41,6 +41,17 @@
   stroke-width: var(--pm-edge-data-width);
 }
 
+/*
+ * Выноска «шаг → подробность» (process-map-9mn.36). Сплошная и без стрелки:
+ * подробность — пояснение к шагу, а не переход потока; маркера у неё нет, см.
+ * DetailLinkEdge.tsx. Обоснование цвета и толщины — у --pm-edge-detail-*.
+ */
+.detailLink {
+  fill: none;
+  stroke: var(--pm-edge-detail-color);
+  stroke-width: var(--pm-edge-detail-width);
+}
+
 /* Маркеры-стрелки живут в скрытом svg вне полотна. */
 .markers {
   position: absolute;

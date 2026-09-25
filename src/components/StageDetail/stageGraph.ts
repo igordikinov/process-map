@@ -37,6 +37,21 @@ export type StageDetailNode =
   | SubprocessNodeType
   | DetailNodeType;
 
+/**
+ * Все типы рёбер, которые может выдать buildStageGraph.
+ *
+ * Объявлены списком, а не выводятся из кода ниже, ради StageDetail.tsx: там
+ * edgeTypes сверяется с этим типом через `satisfies`, и тип ребра, для
+ * которого забыли зарегистрировать компонент, роняет tsc. Иначе React Flow
+ * молча нарисовал бы такое ребро своей кривой по умолчанию, а заметить это
+ * было бы нечем: в jsdom рёбра не рисуются вовсе (им нужны измеренные
+ * хэндлы), а e2e идёт по картам snp и mrp, где, например, выносок к
+ * подробностям нет (process-map-9mn.36).
+ */
+export type StageEdgeType = 'process' | 'processInner' | 'integration' | 'data' | 'detailLink';
+
+export type StageDetailEdge = FlowEdge<Record<string, unknown>, StageEdgeType>;
+
 // ───────────────────────────── геометрия ─────────────────────────────
 
 /**
@@ -284,7 +299,7 @@ function boundingBox(nodes: readonly ProcessNode[]): Box {
 
 export interface StageGraph {
   nodes: StageDetailNode[];
-  edges: FlowEdge[];
+  edges: StageDetailEdge[];
   /**
    * Габарит всей раскладки в координатах графа, включая dashed-рамки групп и
    * заголовки колонок (они уходят выше и левее самих карточек, поэтому
@@ -567,7 +582,7 @@ export function buildStageGraph(stage: Stage, showIntegrations = true): StageGra
 
   // ── рёбра ──
   const nodeById = new Map(stage.nodes.map((node) => [node.id, node]));
-  const edges: FlowEdge[] = [];
+  const edges: StageDetailEdge[] = [];
   for (const edge of stage.edges) {
     const source = nodeById.get(edge.source);
     const target = nodeById.get(edge.target);
@@ -583,6 +598,38 @@ export function buildStageGraph(stage: Stage, showIntegrations = true): StageGra
         source.type === 'integration' ||
         target.type === 'integration')
     ) {
+      continue;
+    }
+    /*
+     * ВЫНОСКА К ПОДРОБНОСТИ (process-map-9mn.36) — до общего правила ниже и
+     * по ТИПУ ЦЕЛИ, а не по kind. В модели это ребро kind: 'data'
+     * (validateIntegrity), и общее правило отдало бы его ребру данных —
+     * пунктиру со стрелкой к артефакту, — а хэндлы выбрало бы по взаимному
+     * положению концов, то есть справа налево, как поток. Подробность же
+     * висит ПОД своим шагом: выноска всегда идёт от низа хоста к верху
+     * подробности, где бы dagre её ни поставил (сегодня — рангом правее,
+     * место под шагом назначит process-map-9mn.26). Нижний хэндл-источник
+     * есть у всех узлов, которые могут быть хостом (StepHandles: шаг,
+     * интеграция, предупреждение, типы BPMN); у подробности — только верхний
+     * хэндл-цель (DetailNode.tsx).
+     *
+     * Ветка стоит ПОСЛЕ фильтра интеграций выше, и это важно: хостом может
+     * быть и интеграция, и при выключенном toggle выноска от скрытого хоста
+     * обязана пропасть вместе с ним, а не уйти в React Flow с source, которого
+     * нет среди узлов. Сама подробность такого хоста при этом остаётся на
+     * полотне без выноски — прятать ли её вместе с хостом, не решено (находка
+     * ревью этой задачи; импортёр сегодня вешает подробности только на шаги).
+     */
+    if (target.type === 'detail') {
+      edges.push({
+        id: edge.id,
+        type: 'detailLink',
+        source: edge.source,
+        target: edge.target,
+        sourceHandle: STEP_HANDLE.bottom,
+        targetHandle: STEP_HANDLE.top,
+        ...(edge.label === undefined ? {} : { label: edge.label }),
+      });
       continue;
     }
     // Раскладка идёт слева направо, поэтому основная пара хэндлов right → left.

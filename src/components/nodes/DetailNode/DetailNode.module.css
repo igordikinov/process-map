@@ -1,26 +1,109 @@
 /*
- * Подробность под шагом, уровень 2 (process-map-9mn.32) — заглушка до
- * process-map-9mn.36. Только var(...) из src/theme/tokens.css (CLAUDE.md
- * «Кодовые правила»); размер — токены, которые сторожит tests/sizes.test.ts.
+ * Подробность под шагом, уровень 2 (NodeType 'detail', process-map-9mn.32,
+ * оформление — process-map-9mn.36). Только var(...) из src/theme/tokens.css
+ * (CLAUDE.md «Кодовые правила»); размер — токены, которые сторожит
+ * tests/sizes.test.ts, и итоговые числа по макету назначит process-map-9mn.26.
+ *
+ * ПРАВИЛО ФАЙЛА: НИ ОДНОГО СПОСОБА ОБРЕЗАТЬ ТЕКСТ. Ни line-clamp, ни
+ * text-overflow, ни overflow: hidden/clip, ни white-space: nowrap, ни
+ * clip-path и contain: paint. Прокрутка (overflow: auto/scroll) — тоже
+ * обрезка: колесо мыши на полотне забирает React Flow, и прокрутить карточку
+ * было бы нечем. У шага подпись клампится до двух строк, потому что полный
+ * текст лежит в title и в панели, — у подробности текст И ЕСТЬ содержание
+ * узла, и срезанный хвост абзаца пропал бы молча. Правило сторожит
+ * tests/detailNode.test.tsx: он читает этот файл, проверяет классы, которые
+ * реально стоят на карточке, и следит, чтобы вид подробности не правили из
+ * чужих таблиц стилей (:global(.react-flow__node-detail) и т. п.).
  */
 
-/* overflow НЕ скрыт намеренно: размер временный, и текст, не влезший в него,
-   должен вылезти за рамку на виду, а не пропасть молча. */
+/*
+ * Карточка — <button> (выбор узла, как у DataNode), поэтому сброс кнопочных
+ * умолчаний: margin, шрифт, выравнивание текста.
+ *
+ * flex-колонка с прижатием к верху: браузер центрирует содержимое <button> по
+ * вертикали, а абзацы читаются сверху вниз. Центрированный текст, не влезший
+ * во временную высоту, к тому же вылез бы и ВВЕРХ — на выноску и на шаг над
+ * подробностью; прижатый к верху он уходит только вниз.
+ *
+ * overflow: visible — явно, а не умолчанием: текст, не влезший в размер,
+ * обязан вылезти за рамку на виду, а не пропасть молча (размер временный, см.
+ * шапку файла).
+ */
 .card {
+  display: flex;
+  overflow: visible;
   width: var(--pm-detail-node-width);
   height: var(--pm-detail-node-height);
   box-sizing: border-box;
+  flex-direction: column;
+  justify-content: flex-start;
   padding: var(--scp-paddings-m);
+  /* Полоски типа слева НЕТ — в этом и отличие от карточек потока и данных:
+     полоска отвечает на вопрос «что это за сущность процесса» (StepCard.tsx),
+     а подробность сущностью процесса не является. Рамка — общая рамка покоя
+     всех карточек, и на ней держатся наведение и выбор ниже. */
   border: 1px solid var(--pm-node-border);
   border-radius: var(--scp-border-radius-md);
-  /* Внешняя заливка, как у колонок данных: подробность — пояснение к шагу, а
-     не сам шаг, и не должна спорить с ним фокусной заливкой. */
-  background: var(--pm-node-bg-external);
-  box-shadow: var(--pm-shadow-node-data);
-  color: var(--scp-content-primary);
+  margin: 0;
+  /* Плоская, без тени: выноска — пояснение к шагу и не должна подниматься
+     над полотном наравне с ним. Заливка и цвет текста — см. комментарий у
+     --pm-detail-bg в tokens.css. */
+  background: var(--pm-detail-bg);
+  color: var(--pm-detail-text-color);
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
+  transition:
+    border-color 120ms ease,
+    box-shadow 120ms ease;
+}
+
+/* Наведение и выбор — те же цвета, что у всех карточек уровня 2 (StepCard,
+   DataNode): узел любого типа откликается на мышь и клавиатуру одинаково.
+   Шорткат border-color здесь законен: полоски типа, которую он затирал у
+   шага и данных (process-map-rni), у подробности нет. */
+.card:hover,
+.card:focus-visible {
+  border-color: var(--scp-color-brand-300);
+  box-shadow: var(--pm-shadow-stage-active);
+  outline: none;
+}
+
+.selected {
+  border-color: var(--scp-accent-primary);
+  box-shadow: 0 0 0 var(--scp-paddings-xs) var(--pm-node-focus-ring);
+}
+
+/* Абзацы склеены через \n (решение владельца, process-map-9mn.31) — pre-line
+   превращает их в строки и при этом переносит длинные строки по ширине. */
+.text {
   font-size: var(--pm-font-size-12-5);
   line-height: var(--pm-line-height-15);
-  /* Абзацы склеены через \n (решение владельца, process-map-9mn.31); обрезки
-     многоточием нет намеренно — текст и есть содержание узла. */
   white-space: pre-line;
+}
+
+/*
+ * Образец подробности в легенде (Legend.tsx, пункт «Подробность»).
+ *
+ * Образец — миниатюра этой карточки: та же заливка, та же рамка, без
+ * полоски типа. Синхронность с карточкой держат общие токены
+ * (--pm-detail-bg, --pm-node-border), а не соседство в файле, и все прочие
+ * образцы легенды, включая фигуры BPMN, живут в Legend.module.css. Класс
+ * оказался здесь только потому, что правка process-map-9mn.36 не трогала
+ * Legend.module.css; место ему — там, рядом с .swatchSubprocess, и переезд
+ * снимет импорт этого модуля из Legend.tsx.
+ *
+ * ТОЛЬКО ДОБАВОЧНЫЕ СВОЙСТВА. Элемент несёт и общий .swatch из
+ * Legend.module.css (flex: none, высота чёрточки, радиус), а порядок двух
+ * таблиц стилей в бандле определяется порядком импортов, не этим файлом.
+ * Поэтому здесь нет ни одного свойства, которое задаёт .swatch: при любом
+ * порядке каскада результат один. Высота чёрточки (14px) равна стороне
+ * образца-фигуры (--pm-legend-system-swatch-size) — выходит квадрат, как у
+ * образцов шлюза, события и подпроцесса.
+ */
+.legendSwatch {
+  width: var(--pm-legend-system-swatch-size);
+  box-sizing: border-box;
+  border: 1px solid var(--pm-node-border);
+  background: var(--pm-detail-bg);
 }
