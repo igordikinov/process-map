@@ -1,4 +1,24 @@
-// Экран «Обзор процесса, уровень 1» (SPEC §4.1, артборд A1).
+// Экран этапов (SPEC §4.1, артборд A1): «Обзор процесса, уровень 1» на
+// двухуровневой карте и экран одного модуля — уровень 2 — на трёхуровневой
+// (задача process-map-9mn.17).
+//
+// ЧТО ПОКАЗЫВАТЬ, ПРИХОДИТ ПРОПАМИ: этапы, рёбра, подпись рамки и модуль —
+// значения levelTwoView() из src/data/modules.ts, которые App считает один
+// раз на пару (карта, модуль). Экран не выясняет сам, какой модуль выбран и
+// какие этапы ему принадлежат, по тому же доводу, по которому rootLabel у
+// Breadcrumbs — проп: знание о форме документа живёт в одном месте, и второй
+// экземпляр этого знания здесь рано или поздно разошёлся бы с первым. Из
+// карты экран по-прежнему читает только то, что принадлежит документу
+// целиком: заголовок, дату, id, корень крошек.
+//
+// ШАПКА — ОДНА ИЗ ДВУХ (проп header). Корень карты ('root') получает
+// OverviewHeader с переключателем версий, экран модуля ('crumbs') — хлебные
+// крошки и НИКАКОГО переключателя. Это правка SPEC §4.2 («на уровне 2
+// переключателя версий нет: там нет шапки вовсе»), вынужденная тем, что на
+// трёхуровневой карте экран этапов перестал быть корнем: без крошек с него не
+// видно дороги назад, а переключатель, выкидывающий из того места, где
+// стоишь, читался бы как ошибка — довод SPEC тот же, меняется только экран,
+// к которому он относится. Текст SPEC переписывает задача process-map-9mn.22.
 import { useMemo } from 'react';
 import {
   Background,
@@ -13,9 +33,11 @@ import { useFrameSize } from '../../hooks/useFrameSize';
 import { useProcessMap } from '../../hooks/useProcessMap';
 import { ru } from '../../i18n/ru';
 import { isImportedActive } from '../../data/activeMap';
+import type { Edge, Module, Stage } from '../../data/schema';
 import { getSelectedVersionId, listVersions } from '../../data/versions';
 import { selectVersion } from '../../data/versionSwitch';
 import { useProcessStore } from '../../store/useProcessStore';
+import { Breadcrumbs } from '../Breadcrumbs';
 import { EdgeMarkers, IntegrationEdge, ProcessEdge } from '../edges';
 import { Legend } from '../Legend';
 import { IntegrationNode } from '../nodes/IntegrationNode';
@@ -69,7 +91,31 @@ const fitViewOptions = { padding: FIT_VIEW_PADDING };
  */
 const proOptions = { hideAttribution: true };
 
-export function Overview() {
+/**
+ * Какая шапка у экрана этапов: 'root' — корень карты (OverviewHeader с
+ * переключателем версий), 'crumbs' — экран модуля трёхуровневой карты
+ * (хлебные крошки). Выбирает App: hasModules(map) ? 'crumbs' : 'root'.
+ */
+export type OverviewHeaderKind = 'root' | 'crumbs';
+
+export interface OverviewProps {
+  /** Показанные этапы: map.stages либо этапы модуля в порядке stageIds. */
+  readonly stages: readonly Stage[];
+  /** Рёбра, касающиеся показанных этапов (overviewEdgesOf). */
+  readonly overviewEdges: readonly Edge[];
+  /** Подпись рамки потока: module.label либо map.moduleLabel. */
+  readonly frameLabel: string;
+  /**
+   * Выбранный модуль — для крошек экрана модуля. На двухуровневой карте
+   * undefined. На экране модуля undefined бывает только мгновение: модуль,
+   * которого нет в документе, App возвращает на корень эффектом
+   * («модуль не найден», App.tsx), и до этого крошки просто не рисуются.
+   */
+  readonly module: Module | undefined;
+  readonly header: OverviewHeaderKind;
+}
+
+export function Overview({ stages, overviewEdges, frameLabel, module, header }: OverviewProps) {
   const showIntegrations = useProcessStore((state) => state.showIntegrations);
 
   // SPEC §4.5: режим решает высота КОНТЕЙНЕРА, а не окна — приложение живёт в
@@ -78,13 +124,15 @@ export function Overview() {
 
   // Карта = process.json + overrides из localStorage. useProcessMap()
   // подписывает экран на правки редактора (SPEC §4.4): после записи ссылки
-  // ссылка обязана появиться сразу, без перезагрузки страницы. Ссылка на
-  // объект карты стабильна, пока правок нет, поэтому useMemo ниже не
-  // пересчитывается на каждый рендер — см. src/hooks/useProcessMap.ts.
+  // ссылка обязана появиться сразу, без перезагрузки страницы. Этапы и рёбра
+  // приходят пропами, но вычислены из той же карты (App зовёт levelTwoView в
+  // useMemo по [map, currentModuleId]), поэтому правка доезжает и до них, а
+  // их ссылки стабильны, пока правок нет, — useMemo ниже не пересчитывается
+  // на каждый рендер. См. src/hooks/useProcessMap.ts.
   const map = useProcessMap();
   const { nodes, edges } = useMemo(
-    () => buildOverviewGraph(map, showIntegrations, compact),
-    [map, showIntegrations, compact],
+    () => buildOverviewGraph({ stages, overviewEdges, frameLabel }, showIntegrations, compact),
+    [stages, overviewEdges, frameLabel, showIntegrations, compact],
   );
 
   // Признак читается на рендере: подмена карты идёт через refreshProcessMap,
@@ -93,24 +141,45 @@ export function Overview() {
 
   return (
     <div className={compact ? `${styles.root} ${styles.compact}` : styles.root} ref={rootRef}>
-      <OverviewHeader
-        title={map.title}
-        stagesCount={map.stages.length}
-        updatedAt={map.updatedAt}
-        compact={compact}
-        imported={imported}
-        /* При загруженной пользователем схеме версий не предлагаем: показана
-           вообще не версия, и «нажатый» сегмент утверждал бы обратное. Путь
-           назад у пользователя есть — кнопка «Вернуться к встроенной карте» в
-           тулбаре редактора, и она вернёт ту версию, с которой ушли. */
-        versions={imported ? [] : listVersions()}
-        selectedVersionId={getSelectedVersionId()}
-        onSelectVersion={selectVersion}
-      />
+      {header === 'root' ? (
+        <OverviewHeader
+          title={map.title}
+          // Число ПОКАЗАННЫХ этапов. На корне двухуровневой карты вид совпадает
+          // с картой (levelTwoView), и это ровно прежнее map.stages.length.
+          stagesCount={stages.length}
+          updatedAt={map.updatedAt}
+          compact={compact}
+          imported={imported}
+          /* При загруженной пользователем схеме версий не предлагаем: показана
+             вообще не версия, и «нажатый» сегмент утверждал бы обратное. Путь
+             назад у пользователя есть — кнопка «Вернуться к встроенной карте» в
+             тулбаре редактора, и она вернёт ту версию, с которой ушли. */
+          versions={imported ? [] : listVersions()}
+          selectedVersionId={getSelectedVersionId()}
+          onSelectVersion={selectVersion}
+        />
+      ) : (
+        /* Экран модуля: крошки вместо шапки корня, переключателя версий нет
+           (шапка файла). Корень крошек — map.moduleLabel документа, а не
+           frameLabel: у moduleLabel две роли, и module.label забирает только
+           подпись рамки (комментарий к rootLabel в Breadcrumbs.tsx). */
+        <Breadcrumbs
+          stages={stages}
+          rootLabel={map.moduleLabel}
+          module={module}
+          compact={compact}
+        />
+      )}
       {/* role="region", а не "application": схема статична, а application
           переводит скринридер в режим прямого прохода клавиш и глушит
-          навигацию по элементам. */}
-      <div className={styles.canvas} role="region" aria-label={ru.overview.canvasLabel}>
+          навигацию по элементам. Подпись называет настоящий номер экрана на
+          ЭТОЙ карте: на трёхуровневой экран этапов — уровень 2
+          (ru.overview.moduleCanvasLabel, там же — почему не общая подпись). */}
+      <div
+        className={styles.canvas}
+        role="region"
+        aria-label={header === 'root' ? ru.overview.canvasLabel : ru.overview.moduleCanvasLabel}
+      >
         {/* ReactFlowProvider — общий контекст для <ReactFlow> и тулбара:
             Toolbar рендерится РЯДОМ с полотном, не внутри него (см. подробное
             объяснение в Toolbar.tsx), поэтому его useReactFlow()/useViewport()
@@ -138,9 +207,19 @@ export function Overview() {
             >
               <Background variant={BackgroundVariant.Dots} gap={GRID_GAP} size={GRID_DOT_SIZE} />
               {/* SPEC §4.5: при смене режима вид подгоняется заново — карточки
-                  этапов меняют и размер, и координаты. */}
+                  этапов меняют и размер, и координаты. Модуль в ключе — по
+                  тому же доводу, что версия (RefitViewport.tsx): другой модуль
+                  — другой состав полотна. Сегодня экран модуля между двумя
+                  модулями размонтируется (путь лежит через экран модулей), но
+                  ключ не должен держаться на маршруте, который выбрал
+                  интерфейс. На двухуровневой карте модуля нет, и ключ
+                  прежний. */}
               <RefitViewport
-                fitKey={`${String(compact)}:${map.id}`}
+                fitKey={
+                  module === undefined
+                    ? `${String(compact)}:${map.id}`
+                    : `${String(compact)}:${map.id}:${module.id}`
+                }
                 fitViewOptions={fitViewOptions}
               />
             </ReactFlow>

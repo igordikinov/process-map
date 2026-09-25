@@ -31,6 +31,7 @@ import {
 import { StageCard } from '../src/components/nodes/StageNode/StageCard';
 import { config } from '../src/config';
 import { loadBaseProcessMap } from '../src/data/loader';
+import { levelTwoView } from '../src/data/modules';
 import type { Stage } from '../src/data/schema';
 import { isCompactHeight, useFrameSize } from '../src/hooks/useFrameSize';
 import { ru } from '../src/i18n/ru';
@@ -224,7 +225,7 @@ describe('useFrameSize: триггер — высота контейнера, а
 
 describe('buildOverviewGraph: компактный режим (SPEC §4.5)', () => {
   it('свимлейнов нет, вместо них одна строка-бейдж', () => {
-    const { nodes } = buildOverviewGraph(map, true, true);
+    const { nodes } = buildOverviewGraph(levelTwoView(map, null), true, true);
 
     expect(nodes.filter((node) => node.type === 'lane')).toHaveLength(0);
     expect(nodes.some((node) => node.id === LANE_IN_ID)).toBe(false);
@@ -241,7 +242,7 @@ describe('buildOverviewGraph: компактный режим (SPEC §4.5)', () 
   });
 
   it('строка-бейдж перечисляет все системы из данных, без повторов', () => {
-    const badge = buildOverviewGraph(map, true, true).nodes.find(
+    const badge = buildOverviewGraph(levelTwoView(map, null), true, true).nodes.find(
       (node) => node.type === 'systemsBadge',
     );
     expect(badge).toBeDefined();
@@ -257,7 +258,7 @@ describe('buildOverviewGraph: компактный режим (SPEC §4.5)', () 
   });
 
   it('карточки этапов 228×200 вместо 274×210', () => {
-    const compact = buildOverviewGraph(map, true, true).nodes.filter(
+    const compact = buildOverviewGraph(levelTwoView(map, null), true, true).nodes.filter(
       (node) => node.type === 'stage',
     );
     expect(compact).toHaveLength(4);
@@ -267,14 +268,16 @@ describe('buildOverviewGraph: компактный режим (SPEC §4.5)', () 
     }
 
     // Обычный режим не задет.
-    const full = buildOverviewGraph(map, true).nodes.filter((node) => node.type === 'stage');
+    const full = buildOverviewGraph(levelTwoView(map, null), true).nodes.filter(
+      (node) => node.type === 'stage',
+    );
     for (const node of full) {
       expect({ width: node.width, height: node.height }).toEqual(STAGE_NODE_SIZE);
     }
   });
 
   it('интеграции сведены в одну карточку и одно ребро на этап', () => {
-    const { nodes, edges } = buildOverviewGraph(map, true, true);
+    const { nodes, edges } = buildOverviewGraph(levelTwoView(map, null), true, true);
 
     for (const stage of map.stages) {
       const card = nodes.find((node) => node.id === stageSystemsNodeId(stage.id));
@@ -293,7 +296,7 @@ describe('buildOverviewGraph: компактный режим (SPEC §4.5)', () 
   });
 
   it('карточки этапов не накладываются и стоят над своими карточками систем', () => {
-    const { nodes } = buildOverviewGraph(map, true, true);
+    const { nodes } = buildOverviewGraph(levelTwoView(map, null), true, true);
     const stages = nodes.filter((node) => node.type === 'stage');
 
     for (let index = 1; index < stages.length; index += 1) {
@@ -314,7 +317,7 @@ describe('buildOverviewGraph: компактный режим (SPEC §4.5)', () 
   });
 
   it('выключенный toggle убирает и строку-бейдж, и карточки систем', () => {
-    const { nodes, edges } = buildOverviewGraph(map, false, true);
+    const { nodes, edges } = buildOverviewGraph(levelTwoView(map, null), false, true);
 
     expect(nodes).toHaveLength(4);
     expect(nodes.every((node) => node.type === 'stage')).toBe(true);
@@ -322,7 +325,7 @@ describe('buildOverviewGraph: компактный режим (SPEC §4.5)', () 
   });
 
   it('у каждого ребра оба конца существуют', () => {
-    const { nodes, edges } = buildOverviewGraph(map, true, true);
+    const { nodes, edges } = buildOverviewGraph(levelTwoView(map, null), true, true);
     const ids = new Set(nodes.map((node) => node.id));
     for (const edge of edges) {
       expect(ids.has(edge.source), `нет источника ${edge.source}`).toBe(true);

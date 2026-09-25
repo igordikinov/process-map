@@ -39,17 +39,16 @@
 // на другом экране, далеко от причины. readonly делает такую правку ошибкой
 // компиляции.
 //
-// Потребитель, чей вход сегодня объявлен как Stage[] (так устроен проп stages
+// Потребитель, чей вход был объявлен как Stage[] (так был устроен проп stages
 // у Breadcrumbs), РАСШИРЯЕТ СВОЙ ВХОД до readonly Stage[], а не приводит
 // результат через `as Stage[]`. Приведение выключило бы ровно ту проверку,
 // ради которой readonly здесь стоит, и выключило бы молча: tsc промолчит и
 // тогда, когда потребитель начнёт мутировать вход. Расширение же бесплатно —
 // функция, которая массив только читает, принимает readonly без единой правки
-// тела. buildOverviewGraph сегодня принимает карту целиком, и расширять ему
-// нечего; новый вход «вид уровня 2», который заводит задача process-map-9mn.17
-// ({stages, overviewEdges, frameLabel}), объявляется readonly СРАЗУ — иначе
-// первый же вызов с результатом этих функций потребует того самого
-// приведения.
+// тела. Так и сделано в задаче process-map-9mn.17: вход buildOverviewGraph —
+// «вид уровня 2» ({stages, overviewEdges, frameLabel}, OverviewView в
+// overviewGraph.ts) — объявлен readonly сразу, проп stages у Breadcrumbs
+// расширен до readonly Stage[].
 //
 // КЕША И МЕМОИЗАЦИИ ЗДЕСЬ НЕТ НАМЕРЕННО — запись для того, кто захочет добавить
 // их «для симметрии». Известный модуль получает НОВЫЙ массив на каждый вызов.
@@ -310,6 +309,60 @@ export function overviewEdgesOf(map: ProcessMap, moduleId: string | null): reado
   }
   const own = new Set(module.stageIds);
   return map.overviewEdges.filter((edge) => own.has(edge.source) || own.has(edge.target));
+}
+
+/**
+ * Всё, что экран этапов (Overview) показывает о выбранном модуле, — одним
+ * значением (задача process-map-9mn.17).
+ *
+ * module — тот же ответ, что у moduleById: undefined на двухуровневой карте,
+ * при moduleId === null и у неизвестного id. Поле ОБЯЗАТЕЛЬНОЕ, со значением
+ * undefined, а не необязательное: читающий обязан решить, что делать без
+ * модуля, а не забыть о таком случае.
+ */
+export interface LevelTwoView {
+  readonly stages: readonly Stage[];
+  readonly overviewEdges: readonly Edge[];
+  /** Подпись рамки вокруг потока этапов (flowLane в overviewGraph.ts). */
+  readonly frameLabel: string;
+  readonly module: Module | undefined;
+}
+
+/**
+ * Вид уровня 2: этапы, рёбра, подпись рамки и сам модуль — одним вызовом.
+ *
+ * ЗАЧЕМ ОДНА ФУНКЦИЯ, а не три вызова у экрана. Четыре поля обязаны
+ * описывать ОДИН модуль: этапы одного модуля при рёбрах другого дали бы экран
+ * без единой стрелки, а рамка «Модуль DP» вокруг этапов SNP — экран, который
+ * выглядит рабочим. Собранные в одном месте из одного moduleId, разойтись они
+ * не могут; разложенные по трём useMemo у вызывающего — могут, и заметно это
+ * было бы только глазами.
+ *
+ * ПОДПИСЬ РАМКИ — module.label («Модуль DP»), а без модуля — map.moduleLabel.
+ * Это ПЕРВАЯ из двух ролей moduleLabel (комментарий к Module.label в
+ * schema.ts): рамка уровня 2 на трёхуровневой карте описывает ОДИН модуль, и
+ * подпись документа («Все процессы In.Plan») на ней была бы неправдой. Вторая
+ * роль — корень хлебных крошек — остаётся за map.moduleLabel на карте любой
+ * формы, и этой функции она не касается: крошки берут корень из документа
+ * (Overview.tsx, StageDetail.tsx), а не из вида.
+ *
+ * На двухуровневой карте и при moduleId === null вид совпадает с картой: те
+ * же массивы той же ссылкой (stagesOfModule, overviewEdgesOf), подпись —
+ * map.moduleLabel. Поэтому на картах snp и mrp обзор строится из ровно тех
+ * значений, из которых строился до 9mn.17.
+ *
+ * Кеша нет, как и у остальных функций файла (шапка): App зовёт её ВНУТРИ
+ * useMemo с зависимостями [map, currentModuleId], а известный модуль получает
+ * новые массивы на каждый вызов.
+ */
+export function levelTwoView(map: ProcessMap, moduleId: string | null): LevelTwoView {
+  const module = moduleById(map, moduleId);
+  return {
+    stages: stagesOfModule(map, moduleId),
+    overviewEdges: overviewEdgesOf(map, moduleId),
+    frameLabel: module?.label ?? map.moduleLabel,
+    module,
+  };
 }
 
 /**
