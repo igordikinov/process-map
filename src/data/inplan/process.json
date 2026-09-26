@@ -1,0 +1,2002 @@
+{
+  "version": "1.0.0",
+  "id": "inplan",
+  "updatedAt": "2026-09-27",
+  "title": "Карта процессов In.Plan",
+  "moduleLabel": "Все процессы In.Plan",
+  "modules": [
+    {
+      "id": "dp",
+      "number": 1,
+      "title": "Планирование спроса",
+      "shortTitle": "DP · Планирование спроса",
+      "label": "Модуль DP",
+      "keyOutputs": [
+        "Итоговый неограниченный прогноз"
+      ],
+      "stageIds": [
+        "stage-1-obespechivayuschie-processy",
+        "stage-2-rabota-s-istoriey-prodazh-i-formirovanie-stat-prognoza",
+        "stage-3-obogaschenie-prognoza-i-formirovanie-konsensus-plana",
+        "stage-4-publikaciya-i-peredacha-neogranichennogo-prognoza"
+      ]
+    },
+    {
+      "id": "meio",
+      "number": 2,
+      "title": "Мультиэшелонная оптимизация запасов",
+      "shortTitle": "MEIO · Мультиэшелонная оптимизация запасов",
+      "label": "Модуль MEIO",
+      "keyOutputs": [
+        "Страховые и целевые запасы"
+      ],
+      "stageIds": [
+        "stage-5-poluchenie-dannyh",
+        "stage-6-podgotovka-k-raschetu",
+        "stage-7-raschet-i-analiz",
+        "stage-8-peresmotr-i-peredacha-politik"
+      ]
+    },
+    {
+      "id": "snp",
+      "number": 3,
+      "title": "Планирование сети поставок",
+      "shortTitle": "SNP · Планирование сети поставок",
+      "label": "Модуль SNP",
+      "keyOutputs": [
+        "Итоговый ограниченный прогноз"
+      ],
+      "stageIds": [
+        "stage-9-poluchenie-dannyh-iz-smezhnyh-moduley",
+        "stage-10-analiz-i-diagnostika-plana",
+        "stage-11-korrektirovki-plana-i-povtornyy-analiz",
+        "stage-12-peredacha-planov-v-ps"
+      ]
+    },
+    {
+      "id": "ps",
+      "number": 4,
+      "title": "Производственное планирование и графикование",
+      "shortTitle": "PS · Производственное планирование и графикование",
+      "label": "Модуль PS",
+      "keyOutputs": [
+        "Детальный план операций"
+      ],
+      "stageIds": [
+        "stage-13-poluchenie-dannyh",
+        "stage-14-kalendarnoe-planirovanie-i-balansirovka",
+        "stage-15-pereplanirovanie",
+        "stage-16-peredacha-planov"
+      ]
+    },
+    {
+      "id": "mrp",
+      "number": 5,
+      "title": "Планирование потребности в материалах",
+      "shortTitle": "MRP · Планирование потребности в материалах",
+      "label": "Модуль MRP",
+      "keyOutputs": [
+        "Передача плана в виде заявок на закупку в систему исполнения закупок"
+      ],
+      "stageIds": [
+        "stage-17-raschet-potrebnosti",
+        "stage-18-obrabotka-oshibok-i-preduprezhdeniy",
+        "stage-19-analiz-i-korrektirovka-rezultatov",
+        "stage-20-scenarnoe-planirovanie"
+      ]
+    }
+  ],
+  "moduleEdges": [
+    {
+      "id": "mod-dp--meio",
+      "source": "dp",
+      "target": "meio",
+      "kind": "process",
+      "label": "Итоговый неограниченный прогноз"
+    },
+    {
+      "id": "mod-meio--snp",
+      "source": "meio",
+      "target": "snp",
+      "kind": "process",
+      "label": "Страховые и целевые запасы"
+    },
+    {
+      "id": "mod-snp--ps",
+      "source": "snp",
+      "target": "ps",
+      "kind": "process",
+      "label": "Итоговый ограниченный прогноз"
+    },
+    {
+      "id": "mod-ps--mrp",
+      "source": "ps",
+      "target": "mrp",
+      "kind": "process",
+      "label": "Детальный план операций"
+    }
+  ],
+  "lanes": [
+    {
+      "id": "fpa",
+      "title": "FP&A · Финансовое планирование и анализ"
+    }
+  ],
+  "stages": [
+    {
+      "id": "stage-1-obespechivayuschie-processy",
+      "number": 1,
+      "title": "Обеспечивающие процессы",
+      "shortTitle": "Обеспечивающие процессы",
+      "keyOutputs": [],
+      "groups": [],
+      "nodes": [
+        {
+          "id": "upravlenie-dannymi",
+          "type": "step",
+          "label": "Управление данными",
+          "position": {
+            "x": 296,
+            "y": 59
+          },
+          "slidePosition": {
+            "x": 14,
+            "y": 406
+          }
+        },
+        {
+          "id": "matrica-assortimenta-logisticheskaya-shema-mepping-dfu-sku",
+          "type": "detail",
+          "label": "Матрица ассортимента\nЛогистическая схема\nМэппинг DFU-SKU",
+          "position": {
+            "x": 646,
+            "y": 0
+          },
+          "slidePosition": {
+            "x": 10,
+            "y": 491
+          }
+        },
+        {
+          "id": "istoriya-prodazh-i-plan-promo-dp",
+          "type": "data",
+          "label": "История продаж и план промо",
+          "direction": "in",
+          "position": {
+            "x": 0,
+            "y": 57
+          },
+          "slidePosition": {
+            "x": 184,
+            "y": 93
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "e-upravlenie-dannymi--matrica-assortimenta-logisticheskaya-shema-mepping-dfu-sku",
+          "source": "upravlenie-dannymi",
+          "target": "matrica-assortimenta-logisticheskaya-shema-mepping-dfu-sku",
+          "kind": "data"
+        }
+      ],
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "id": "stage-2-rabota-s-istoriey-prodazh-i-formirovanie-stat-prognoza",
+      "number": 2,
+      "title": "Работа с историей продаж и формирование стат. прогноза",
+      "shortTitle": "Работа с историей продаж и формирование стат. прогноза",
+      "keyOutputs": [],
+      "groups": [],
+      "nodes": [
+        {
+          "id": "zagruzka-istorii-prodazh",
+          "type": "step",
+          "label": "Загрузка истории продаж",
+          "position": {
+            "x": 0,
+            "y": 202
+          },
+          "slidePosition": {
+            "x": 168,
+            "y": 406
+          }
+        },
+        {
+          "id": "ochistka-istorii-prodazh",
+          "type": "step",
+          "label": "Очистка истории продаж",
+          "position": {
+            "x": 350,
+            "y": 131
+          },
+          "slidePosition": {
+            "x": 322,
+            "y": 406
+          }
+        },
+        {
+          "id": "prognozirovanie-bazovoy-linii",
+          "type": "step",
+          "label": "Прогнозирование базовой линии",
+          "position": {
+            "x": 700,
+            "y": 59
+          },
+          "slidePosition": {
+            "x": 478,
+            "y": 406
+          }
+        },
+        {
+          "id": "sell-in-sell-out-off-take-dannye-dlya-modeli-prognozirovaniya",
+          "type": "detail",
+          "label": "Sell-In\nSell-Out\nOff-Take\nДанные для модели прогнозирования",
+          "position": {
+            "x": 350,
+            "y": 215
+          },
+          "slidePosition": {
+            "x": 159,
+            "y": 491
+          }
+        },
+        {
+          "id": "avtomaticheskaya-ochistka-ochistka-po-itogam-segmentacii-oos-outliers",
+          "type": "detail",
+          "label": "Автоматическая очистка:\nОчистка по итогам сегментации\nOOS\nOutliers\nПромо\nЭкспертная очистка данных",
+          "position": {
+            "x": 700,
+            "y": 143
+          },
+          "slidePosition": {
+            "x": 310,
+            "y": 491
+          }
+        },
+        {
+          "id": "ocenka-effektivnosti-modeley-planirovaniya-upravlenie-segmentami",
+          "type": "detail",
+          "label": "Оценка эффективности моделей планирования\nУправление сегментами\nУправление моделями прогнозирования\nСегментация и тестирование временных рядов",
+          "position": {
+            "x": 1050,
+            "y": 0
+          },
+          "slidePosition": {
+            "x": 467,
+            "y": 491
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "e-zagruzka-istorii-prodazh--ochistka-istorii-prodazh",
+          "source": "zagruzka-istorii-prodazh",
+          "target": "ochistka-istorii-prodazh",
+          "kind": "process"
+        },
+        {
+          "id": "e-ochistka-istorii-prodazh--prognozirovanie-bazovoy-linii",
+          "source": "ochistka-istorii-prodazh",
+          "target": "prognozirovanie-bazovoy-linii",
+          "kind": "process"
+        },
+        {
+          "id": "e-zagruzka-istorii-prodazh--sell-in-sell-out-off-take-dannye-dlya-modeli-prognozirovaniya",
+          "source": "zagruzka-istorii-prodazh",
+          "target": "sell-in-sell-out-off-take-dannye-dlya-modeli-prognozirovaniya",
+          "kind": "data"
+        },
+        {
+          "id": "e-ochistka-istorii-prodazh--avtomaticheskaya-ochistka-ochistka-po-itogam-segmentacii-oos-outliers",
+          "source": "ochistka-istorii-prodazh",
+          "target": "avtomaticheskaya-ochistka-ochistka-po-itogam-segmentacii-oos-outliers",
+          "kind": "data"
+        },
+        {
+          "id": "e-prognozirovanie-bazovoy-linii--ocenka-effektivnosti-modeley-planirovaniya-upravlenie-segmentami",
+          "source": "prognozirovanie-bazovoy-linii",
+          "target": "ocenka-effektivnosti-modeley-planirovaniya-upravlenie-segmentami",
+          "kind": "data"
+        }
+      ],
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "id": "stage-3-obogaschenie-prognoza-i-formirovanie-konsensus-plana",
+      "number": 3,
+      "title": "Обогащение прогноза и формирование консенсус плана",
+      "shortTitle": "Обогащение прогноза и формирование консенсус плана",
+      "keyOutputs": [],
+      "groups": [],
+      "nodes": [
+        {
+          "id": "obogaschenie-prognoza",
+          "type": "step",
+          "label": "Обогащение прогноза",
+          "position": {
+            "x": 0,
+            "y": 131
+          },
+          "slidePosition": {
+            "x": 644,
+            "y": 406
+          }
+        },
+        {
+          "id": "formirovanie-i-utverzhdenie-itogovogo-prognoza",
+          "type": "step",
+          "label": "Формирование и утверждение итогового прогноза",
+          "position": {
+            "x": 350,
+            "y": 59
+          },
+          "slidePosition": {
+            "x": 806,
+            "y": 406
+          }
+        },
+        {
+          "id": "planirovanie-novinok-listing-delisting-ekspertnoe-planirovanie-effektov",
+          "type": "detail",
+          "label": "Планирование новинок/ листинг/делистинг\nЭкспертное планирование эффектов Building Blocks\nПередача в NRM базового прогноза\nПолучение плана промо из NRM",
+          "position": {
+            "x": 350,
+            "y": 143
+          },
+          "slidePosition": {
+            "x": 632,
+            "y": 491
+          }
+        },
+        {
+          "id": "dashbordy-i-analiticheskie-otchety-dlya-demand-review-meeting",
+          "type": "detail",
+          "label": "Дашборды и аналитические отчеты для Demand Review Meeting\nПоддержка формирования консенсус-прогноза\nВерсионность и сценарный анализ",
+          "position": {
+            "x": 700,
+            "y": 0
+          },
+          "slidePosition": {
+            "x": 794,
+            "y": 491
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "e-obogaschenie-prognoza--formirovanie-i-utverzhdenie-itogovogo-prognoza",
+          "source": "obogaschenie-prognoza",
+          "target": "formirovanie-i-utverzhdenie-itogovogo-prognoza",
+          "kind": "process"
+        },
+        {
+          "id": "e-obogaschenie-prognoza--planirovanie-novinok-listing-delisting-ekspertnoe-planirovanie-effektov",
+          "source": "obogaschenie-prognoza",
+          "target": "planirovanie-novinok-listing-delisting-ekspertnoe-planirovanie-effektov",
+          "kind": "data"
+        },
+        {
+          "id": "e-formirovanie-i-utverzhdenie-itogovogo-prognoza--dashbordy-i-analiticheskie-otchety-dlya-demand-review-meeting",
+          "source": "formirovanie-i-utverzhdenie-itogovogo-prognoza",
+          "target": "dashbordy-i-analiticheskie-otchety-dlya-demand-review-meeting",
+          "kind": "data"
+        }
+      ],
+      "inputs": [
+        {
+          "system": "NRM",
+          "label": "Получение плана промо из NRM",
+          "stage": 3,
+          "direction": "in"
+        }
+      ],
+      "outputs": [
+        {
+          "system": "NRM",
+          "label": "Передача в NRM базового прогноза",
+          "stage": 3,
+          "direction": "out"
+        }
+      ]
+    },
+    {
+      "id": "stage-4-publikaciya-i-peredacha-neogranichennogo-prognoza",
+      "number": 4,
+      "title": "Публикация и передача неограниченного прогноза",
+      "shortTitle": "Публикация и передача неограниченного прогноза",
+      "keyOutputs": [
+        "Итоговый неограниченный прогноз"
+      ],
+      "groups": [],
+      "nodes": [
+        {
+          "id": "peredacha-neogranichennogo-plana-sprosa-v-sp-meio",
+          "type": "step",
+          "label": "Передача Неограниченного Плана Спроса в SP/MEIO",
+          "position": {
+            "x": 350,
+            "y": 202
+          },
+          "slidePosition": {
+            "x": 1123,
+            "y": 406
+          }
+        },
+        {
+          "id": "publikaciya-prognoza",
+          "type": "step",
+          "label": "Публикация прогноза",
+          "position": {
+            "x": 0,
+            "y": 131
+          },
+          "slidePosition": {
+            "x": 967,
+            "y": 406
+          }
+        },
+        {
+          "id": "dezagregaciya-dfu-sku-arhiv-prognozov-na-urovne-dfu-s-lagom-arhiv",
+          "type": "detail",
+          "label": "Дезагрегация DFU-SKU\nАрхив прогнозов на уровне DFU (с лагом)\nАрхив прогнозов на уровне SKU (с лагом)",
+          "position": {
+            "x": 350,
+            "y": 0
+          },
+          "slidePosition": {
+            "x": 957,
+            "y": 491
+          }
+        },
+        {
+          "id": "itogovyy-neogranichennyy-prognoz-dp",
+          "type": "data",
+          "label": "Итоговый неограниченный прогноз",
+          "direction": "out",
+          "position": {
+            "x": 764,
+            "y": 99
+          },
+          "slidePosition": {
+            "x": 411,
+            "y": 89
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "e-publikaciya-prognoza--peredacha-neogranichennogo-plana-sprosa-v-sp-meio",
+          "source": "publikaciya-prognoza",
+          "target": "peredacha-neogranichennogo-plana-sprosa-v-sp-meio",
+          "kind": "process"
+        },
+        {
+          "id": "e-publikaciya-prognoza--dezagregaciya-dfu-sku-arhiv-prognozov-na-urovne-dfu-s-lagom-arhiv",
+          "source": "publikaciya-prognoza",
+          "target": "dezagregaciya-dfu-sku-arhiv-prognozov-na-urovne-dfu-s-lagom-arhiv",
+          "kind": "data"
+        }
+      ],
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "id": "stage-5-poluchenie-dannyh",
+      "number": 5,
+      "title": "Получение данных",
+      "shortTitle": "Получение данных",
+      "keyOutputs": [],
+      "groups": [],
+      "nodes": [
+        {
+          "id": "osnovnye-dannye",
+          "type": "step",
+          "label": "Основные данные",
+          "position": {
+            "x": 296,
+            "y": 0
+          },
+          "slidePosition": {
+            "x": 30,
+            "y": 337
+          }
+        },
+        {
+          "id": "poluchenie-neogranichennogo-prognoza-istorii-prodazh-istorii-prognozov",
+          "type": "step",
+          "label": "Получение неограниченного прогноза/истории продаж/истории прогнозов",
+          "position": {
+            "x": 296,
+            "y": 84
+          },
+          "slidePosition": {
+            "x": 30,
+            "y": 449
+          }
+        },
+        {
+          "id": "itogovyy-neogranichennyy-prognoz-meio",
+          "type": "data",
+          "label": "Итоговый неограниченный прогноз",
+          "direction": "in",
+          "position": {
+            "x": 0,
+            "y": 40
+          },
+          "slidePosition": {
+            "x": 411,
+            "y": 89
+          }
+        }
+      ],
+      "edges": [],
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "id": "stage-6-podgotovka-k-raschetu",
+      "number": 6,
+      "title": "Подготовка к расчету",
+      "shortTitle": "Подготовка к расчету",
+      "keyOutputs": [],
+      "groups": [],
+      "nodes": [
+        {
+          "id": "nastroyka-parametrov-dlya-rascheta-urovney-zapasov",
+          "type": "step",
+          "label": "Настройка параметров для расчёта уровней запасов",
+          "position": {
+            "x": 0,
+            "y": 131
+          },
+          "slidePosition": {
+            "x": 206,
+            "y": 337
+          }
+        },
+        {
+          "id": "abc-xyz-segmentaciya",
+          "type": "step",
+          "label": "ABC-XYZ сегментация",
+          "position": {
+            "x": 350,
+            "y": 59
+          },
+          "slidePosition": {
+            "x": 390,
+            "y": 337
+          }
+        },
+        {
+          "id": "fakticheskiy-klientskiy-sl-fakticheskie-lidtaymy-i-ih-otkloneniya",
+          "type": "detail",
+          "label": "Фактический клиентский SL\nФактические лидтаймы и их отклонения (задержки)\nФактические квоты\nВолатильность спроса",
+          "position": {
+            "x": 350,
+            "y": 143
+          },
+          "slidePosition": {
+            "x": 194,
+            "y": 427
+          }
+        },
+        {
+          "id": "segmentaciya-grupp-klient-produkt-po-priznakam-vedenie-celevogo-urovnya",
+          "type": "detail",
+          "label": "Сегментация групп клиент-продукт по признакам\nВедение целевого уровня сервиса",
+          "position": {
+            "x": 700,
+            "y": 0
+          },
+          "slidePosition": {
+            "x": 379,
+            "y": 427
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "e-nastroyka-parametrov-dlya-rascheta-urovney-zapasov--abc-xyz-segmentaciya",
+          "source": "nastroyka-parametrov-dlya-rascheta-urovney-zapasov",
+          "target": "abc-xyz-segmentaciya",
+          "kind": "process"
+        },
+        {
+          "id": "e-nastroyka-parametrov-dlya-rascheta-urovney-zapasov--fakticheskiy-klientskiy-sl-fakticheskie-lidtaymy-i-ih-otkloneniya",
+          "source": "nastroyka-parametrov-dlya-rascheta-urovney-zapasov",
+          "target": "fakticheskiy-klientskiy-sl-fakticheskie-lidtaymy-i-ih-otkloneniya",
+          "kind": "data"
+        },
+        {
+          "id": "e-abc-xyz-segmentaciya--segmentaciya-grupp-klient-produkt-po-priznakam-vedenie-celevogo-urovnya",
+          "source": "abc-xyz-segmentaciya",
+          "target": "segmentaciya-grupp-klient-produkt-po-priznakam-vedenie-celevogo-urovnya",
+          "kind": "data"
+        }
+      ],
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "id": "stage-7-raschet-i-analiz",
+      "number": 7,
+      "title": "Расчет и анализ",
+      "shortTitle": "Расчет и анализ",
+      "keyOutputs": [],
+      "groups": [],
+      "nodes": [
+        {
+          "id": "raschet-rekomendaciy-po-urovnyam-zapasov",
+          "type": "step",
+          "label": "Расчет рекомендаций по уровням запасов",
+          "position": {
+            "x": 0,
+            "y": 131
+          },
+          "slidePosition": {
+            "x": 570,
+            "y": 337
+          }
+        },
+        {
+          "id": "analiz-poluchennyh-znacheniy",
+          "type": "step",
+          "label": "Анализ полученных значений",
+          "position": {
+            "x": 350,
+            "y": 59
+          },
+          "slidePosition": {
+            "x": 750,
+            "y": 337
+          }
+        },
+        {
+          "id": "nastroyka-parametrov-optimizacii-uchet-ogranicheniy-raschet-optimalnogo",
+          "type": "detail",
+          "label": "Настройка параметров оптимизации\nУчет ограничений\nРасчет оптимального страхового запаса\nРасчет целевого запаса\nРасчет циклического запаса\nРасчет точки заказа\nРасчет рекомендованного уровня сервиса",
+          "position": {
+            "x": 350,
+            "y": 143
+          },
+          "slidePosition": {
+            "x": 558,
+            "y": 427
+          }
+        },
+        {
+          "id": "scenarnoe-modelirovanie-ruchnye-korrektirovki",
+          "type": "detail",
+          "label": "Сценарное моделирование\nРучные корректировки",
+          "position": {
+            "x": 700,
+            "y": 0
+          },
+          "slidePosition": {
+            "x": 741,
+            "y": 427
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "e-raschet-rekomendaciy-po-urovnyam-zapasov--analiz-poluchennyh-znacheniy",
+          "source": "raschet-rekomendaciy-po-urovnyam-zapasov",
+          "target": "analiz-poluchennyh-znacheniy",
+          "kind": "process"
+        },
+        {
+          "id": "e-raschet-rekomendaciy-po-urovnyam-zapasov--nastroyka-parametrov-optimizacii-uchet-ogranicheniy-raschet-optimalnogo",
+          "source": "raschet-rekomendaciy-po-urovnyam-zapasov",
+          "target": "nastroyka-parametrov-optimizacii-uchet-ogranicheniy-raschet-optimalnogo",
+          "kind": "data"
+        },
+        {
+          "id": "e-analiz-poluchennyh-znacheniy--scenarnoe-modelirovanie-ruchnye-korrektirovki",
+          "source": "analiz-poluchennyh-znacheniy",
+          "target": "scenarnoe-modelirovanie-ruchnye-korrektirovki",
+          "kind": "data"
+        }
+      ],
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "id": "stage-8-peresmotr-i-peredacha-politik",
+      "number": 8,
+      "title": "Пересмотр и передача политик",
+      "shortTitle": "Пересмотр и передача политик",
+      "keyOutputs": [
+        "Страховые и целевые запасы"
+      ],
+      "groups": [],
+      "nodes": [
+        {
+          "id": "peresmotr-politiki-upravleniya-zapasami",
+          "type": "step",
+          "label": "Пересмотр политики управления запасами",
+          "position": {
+            "x": 0,
+            "y": 72
+          },
+          "slidePosition": {
+            "x": 930,
+            "y": 337
+          }
+        },
+        {
+          "id": "peredacha-normativov-po-zapasam-v-moduli-snp-ps-erp",
+          "type": "integration",
+          "label": "Передача нормативов по запасам в модули SNP/PS/ERP",
+          "position": {
+            "x": 350,
+            "y": 0
+          },
+          "slidePosition": {
+            "x": 1103,
+            "y": 337
+          }
+        },
+        {
+          "id": "soglasovanie-politik-s-menedzhmentom",
+          "type": "detail",
+          "label": "Согласование политик с менеджментом",
+          "position": {
+            "x": 350,
+            "y": 84
+          },
+          "slidePosition": {
+            "x": 918,
+            "y": 427
+          }
+        },
+        {
+          "id": "strahovye-i-celevye-zapasy-meio",
+          "type": "data",
+          "label": "Страховые и целевые запасы",
+          "direction": "out",
+          "position": {
+            "x": 764,
+            "y": 99
+          },
+          "slidePosition": {
+            "x": 635,
+            "y": 97
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "e-peresmotr-politiki-upravleniya-zapasami--peredacha-normativov-po-zapasam-v-moduli-snp-ps-erp",
+          "source": "peresmotr-politiki-upravleniya-zapasami",
+          "target": "peredacha-normativov-po-zapasam-v-moduli-snp-ps-erp",
+          "kind": "process"
+        },
+        {
+          "id": "e-peresmotr-politiki-upravleniya-zapasami--soglasovanie-politik-s-menedzhmentom",
+          "source": "peresmotr-politiki-upravleniya-zapasami",
+          "target": "soglasovanie-politik-s-menedzhmentom",
+          "kind": "data"
+        }
+      ],
+      "inputs": [],
+      "outputs": [
+        {
+          "system": "ERP",
+          "label": "Передача нормативов по запасам в модули SNP/PS/ERP",
+          "stage": 8,
+          "direction": "out"
+        }
+      ]
+    },
+    {
+      "id": "stage-9-poluchenie-dannyh-iz-smezhnyh-moduley",
+      "number": 9,
+      "title": "Получение данных из смежных модулей",
+      "shortTitle": "Получение данных из смежных модулей",
+      "keyOutputs": [],
+      "groups": [],
+      "nodes": [
+        {
+          "id": "poluchenie-neogranichennogo-sprosa",
+          "type": "step",
+          "label": "Получение неограниченного спроса",
+          "position": {
+            "x": 296,
+            "y": 0
+          },
+          "slidePosition": {
+            "x": 60,
+            "y": 416
+          }
+        },
+        {
+          "id": "poluchenie-rezultatov-raschetov-modulya-meio",
+          "type": "step",
+          "label": "Получение результатов расчетов модуля MEIO",
+          "position": {
+            "x": 296,
+            "y": 84
+          },
+          "slidePosition": {
+            "x": 60,
+            "y": 540
+          }
+        },
+        {
+          "id": "strahovye-i-celevye-zapasy-snp",
+          "type": "data",
+          "label": "Страховые и целевые запасы",
+          "direction": "in",
+          "position": {
+            "x": 0,
+            "y": 40
+          },
+          "slidePosition": {
+            "x": 635,
+            "y": 97
+          }
+        }
+      ],
+      "edges": [],
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "id": "stage-10-analiz-i-diagnostika-plana",
+      "number": 10,
+      "title": "Анализ и диагностика плана",
+      "shortTitle": "Анализ и диагностика плана",
+      "keyOutputs": [],
+      "groups": [],
+      "nodes": [
+        {
+          "id": "pervichnyy-analiz-sprosa-i-vyyavlenie-problem",
+          "type": "step",
+          "label": "Первичный анализ спроса и выявление проблем",
+          "position": {
+            "x": 0,
+            "y": 131
+          },
+          "slidePosition": {
+            "x": 294,
+            "y": 416
+          }
+        },
+        {
+          "id": "detalnaya-diagnostika-voznikshih-deficitov",
+          "type": "step",
+          "label": "Детальная диагностика возникших дефицитов",
+          "position": {
+            "x": 350,
+            "y": 59
+          },
+          "slidePosition": {
+            "x": 482,
+            "y": 416
+          }
+        },
+        {
+          "id": "verhneurovnevyy-analiz-preduprezhdeniy-detalnyy-analiz-preduprezhdeniy",
+          "type": "detail",
+          "label": "Верхнеуровневый анализ предупреждений\nДетальный анализ предупреждений\nАнализ покрытия потребности",
+          "position": {
+            "x": 350,
+            "y": 143
+          },
+          "slidePosition": {
+            "x": 288,
+            "y": 512
+          }
+        },
+        {
+          "id": "analiz-vozniknoveniya-nepokrytoy-potrebnosti-analiz-zagruzki-moschnostey",
+          "type": "detail",
+          "label": "Анализ возникновения непокрытой потребности\nАнализ загрузки мощностей",
+          "position": {
+            "x": 700,
+            "y": 0
+          },
+          "slidePosition": {
+            "x": 483,
+            "y": 512
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "e-pervichnyy-analiz-sprosa-i-vyyavlenie-problem--detalnaya-diagnostika-voznikshih-deficitov",
+          "source": "pervichnyy-analiz-sprosa-i-vyyavlenie-problem",
+          "target": "detalnaya-diagnostika-voznikshih-deficitov",
+          "kind": "process"
+        },
+        {
+          "id": "e-pervichnyy-analiz-sprosa-i-vyyavlenie-problem--verhneurovnevyy-analiz-preduprezhdeniy-detalnyy-analiz-preduprezhdeniy",
+          "source": "pervichnyy-analiz-sprosa-i-vyyavlenie-problem",
+          "target": "verhneurovnevyy-analiz-preduprezhdeniy-detalnyy-analiz-preduprezhdeniy",
+          "kind": "data"
+        },
+        {
+          "id": "e-detalnaya-diagnostika-voznikshih-deficitov--analiz-vozniknoveniya-nepokrytoy-potrebnosti-analiz-zagruzki-moschnostey",
+          "source": "detalnaya-diagnostika-voznikshih-deficitov",
+          "target": "analiz-vozniknoveniya-nepokrytoy-potrebnosti-analiz-zagruzki-moschnostey",
+          "kind": "data"
+        }
+      ],
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "id": "stage-11-korrektirovki-plana-i-povtornyy-analiz",
+      "number": 11,
+      "title": "Корректировки плана и повторный анализ",
+      "shortTitle": "Корректировки плана и повторный анализ",
+      "keyOutputs": [],
+      "groups": [],
+      "nodes": [
+        {
+          "id": "vnesenie-korrektirovok-i-perezapusk-optimizatora",
+          "type": "step",
+          "label": "Внесение корректировок и перезапуск оптимизатора",
+          "position": {
+            "x": 0,
+            "y": 131
+          },
+          "slidePosition": {
+            "x": 689,
+            "y": 416
+          }
+        },
+        {
+          "id": "povtornyy-analiz-plana-s-uchetom-korrektirovok",
+          "type": "step",
+          "label": "Повторный анализ плана с учетом корректировок",
+          "position": {
+            "x": 350,
+            "y": 59
+          },
+          "slidePosition": {
+            "x": 871,
+            "y": 416
+          }
+        },
+        {
+          "id": "vnesenie-korrektirovok-rezervnoy-moschnosti-zapusk-perescheta",
+          "type": "detail",
+          "label": "Внесение корректировок резервной мощности\nЗапуск пересчета алгоритмов после внесения корректировок",
+          "position": {
+            "x": 350,
+            "y": 143
+          },
+          "slidePosition": {
+            "x": 689,
+            "y": 510
+          }
+        },
+        {
+          "id": "povtornyy-analiz-zagruzki-moschnostey-povtornyy-analiz-preduprezhdeniy",
+          "type": "detail",
+          "label": "Повторный анализ загрузки мощностей\nПовторный анализ предупреждений\nАнализ покрытия потребности\nАнализ результатов работы оптимизатора",
+          "position": {
+            "x": 700,
+            "y": 0
+          },
+          "slidePosition": {
+            "x": 865,
+            "y": 512
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "e-vnesenie-korrektirovok-i-perezapusk-optimizatora--povtornyy-analiz-plana-s-uchetom-korrektirovok",
+          "source": "vnesenie-korrektirovok-i-perezapusk-optimizatora",
+          "target": "povtornyy-analiz-plana-s-uchetom-korrektirovok",
+          "kind": "process"
+        },
+        {
+          "id": "e-vnesenie-korrektirovok-i-perezapusk-optimizatora--vnesenie-korrektirovok-rezervnoy-moschnosti-zapusk-perescheta",
+          "source": "vnesenie-korrektirovok-i-perezapusk-optimizatora",
+          "target": "vnesenie-korrektirovok-rezervnoy-moschnosti-zapusk-perescheta",
+          "kind": "data"
+        },
+        {
+          "id": "e-povtornyy-analiz-plana-s-uchetom-korrektirovok--povtornyy-analiz-zagruzki-moschnostey-povtornyy-analiz-preduprezhdeniy",
+          "source": "povtornyy-analiz-plana-s-uchetom-korrektirovok",
+          "target": "povtornyy-analiz-zagruzki-moschnostey-povtornyy-analiz-preduprezhdeniy",
+          "kind": "data"
+        }
+      ],
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "id": "stage-12-peredacha-planov-v-ps",
+      "number": 12,
+      "title": "Передача планов в PS",
+      "shortTitle": "Передача планов в PS",
+      "keyOutputs": [
+        "Итоговый ограниченный прогноз"
+      ],
+      "groups": [],
+      "nodes": [
+        {
+          "id": "peredacha-soglasovannogo-obemnogo-plana-v-modul-ps",
+          "type": "integration",
+          "label": "Передача согласованного объемного плана в модуль PS",
+          "position": {
+            "x": 0,
+            "y": 2
+          },
+          "slidePosition": {
+            "x": 1074,
+            "y": 416
+          }
+        },
+        {
+          "id": "itogovyy-ogranichennyy-prognoz-snp",
+          "type": "data",
+          "label": "Итоговый ограниченный прогноз",
+          "direction": "out",
+          "position": {
+            "x": 414,
+            "y": 0
+          },
+          "slidePosition": {
+            "x": 862,
+            "y": 93
+          }
+        }
+      ],
+      "edges": [],
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "id": "stage-13-poluchenie-dannyh",
+      "number": 13,
+      "title": "Получение данных",
+      "shortTitle": "Получение данных",
+      "keyOutputs": [],
+      "groups": [],
+      "nodes": [
+        {
+          "id": "poluchenie-soglasovannogo-obemnogo-plana-proizvodstva-iz-snp",
+          "type": "step",
+          "label": "Получение согласованного объемного плана производства из SNP",
+          "position": {
+            "x": 296,
+            "y": 0
+          },
+          "slidePosition": {
+            "x": 25,
+            "y": 399
+          }
+        },
+        {
+          "id": "upravlenie-proizvodstvom-v-erp",
+          "type": "step",
+          "label": "Управление производством в ERP",
+          "position": {
+            "x": 296,
+            "y": 84
+          },
+          "slidePosition": {
+            "x": 25,
+            "y": 485
+          }
+        },
+        {
+          "id": "proizvodstvennye-tehnologicheskie-zakazy-osnovnye-i-tranzakcionnye",
+          "type": "detail",
+          "label": "Производственные / Технологические заказы\nОсновные и транзакционные данные",
+          "position": {
+            "x": 646,
+            "y": 25
+          },
+          "slidePosition": {
+            "x": 19,
+            "y": 553
+          }
+        },
+        {
+          "id": "itogovyy-ogranichennyy-prognoz-ps",
+          "type": "data",
+          "label": "Итоговый ограниченный прогноз",
+          "direction": "in",
+          "position": {
+            "x": 0,
+            "y": 70
+          },
+          "slidePosition": {
+            "x": 862,
+            "y": 93
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "e-upravlenie-proizvodstvom-v-erp--proizvodstvennye-tehnologicheskie-zakazy-osnovnye-i-tranzakcionnye",
+          "source": "upravlenie-proizvodstvom-v-erp",
+          "target": "proizvodstvennye-tehnologicheskie-zakazy-osnovnye-i-tranzakcionnye",
+          "kind": "data"
+        }
+      ],
+      "inputs": [
+        {
+          "system": "ERP",
+          "label": "Управление производством в ERP",
+          "stage": 13,
+          "direction": "in"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "id": "stage-14-kalendarnoe-planirovanie-i-balansirovka",
+      "number": 14,
+      "title": "Календарное планирование и балансировка",
+      "shortTitle": "Календарное планирование и балансировка",
+      "keyOutputs": [],
+      "groups": [],
+      "nodes": [
+        {
+          "id": "analiz-plana-snp-i-potrebnostey-v-proizvodstve",
+          "type": "step",
+          "label": "Анализ плана SNP и потребностей в производстве",
+          "position": {
+            "x": 0,
+            "y": 202
+          },
+          "slidePosition": {
+            "x": 205,
+            "y": 399
+          }
+        },
+        {
+          "id": "formirovanie-plana-proizvodstva-gp-i-pf",
+          "type": "step",
+          "label": "Формирование Плана производства ГП и ПФ",
+          "position": {
+            "x": 350,
+            "y": 131
+          },
+          "slidePosition": {
+            "x": 385,
+            "y": 399
+          }
+        },
+        {
+          "id": "balansirovka-zagruzki-liniy-pr-va-gp-i-pf",
+          "type": "step",
+          "label": "Балансировка загрузки линий пр-ва ГП и ПФ",
+          "position": {
+            "x": 700,
+            "y": 59
+          },
+          "slidePosition": {
+            "x": 565,
+            "y": 399
+          }
+        },
+        {
+          "id": "obemy-v-rabotu",
+          "type": "detail",
+          "label": "Объемы в работу",
+          "position": {
+            "x": 350,
+            "y": 215
+          },
+          "slidePosition": {
+            "x": 207,
+            "y": 484
+          }
+        },
+        {
+          "id": "detalnyy-plan-proizvodstva-po-dnyam-plan-vypuska",
+          "type": "detail",
+          "label": "Детальный план производства по дням (план выпуска)",
+          "position": {
+            "x": 700,
+            "y": 143
+          },
+          "slidePosition": {
+            "x": 389,
+            "y": 484
+          }
+        },
+        {
+          "id": "sbalansirovannyy-detalnyy-plan-proizvodstva-po-dnyam-smenam-i",
+          "type": "detail",
+          "label": "Сбалансированный детальный план производства по дням/сменам и мощностям (план запуска)",
+          "position": {
+            "x": 1050,
+            "y": 0
+          },
+          "slidePosition": {
+            "x": 570,
+            "y": 484
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "e-analiz-plana-snp-i-potrebnostey-v-proizvodstve--formirovanie-plana-proizvodstva-gp-i-pf",
+          "source": "analiz-plana-snp-i-potrebnostey-v-proizvodstve",
+          "target": "formirovanie-plana-proizvodstva-gp-i-pf",
+          "kind": "process"
+        },
+        {
+          "id": "e-formirovanie-plana-proizvodstva-gp-i-pf--balansirovka-zagruzki-liniy-pr-va-gp-i-pf",
+          "source": "formirovanie-plana-proizvodstva-gp-i-pf",
+          "target": "balansirovka-zagruzki-liniy-pr-va-gp-i-pf",
+          "kind": "process"
+        },
+        {
+          "id": "e-analiz-plana-snp-i-potrebnostey-v-proizvodstve--obemy-v-rabotu",
+          "source": "analiz-plana-snp-i-potrebnostey-v-proizvodstve",
+          "target": "obemy-v-rabotu",
+          "kind": "data"
+        },
+        {
+          "id": "e-formirovanie-plana-proizvodstva-gp-i-pf--detalnyy-plan-proizvodstva-po-dnyam-plan-vypuska",
+          "source": "formirovanie-plana-proizvodstva-gp-i-pf",
+          "target": "detalnyy-plan-proizvodstva-po-dnyam-plan-vypuska",
+          "kind": "data"
+        },
+        {
+          "id": "e-balansirovka-zagruzki-liniy-pr-va-gp-i-pf--sbalansirovannyy-detalnyy-plan-proizvodstva-po-dnyam-smenam-i",
+          "source": "balansirovka-zagruzki-liniy-pr-va-gp-i-pf",
+          "target": "sbalansirovannyy-detalnyy-plan-proizvodstva-po-dnyam-smenam-i",
+          "kind": "data"
+        }
+      ],
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "id": "stage-15-pereplanirovanie",
+      "number": 15,
+      "title": "Перепланирование",
+      "shortTitle": "Перепланирование",
+      "keyOutputs": [],
+      "groups": [],
+      "nodes": [
+        {
+          "id": "analiz-pereplanirovanie-i-korrektirovka",
+          "type": "step",
+          "label": "Анализ, перепланирование и корректировка",
+          "position": {
+            "x": 0,
+            "y": 59
+          },
+          "slidePosition": {
+            "x": 745,
+            "y": 399
+          }
+        },
+        {
+          "id": "ustranenie-otkloneniy",
+          "type": "detail",
+          "label": "Устранение отклонений",
+          "position": {
+            "x": 350,
+            "y": 0
+          },
+          "slidePosition": {
+            "x": 751,
+            "y": 484
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "e-analiz-pereplanirovanie-i-korrektirovka--ustranenie-otkloneniy",
+          "source": "analiz-pereplanirovanie-i-korrektirovka",
+          "target": "ustranenie-otkloneniy",
+          "kind": "data"
+        }
+      ],
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "id": "stage-16-peredacha-planov",
+      "number": 16,
+      "title": "Передача планов",
+      "shortTitle": "Передача планов",
+      "keyOutputs": [
+        "Детальный план операций"
+      ],
+      "groups": [],
+      "nodes": [
+        {
+          "id": "publikaciya-planovyh-zakazov-v-sistemu-ispolneniya",
+          "type": "step",
+          "label": "Публикация плановых заказов в систему исполнения",
+          "position": {
+            "x": 0,
+            "y": 72
+          },
+          "slidePosition": {
+            "x": 925,
+            "y": 399
+          }
+        },
+        {
+          "id": "peredacha-grafika-proizvodstva-v-modul-sp",
+          "type": "integration",
+          "label": "Передача графика производства в модуль SP",
+          "position": {
+            "x": 350,
+            "y": 0
+          },
+          "slidePosition": {
+            "x": 1106,
+            "y": 399
+          }
+        },
+        {
+          "id": "peredacha-planovyh-zakazov",
+          "type": "detail",
+          "label": "Передача плановых заказов",
+          "position": {
+            "x": 350,
+            "y": 84
+          },
+          "slidePosition": {
+            "x": 932,
+            "y": 484
+          }
+        },
+        {
+          "id": "detalnyy-plan-operaciy-ps",
+          "type": "data",
+          "label": "Детальный план операций",
+          "direction": "out",
+          "position": {
+            "x": 764,
+            "y": 99
+          },
+          "slidePosition": {
+            "x": 1096,
+            "y": 96
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "e-publikaciya-planovyh-zakazov-v-sistemu-ispolneniya--peredacha-grafika-proizvodstva-v-modul-sp",
+          "source": "publikaciya-planovyh-zakazov-v-sistemu-ispolneniya",
+          "target": "peredacha-grafika-proizvodstva-v-modul-sp",
+          "kind": "process"
+        },
+        {
+          "id": "e-publikaciya-planovyh-zakazov-v-sistemu-ispolneniya--peredacha-planovyh-zakazov",
+          "source": "publikaciya-planovyh-zakazov-v-sistemu-ispolneniya",
+          "target": "peredacha-planovyh-zakazov",
+          "kind": "data"
+        }
+      ],
+      "inputs": [],
+      "outputs": [
+        {
+          "system": "ERP",
+          "label": "Публикация плановых заказов в систему исполнения",
+          "stage": 16,
+          "direction": "out"
+        }
+      ]
+    },
+    {
+      "id": "stage-17-raschet-potrebnosti",
+      "number": 17,
+      "title": "Расчет потребности",
+      "shortTitle": "Расчет потребности",
+      "keyOutputs": [],
+      "groups": [],
+      "nodes": [
+        {
+          "id": "planovye-zakazy-iz-snp-ps",
+          "type": "data",
+          "label": "Плановые заказы из SNP, PS",
+          "direction": "in",
+          "position": {
+            "x": 0,
+            "y": 92
+          },
+          "slidePosition": {
+            "x": 23,
+            "y": 99
+          }
+        },
+        {
+          "id": "razuzlovanie-bom-proverka-analogov-i-zamen",
+          "type": "step",
+          "label": "Разузлование BOM, проверка аналогов и замен",
+          "position": {
+            "x": 296,
+            "y": 202
+          },
+          "slidePosition": {
+            "x": 237,
+            "y": 135
+          }
+        },
+        {
+          "id": "raschet-brutto-i-netto-potrebnostey",
+          "type": "step",
+          "label": "Расчет брутто- и нетто-потребностей",
+          "position": {
+            "x": 646,
+            "y": 131
+          },
+          "slidePosition": {
+            "x": 429,
+            "y": 135
+          }
+        },
+        {
+          "id": "formirovanie-zayavok-na-zakupku",
+          "type": "step",
+          "label": "Формирование заявок на закупку",
+          "position": {
+            "x": 996,
+            "y": 59
+          },
+          "slidePosition": {
+            "x": 620,
+            "y": 135
+          }
+        },
+        {
+          "id": "osnovnye-i-tranzakcionnye-dannye-iz-erp",
+          "type": "data",
+          "label": "Основные и транзакционные данные из ERP",
+          "direction": "in",
+          "position": {
+            "x": 0,
+            "y": 164
+          },
+          "slidePosition": {
+            "x": 23,
+            "y": 156
+          }
+        },
+        {
+          "id": "specifikacii-bom-analogi-i-zameny-komponentov",
+          "type": "detail",
+          "label": "Спецификации (BOM)\nАналоги и замены компонентов",
+          "position": {
+            "x": 646,
+            "y": 215
+          },
+          "slidePosition": {
+            "x": 232,
+            "y": 206
+          }
+        },
+        {
+          "id": "ostatki-i-strahovye-zapasy-suschestvuyuschie-zakazy-na-postavku-i",
+          "type": "detail",
+          "label": "Остатки и страховые запасы\nСуществующие заказы на поставку и заявки на закупку\nПеремещения (входящие/исходящие)\nПараметры партии (min/max/кратность, периодичность) и календари",
+          "position": {
+            "x": 996,
+            "y": 143
+          },
+          "slidePosition": {
+            "x": 425,
+            "y": 206
+          }
+        },
+        {
+          "id": "parametry-zakupki-lead-time-moq-min-max-partiya-kratnost-periodichnost",
+          "type": "detail",
+          "label": "Параметры закупки:\nLead time, MOQ, min/max партия, кратность, периодичность\nИсточник поставки, квоты, цены\nДанные по поставщикам и логистическим ограничениям\nКалендарь поставщика, окна отгрузки\nОграничения по объемам/мощностям\nТранспортные ограничения",
+          "position": {
+            "x": 1346,
+            "y": 0
+          },
+          "slidePosition": {
+            "x": 609,
+            "y": 206
+          }
+        },
+        {
+          "id": "rekomendovannye-urovni-zapasov-iz-meio",
+          "type": "data",
+          "label": "Рекомендованные уровни запасов из MEIO",
+          "direction": "in",
+          "position": {
+            "x": 0,
+            "y": 236
+          },
+          "slidePosition": {
+            "x": 23,
+            "y": 219
+          }
+        },
+        {
+          "id": "planovye-pervichnye-potrebnosti-i-drugie-vidy-potrebnostey",
+          "type": "data",
+          "label": "Плановые первичные потребности и другие виды потребностей",
+          "direction": "in",
+          "position": {
+            "x": 0,
+            "y": 308
+          },
+          "slidePosition": {
+            "x": 23,
+            "y": 299
+          }
+        },
+        {
+          "id": "detalnyy-plan-operaciy-mrp",
+          "type": "data",
+          "label": "Детальный план операций",
+          "direction": "in",
+          "position": {
+            "x": 0,
+            "y": 20
+          },
+          "slidePosition": {
+            "x": 1096,
+            "y": 96
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "e-planovye-zakazy-iz-snp-ps--razuzlovanie-bom-proverka-analogov-i-zamen",
+          "source": "planovye-zakazy-iz-snp-ps",
+          "target": "razuzlovanie-bom-proverka-analogov-i-zamen",
+          "kind": "data"
+        },
+        {
+          "id": "e-planovye-pervichnye-potrebnosti-i-drugie-vidy-potrebnostey--razuzlovanie-bom-proverka-analogov-i-zamen",
+          "source": "planovye-pervichnye-potrebnosti-i-drugie-vidy-potrebnostey",
+          "target": "razuzlovanie-bom-proverka-analogov-i-zamen",
+          "kind": "data"
+        },
+        {
+          "id": "e-osnovnye-i-tranzakcionnye-dannye-iz-erp--razuzlovanie-bom-proverka-analogov-i-zamen",
+          "source": "osnovnye-i-tranzakcionnye-dannye-iz-erp",
+          "target": "razuzlovanie-bom-proverka-analogov-i-zamen",
+          "kind": "data"
+        },
+        {
+          "id": "e-rekomendovannye-urovni-zapasov-iz-meio--razuzlovanie-bom-proverka-analogov-i-zamen",
+          "source": "rekomendovannye-urovni-zapasov-iz-meio",
+          "target": "razuzlovanie-bom-proverka-analogov-i-zamen",
+          "kind": "data"
+        },
+        {
+          "id": "e-razuzlovanie-bom-proverka-analogov-i-zamen--raschet-brutto-i-netto-potrebnostey",
+          "source": "razuzlovanie-bom-proverka-analogov-i-zamen",
+          "target": "raschet-brutto-i-netto-potrebnostey",
+          "kind": "process"
+        },
+        {
+          "id": "e-raschet-brutto-i-netto-potrebnostey--formirovanie-zayavok-na-zakupku",
+          "source": "raschet-brutto-i-netto-potrebnostey",
+          "target": "formirovanie-zayavok-na-zakupku",
+          "kind": "process"
+        },
+        {
+          "id": "e-razuzlovanie-bom-proverka-analogov-i-zamen--specifikacii-bom-analogi-i-zameny-komponentov",
+          "source": "razuzlovanie-bom-proverka-analogov-i-zamen",
+          "target": "specifikacii-bom-analogi-i-zameny-komponentov",
+          "kind": "data"
+        },
+        {
+          "id": "e-raschet-brutto-i-netto-potrebnostey--ostatki-i-strahovye-zapasy-suschestvuyuschie-zakazy-na-postavku-i",
+          "source": "raschet-brutto-i-netto-potrebnostey",
+          "target": "ostatki-i-strahovye-zapasy-suschestvuyuschie-zakazy-na-postavku-i",
+          "kind": "data"
+        },
+        {
+          "id": "e-formirovanie-zayavok-na-zakupku--parametry-zakupki-lead-time-moq-min-max-partiya-kratnost-periodichnost",
+          "source": "formirovanie-zayavok-na-zakupku",
+          "target": "parametry-zakupki-lead-time-moq-min-max-partiya-kratnost-periodichnost",
+          "kind": "data"
+        }
+      ],
+      "inputs": [
+        {
+          "system": "ERP",
+          "label": "Основные и транзакционные данные из ERP",
+          "stage": 17,
+          "direction": "in"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "id": "stage-18-obrabotka-oshibok-i-preduprezhdeniy",
+      "number": 18,
+      "title": "Обработка ошибок и предупреждений",
+      "shortTitle": "Обработка ошибок и предупреждений",
+      "keyOutputs": [],
+      "groups": [],
+      "nodes": [
+        {
+          "id": "analiz-preduprezhdeniy",
+          "type": "warning",
+          "label": "Анализ предупреждений",
+          "position": {
+            "x": 0,
+            "y": 59
+          },
+          "slidePosition": {
+            "x": 812,
+            "y": 135
+          }
+        },
+        {
+          "id": "ispravlenie-dannyh",
+          "type": "step",
+          "label": "Исправление данных",
+          "position": {
+            "x": 350,
+            "y": 59
+          },
+          "slidePosition": {
+            "x": 1004,
+            "y": 135
+          }
+        },
+        {
+          "id": "korrektirovka-ishodnyh-dannyh-za-kotoroy-sleduet-pereraschet-potrebnosti",
+          "type": "detail",
+          "label": "Корректировка исходных данных, за которой следует перерасчет потребности",
+          "position": {
+            "x": 700,
+            "y": 0
+          },
+          "slidePosition": {
+            "x": 999,
+            "y": 217
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "e-analiz-preduprezhdeniy--ispravlenie-dannyh",
+          "source": "analiz-preduprezhdeniy",
+          "target": "ispravlenie-dannyh",
+          "kind": "process"
+        },
+        {
+          "id": "e-ispravlenie-dannyh--korrektirovka-ishodnyh-dannyh-za-kotoroy-sleduet-pereraschet-potrebnosti",
+          "source": "ispravlenie-dannyh",
+          "target": "korrektirovka-ishodnyh-dannyh-za-kotoroy-sleduet-pereraschet-potrebnosti",
+          "kind": "data"
+        }
+      ],
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "id": "stage-19-analiz-i-korrektirovka-rezultatov",
+      "number": 19,
+      "title": "Анализ и корректировка результатов",
+      "shortTitle": "Анализ и корректировка результатов",
+      "keyOutputs": [
+        "Передача плана в виде заявок на закупку в систему исполнения закупок"
+      ],
+      "groups": [],
+      "nodes": [
+        {
+          "id": "proverka-obespechennosti-bom",
+          "type": "step",
+          "label": "Проверка обеспеченности BOM",
+          "position": {
+            "x": 0,
+            "y": 2
+          },
+          "slidePosition": {
+            "x": 28,
+            "y": 431
+          }
+        },
+        {
+          "id": "korrektirovka-zayavok",
+          "type": "step",
+          "label": "Корректировка заявок",
+          "position": {
+            "x": 350,
+            "y": 2
+          },
+          "slidePosition": {
+            "x": 206,
+            "y": 431
+          }
+        },
+        {
+          "id": "soglasovanie-izmeneniy",
+          "type": "step",
+          "label": "Согласование изменений",
+          "position": {
+            "x": 700,
+            "y": 2
+          },
+          "slidePosition": {
+            "x": 384,
+            "y": 431
+          }
+        },
+        {
+          "id": "soglasovanie-plana-zakupok",
+          "type": "step",
+          "label": "Согласование плана закупок",
+          "position": {
+            "x": 1050,
+            "y": 2
+          },
+          "slidePosition": {
+            "x": 562,
+            "y": 431
+          }
+        },
+        {
+          "id": "peredacha-plana-v-vide-zayavok-na-zakupku-v-sistemu-ispolneniya-zakupok",
+          "type": "data",
+          "label": "Передача плана в виде заявок на закупку в систему исполнения закупок",
+          "direction": "out",
+          "position": {
+            "x": 1464,
+            "y": 0
+          },
+          "slidePosition": {
+            "x": 559,
+            "y": 528
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "e-korrektirovka-zayavok--soglasovanie-izmeneniy",
+          "source": "korrektirovka-zayavok",
+          "target": "soglasovanie-izmeneniy",
+          "kind": "process"
+        },
+        {
+          "id": "e-proverka-obespechennosti-bom--korrektirovka-zayavok",
+          "source": "proverka-obespechennosti-bom",
+          "target": "korrektirovka-zayavok",
+          "kind": "process"
+        },
+        {
+          "id": "e-soglasovanie-izmeneniy--soglasovanie-plana-zakupok",
+          "source": "soglasovanie-izmeneniy",
+          "target": "soglasovanie-plana-zakupok",
+          "kind": "process"
+        },
+        {
+          "id": "e-soglasovanie-plana-zakupok--peredacha-plana-v-vide-zayavok-na-zakupku-v-sistemu-ispolneniya-zakupok",
+          "source": "soglasovanie-plana-zakupok",
+          "target": "peredacha-plana-v-vide-zayavok-na-zakupku-v-sistemu-ispolneniya-zakupok",
+          "kind": "data"
+        }
+      ],
+      "inputs": [],
+      "outputs": [
+        {
+          "system": "ERP",
+          "label": "Передача плана в виде заявок на закупку в систему исполнения закупок",
+          "stage": 19,
+          "direction": "out"
+        }
+      ]
+    },
+    {
+      "id": "stage-20-scenarnoe-planirovanie",
+      "number": 20,
+      "title": "Сценарное планирование",
+      "shortTitle": "Сценарное планирование",
+      "keyOutputs": [],
+      "groups": [],
+      "nodes": [
+        {
+          "id": "sozdanie-alternativnyh-scenariev",
+          "type": "step",
+          "label": "Создание альтернативных сценариев",
+          "position": {
+            "x": 0,
+            "y": 0
+          },
+          "slidePosition": {
+            "x": 749,
+            "y": 431
+          }
+        },
+        {
+          "id": "sravnenie-po-kpi-stoimost-riski-zapasy",
+          "type": "step",
+          "label": "Сравнение по KPI (стоимость, риски, запасы)",
+          "position": {
+            "x": 350,
+            "y": 0
+          },
+          "slidePosition": {
+            "x": 922,
+            "y": 431
+          }
+        },
+        {
+          "id": "utverzhdenie-finalnogo-scenariya",
+          "type": "step",
+          "label": "Утверждение финального сценария",
+          "position": {
+            "x": 700,
+            "y": 0
+          },
+          "slidePosition": {
+            "x": 1095,
+            "y": 431
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "e-sozdanie-alternativnyh-scenariev--sravnenie-po-kpi-stoimost-riski-zapasy",
+          "source": "sozdanie-alternativnyh-scenariev",
+          "target": "sravnenie-po-kpi-stoimost-riski-zapasy",
+          "kind": "process"
+        },
+        {
+          "id": "e-sravnenie-po-kpi-stoimost-riski-zapasy--utverzhdenie-finalnogo-scenariya",
+          "source": "sravnenie-po-kpi-stoimost-riski-zapasy",
+          "target": "utverzhdenie-finalnogo-scenariya",
+          "kind": "process"
+        }
+      ],
+      "inputs": [],
+      "outputs": []
+    }
+  ],
+  "overviewEdges": [
+    {
+      "id": "ov-stage-2-rabota-s-istoriey-prodazh-i-formirovanie-stat-prognoza--stage-3-obogaschenie-prognoza-i-formirovanie-konsensus-plana",
+      "source": "stage-2-rabota-s-istoriey-prodazh-i-formirovanie-stat-prognoza",
+      "target": "stage-3-obogaschenie-prognoza-i-formirovanie-konsensus-plana",
+      "kind": "process"
+    },
+    {
+      "id": "ov-stage-3-obogaschenie-prognoza-i-formirovanie-konsensus-plana--stage-4-publikaciya-i-peredacha-neogranichennogo-prognoza",
+      "source": "stage-3-obogaschenie-prognoza-i-formirovanie-konsensus-plana",
+      "target": "stage-4-publikaciya-i-peredacha-neogranichennogo-prognoza",
+      "kind": "process"
+    },
+    {
+      "id": "ov-stage-5-poluchenie-dannyh--stage-6-podgotovka-k-raschetu",
+      "source": "stage-5-poluchenie-dannyh",
+      "target": "stage-6-podgotovka-k-raschetu",
+      "kind": "process"
+    },
+    {
+      "id": "ov-stage-6-podgotovka-k-raschetu--stage-7-raschet-i-analiz",
+      "source": "stage-6-podgotovka-k-raschetu",
+      "target": "stage-7-raschet-i-analiz",
+      "kind": "process"
+    },
+    {
+      "id": "ov-stage-7-raschet-i-analiz--stage-8-peresmotr-i-peredacha-politik",
+      "source": "stage-7-raschet-i-analiz",
+      "target": "stage-8-peresmotr-i-peredacha-politik",
+      "kind": "process"
+    },
+    {
+      "id": "ov-stage-10-analiz-i-diagnostika-plana--stage-11-korrektirovki-plana-i-povtornyy-analiz",
+      "source": "stage-10-analiz-i-diagnostika-plana",
+      "target": "stage-11-korrektirovki-plana-i-povtornyy-analiz",
+      "kind": "process"
+    },
+    {
+      "id": "ov-stage-11-korrektirovki-plana-i-povtornyy-analiz--stage-12-peredacha-planov-v-ps",
+      "source": "stage-11-korrektirovki-plana-i-povtornyy-analiz",
+      "target": "stage-12-peredacha-planov-v-ps",
+      "kind": "process"
+    },
+    {
+      "id": "ov-stage-9-poluchenie-dannyh-iz-smezhnyh-moduley--stage-10-analiz-i-diagnostika-plana",
+      "source": "stage-9-poluchenie-dannyh-iz-smezhnyh-moduley",
+      "target": "stage-10-analiz-i-diagnostika-plana",
+      "kind": "process"
+    },
+    {
+      "id": "ov-stage-13-poluchenie-dannyh--stage-14-kalendarnoe-planirovanie-i-balansirovka",
+      "source": "stage-13-poluchenie-dannyh",
+      "target": "stage-14-kalendarnoe-planirovanie-i-balansirovka",
+      "kind": "process"
+    },
+    {
+      "id": "ov-stage-14-kalendarnoe-planirovanie-i-balansirovka--stage-15-pereplanirovanie",
+      "source": "stage-14-kalendarnoe-planirovanie-i-balansirovka",
+      "target": "stage-15-pereplanirovanie",
+      "kind": "process"
+    },
+    {
+      "id": "ov-stage-15-pereplanirovanie--stage-16-peredacha-planov",
+      "source": "stage-15-pereplanirovanie",
+      "target": "stage-16-peredacha-planov",
+      "kind": "process"
+    },
+    {
+      "id": "ov-stage-18-obrabotka-oshibok-i-preduprezhdeniy--stage-17-raschet-potrebnosti",
+      "source": "stage-18-obrabotka-oshibok-i-preduprezhdeniy",
+      "target": "stage-17-raschet-potrebnosti",
+      "kind": "process"
+    },
+    {
+      "id": "ov-stage-17-raschet-potrebnosti--stage-18-obrabotka-oshibok-i-preduprezhdeniy",
+      "source": "stage-17-raschet-potrebnosti",
+      "target": "stage-18-obrabotka-oshibok-i-preduprezhdeniy",
+      "kind": "process"
+    },
+    {
+      "id": "ov-stage-18-obrabotka-oshibok-i-preduprezhdeniy--stage-19-analiz-i-korrektirovka-rezultatov",
+      "source": "stage-18-obrabotka-oshibok-i-preduprezhdeniy",
+      "target": "stage-19-analiz-i-korrektirovka-rezultatov",
+      "kind": "process"
+    },
+    {
+      "id": "ov-stage-19-analiz-i-korrektirovka-rezultatov--stage-20-scenarnoe-planirovanie",
+      "source": "stage-19-analiz-i-korrektirovka-rezultatov",
+      "target": "stage-20-scenarnoe-planirovanie",
+      "kind": "process"
+    },
+    {
+      "id": "ov-stage-20-scenarnoe-planirovanie--stage-19-analiz-i-korrektirovka-rezultatov",
+      "source": "stage-20-scenarnoe-planirovanie",
+      "target": "stage-19-analiz-i-korrektirovka-rezultatov",
+      "kind": "process"
+    },
+    {
+      "id": "ov-ERP--stage-17-raschet-potrebnosti",
+      "source": "ERP",
+      "target": "stage-17-raschet-potrebnosti",
+      "kind": "integration"
+    },
+    {
+      "id": "ov-stage-19-analiz-i-korrektirovka-rezultatov--ERP",
+      "source": "stage-19-analiz-i-korrektirovka-rezultatov",
+      "target": "ERP",
+      "kind": "integration"
+    },
+    {
+      "id": "ov-stage-16-peredacha-planov--ERP",
+      "source": "stage-16-peredacha-planov",
+      "target": "ERP",
+      "kind": "integration"
+    },
+    {
+      "id": "ov-ERP--stage-13-poluchenie-dannyh",
+      "source": "ERP",
+      "target": "stage-13-poluchenie-dannyh",
+      "kind": "integration"
+    },
+    {
+      "id": "ov-stage-8-peresmotr-i-peredacha-politik--ERP",
+      "source": "stage-8-peresmotr-i-peredacha-politik",
+      "target": "ERP",
+      "kind": "integration"
+    },
+    {
+      "id": "ov-stage-3-obogaschenie-prognoza-i-formirovanie-konsensus-plana--NRM",
+      "source": "stage-3-obogaschenie-prognoza-i-formirovanie-konsensus-plana",
+      "target": "NRM",
+      "kind": "integration"
+    },
+    {
+      "id": "ov-NRM--stage-3-obogaschenie-prognoza-i-formirovanie-konsensus-plana",
+      "source": "NRM",
+      "target": "stage-3-obogaschenie-prognoza-i-formirovanie-konsensus-plana",
+      "kind": "integration"
+    }
+  ]
+}

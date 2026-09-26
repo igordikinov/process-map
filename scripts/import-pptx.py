@@ -182,6 +182,14 @@ MAP_UPDATED_AT_MRP = "2026-09-01"
 MAP_DATA_FINGERPRINT_MRP = "394e6ee9b381b0fd01eda89ffc7391993810474ae7c0cdee669023bf429fc9cd"
 
 
+# Карта пяти модулей из колоды L2 (process-map-9mn.15).
+MAP_ID_INPLAN = "inplan"
+MAP_TITLE_INPLAN = "Карта процессов In.Plan"
+MAP_MODULE_LABEL_INPLAN = "Все процессы In.Plan"
+MAP_UPDATED_AT_INPLAN = "2026-09-27"
+MAP_DATA_FINGERPRINT_INPLAN = "c6cbcaaadf3190bd27fbaab1454c2e467296db0f9423c4106ce5f439a658f966"
+
+
 # Сколько этапов у карты, если профиль не сказал иного (MapSpec.stage_count).
 #
 # ПРЕЖНИЙ КОММЕНТАРИЙ «ограничение zod-схемы: number ∈ {1,2,3,4}» БЫЛ НЕПРАВДОЙ
@@ -300,6 +308,23 @@ MAPS: dict[str, MapSpec] = {
         module_label=MAP_MODULE_LABEL_MRP,
         updated_at=MAP_UPDATED_AT_MRP,
         fingerprint=MAP_DATA_FINGERPRINT_MRP,
+    ),
+    "inplan": MapSpec(
+        key="inplan",
+        pptx=ROOT / "In.Plan L2 Обзор и E2E demo (24-09-2026).pptx",
+        json=ROOT / "src" / "data" / "inplan" / "process.json",
+        required_nodes=ROOT / "tests" / "fixtures" / "inplan" / "required-nodes.json",
+        profile="three-tier",
+        slides=11,
+        slide_index=None,
+        map_id=MAP_ID_INPLAN,
+        title=MAP_TITLE_INPLAN,
+        module_label=MAP_MODULE_LABEL_INPLAN,
+        updated_at=MAP_UPDATED_AT_INPLAN,
+        fingerprint=MAP_DATA_FINGERPRINT_INPLAN,
+        overview_slide=0,
+        nav_slides=(1, 3, 5, 7, 9),
+        artifact_fill="scheme:accent3",
     ),
 }
 
@@ -528,6 +553,83 @@ OWNER_DECISION_EXTERNAL_IO: tuple[dict, ...] = (
             "подходит: ближайший конец линии [138] лежит в 352422 EMU ниже и внутри "
             "текстбокса заголовка этапа [15]"
         ),
+    },
+    {
+        "map": "inplan",
+        "task": "process-map-9mn.31",
+        "stage": 17,
+        "system": "ERP",
+        "label": "Основные и транзакционные данные из ERP",
+        "direction": "in",
+        "module": "mrp",
+        "source": "слайд 9 колоды L2, решение владельца 9mn.31",
+        "why": "Явная внешняя система; упоминания собственных модулей внешних полос не создают.",
+    },
+    {
+        "map": "inplan",
+        "task": "process-map-9mn.31",
+        "stage": 19,
+        "system": "ERP",
+        "label": "Передача плана в виде заявок на закупку в систему исполнения закупок",
+        "direction": "out",
+        "module": "mrp",
+        "source": "слайд 9 колоды L2, решение владельца 9mn.31",
+        "why": "Явная внешняя система; упоминания собственных модулей внешних полос не создают.",
+    },
+    {
+        "map": "inplan",
+        "task": "process-map-9mn.31",
+        "stage": 16,
+        "system": "ERP",
+        "label": "Публикация плановых заказов в систему исполнения",
+        "direction": "out",
+        "module": "ps",
+        "source": "слайд 11 колоды L2, решение владельца 9mn.31",
+        "why": "Явная внешняя система; упоминания собственных модулей внешних полос не создают.",
+    },
+    {
+        "map": "inplan",
+        "task": "process-map-9mn.31",
+        "stage": 13,
+        "system": "ERP",
+        "label": "Управление производством в ERP",
+        "direction": "in",
+        "module": "ps",
+        "source": "слайд 11 колоды L2, решение владельца 9mn.31",
+        "why": "Явная внешняя система; упоминания собственных модулей внешних полос не создают.",
+    },
+    {
+        "map": "inplan",
+        "task": "process-map-9mn.31",
+        "stage": 8,
+        "system": "ERP",
+        "label": "Передача нормативов по запасам в модули SNP/PS/ERP",
+        "direction": "out",
+        "module": "meio",
+        "source": "слайд 5 колоды L2, решение владельца 9mn.31",
+        "why": "Явная внешняя система; упоминания собственных модулей внешних полос не создают.",
+    },
+    {
+        "map": "inplan",
+        "task": "process-map-9mn.31",
+        "stage": 3,
+        "system": "NRM",
+        "label": "Передача в NRM базового прогноза",
+        "direction": "out",
+        "module": "dp",
+        "source": "слайд 3 колоды L2, решение владельца 9mn.31",
+        "why": "Явная внешняя система; упоминания собственных модулей внешних полос не создают.",
+    },
+    {
+        "map": "inplan",
+        "task": "process-map-9mn.31",
+        "stage": 3,
+        "system": "NRM",
+        "label": "Получение плана промо из NRM",
+        "direction": "in",
+        "module": "dp",
+        "source": "слайд 3 колоды L2, решение владельца 9mn.31",
+        "why": "Явная внешняя система; упоминания собственных модулей внешних полос не создают.",
     },
 )
 
