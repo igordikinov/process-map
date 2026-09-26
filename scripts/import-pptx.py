@@ -193,6 +193,9 @@ MAP_DATA_FINGERPRINT_MRP = "394e6ee9b381b0fd01eda89ffc7391993810474ae7c0cdee6690
 # не всего импортёра.
 STAGE_COUNT = 4
 
+# У single-slide артефакты accent2; у колоды L2 — accent3 (MapSpec).
+ARTIFACT_FILL = "scheme:accent2"
+
 
 @dataclass(frozen=True)
 class MapSpec:
@@ -265,6 +268,8 @@ class MapSpec:
     # read_module_index (process-map-9mn.14.2); слайд детализации модуля —
     # следующий за навигационным.
     nav_slides: tuple[int, ...] = ()
+    # Для колоды L2 задаётся scheme:accent3; не путать с заливкой яруса.
+    artifact_fill: str = ARTIFACT_FILL
 
 
 MAPS: dict[str, MapSpec] = {
@@ -315,6 +320,9 @@ CAPTION_MIN_NODE_HEIGHT = 250_000    # тонкие полосы подписы�
 EDGE_SNAP_DETAIL = 300_000           # конец линии «прилипает» к узлу (слайды детализации)
 EDGE_SNAP_SECOND = 900_000           # второй проход для линий с одним разрешённым концом
 EDGE_SECOND_RATIO = 1.8              # следующий кандидат должен быть настолько же дальше
+# Стыки L2 точные (0 EMU). Ближайший НЕ-стык — 38519 EMU: слайд 9,
+# конец [91] рядом с [52]. Допуск держим в [0, 38519), без расширения «на глаз».
+JUNCTION_TOLERANCE = 0
 EDGE_SNAP_OVERVIEW = 500_000         # то же для обзора: там геометрия заметно свободнее
 PROMOTE_MIN_ENDPOINTS = 2            # столько концов линий должно упираться в текстбокс
 PROMOTE_SNAP = 50_000                # и упираться вплотную: подпись рядом со стрелкой — не узел
@@ -326,10 +334,6 @@ DECOR_ARROW_MAX_WIDTH = 400_000      # мелкие стрелки-коннек�
 
 MAX_KEY_OUTPUTS = 4                  # ограничение zod-схемы
 
-# Заливка плашек-артефактов (входы и выход процесса) в профиле «одиночный слайд».
-# В презентации SNP входы нарисованы надписями, здесь — автофигурами, и без
-# отдельного признака они стали бы обычными шагами.
-ARTIFACT_FILL = "scheme:accent2"
 MAX_ID_LENGTH = 72                   # длиннее, чтобы различающая часть текста не срезалась
 
 # NRM — внешняя система модуля DP на карте inplan (process-map-9mn.31, п. 6).
@@ -391,6 +395,16 @@ STAGE_KEY_ORDER = (
 # переносить из предыдущего process.json, иначе перегенерация их стирает.
 PRESERVED_NODE_FIELDS = ("owner", "screen")
 PRESERVED_STAGE_FIELDS = ("screen",)
+PRESERVED_MODULE_FIELDS = ("screen",)
+
+MAP_KEY_ORDER = (
+    "version", "id", "updatedAt", "title", "moduleLabel", "modules",
+    "moduleEdges", "lanes", "stages", "overviewEdges",
+)
+MODULE_KEY_ORDER = (
+    "id", "number", "title", "shortTitle", "label", "keyOutputs", "screen", "stageIds",
+)
+LANE_KEY_ORDER = ("id", "title")
 
 # Остальное импортёр строит сам из презентации.
 IMPORTER_NODE_FIELDS = tuple(k for k in NODE_KEY_ORDER if k not in PRESERVED_NODE_FIELDS)
@@ -598,10 +612,8 @@ PROFILE_READS: dict[str, frozenset[str]] = {
     ),
     "single-slide": frozenset(),
     # Трёхуровневая карта inplan (process-map-9mn.14): из четырёх таблиц ей
-    # нужна только внешняя система этапа, названная владельцем. Читать её
-    # начнёт построитель подзадачи 14.6; до тех пор профиль зарегистрирован
-    # заглушкой (см. PROFILE_BUILDERS), которая останавливает импорт раньше,
-    # чем что-либо прочитает.
+    # нужна только внешняя система этапа, названная владельцем. Построитель
+    # проверяет декларацию по текстам именно этого этапа, включая подробности.
     "three-tier": frozenset({"OWNER_DECISION_EXTERNAL_IO"}),
 }
 
@@ -937,6 +949,13 @@ class SlideReport:
     module_transfers: list[str] = field(default_factory=list)
     module_lanes: list[str] = field(default_factory=list)
     activity_check: list[str] = field(default_factory=list)
+    # Только L2: связи шагов с подробностями и отвергнутые концы линий.
+    detail_attachments: list[str] = field(default_factory=list)
+    lines_on_details: list[str] = field(default_factory=list)
+    line_junctions: list[str] = field(default_factory=list)
+    key_output_sources: list[str] = field(default_factory=list)
+    unused_module_mentions: list[str] = field(default_factory=list)
+    isolated_flow: list[str] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         if self.role not in SLIDE_ROLES:
@@ -2003,10 +2022,6 @@ def read_module_index(
     read_slide (индекс — 0-based номер слайда). Фигуры, а не слайды
     python-pptx, чтобы самопроверка могла подать синтетику без презентации.
 
-    ПОКА НЕ ВЫЗЫВАЕТСЯ НИКАКИМ ПОСТРОИТЕЛЕМ: build_three_tier_map — заглушка,
-    подключит реестр подзадача process-map-9mn.14.6. До тех пор его держит
-    самопроверка (пункт 14), а на настоящей колоде он проверен разовым зондом.
-
     ОСТАНОВКИ, а не догадки:
       · кнопки на навигационных слайдах разные (не тот набор или не тот
         порядок) — номер модуля зависел бы от того, с какого слайда его читать;
@@ -2847,10 +2862,6 @@ def read_modules_slide(
     Слайд 1 целиком: ряд модулей, сторож стрелок, передачи, полосы — и строка
     отчёта о каждой фигуре с текстом, которая ни во что из этого не попала.
 
-    ПОКА НЕ ВЫЗЫВАЕТСЯ НИКАКИМ ПОСТРОИТЕЛЕМ, как и read_module_index: подключит
-    подзадача process-map-9mn.14.6. До тех пор её держит самопроверка (пункт
-    15), а на настоящей колоде она проверена разовым зондом.
-
     Порядок шагов не произволен: колонки нужны всем остальным, а сторож стрелок
     идёт ДО передач — прочтение «левая — источник» проверяется раньше, чем по
     нему что-то собрано.
@@ -2915,11 +2926,11 @@ def rotate_point(point: tuple[float, float], cx: float, cy: float, degrees: floa
     return (cx + dx * cos_a - dy * sin_a, cy + dx * sin_a + dy * cos_a)
 
 
-def line_endpoints(shape: Shape) -> tuple[tuple[float, float], tuple[float, float]]:
+def raw_line_endpoints(shape: Shape) -> tuple[tuple[float, float], tuple[float, float]]:
     """
     Начало и конец линии из left/top/width/height + флагов отражения и ПОВОРОТА.
-    Стрелка на конце (a:tailEnd) означает направление начало→конец; стрелка
-    на начале (a:headEnd) — обратное.
+    Порядок DrawingML: start_sid/head_arrow относятся к первому концу,
+    end_sid/tail_arrow — ко второму. Направление стрелки здесь не учитывается.
 
     ПОВОРОТ (process-map-3wh.18). У повёрнутого коннектора left/top/width/height
     описывают НЕПОВЁРНУТУЮ рамку, а рисуется он повёрнутым вокруг её центра.
@@ -2939,9 +2950,88 @@ def line_endpoints(shape: Shape) -> tuple[tuple[float, float], tuple[float, floa
         cx, cy = float(shape.box.cx), float(shape.box.cy)
         start = rotate_point(start, cx, cy, shape.rot)
         end = rotate_point(end, cx, cy, shape.rot)
+    return start, end
+
+
+def line_endpoints(shape: Shape) -> tuple[tuple[float, float], tuple[float, float]]:
+    """Концы в направлении стрелки; прежний контракт профилей SNP/MRP."""
+    start, end = raw_line_endpoints(shape)
     if shape.head_arrow and not shape.tail_arrow:
         return end, start
     return start, end
+
+
+def segment_distance(
+    point: tuple[float, float], start: tuple[float, float], end: tuple[float, float],
+) -> float:
+    """Расстояние до ОТРЕЗКА, включая Т-стык в его середину и нулевую длину."""
+    dx, dy = end[0] - start[0], end[1] - start[1]
+    length_squared = dx * dx + dy * dy
+    if length_squared == 0:
+        return math.hypot(point[0] - start[0], point[1] - start[1])
+    px, py = point[0] - start[0], point[1] - start[1]
+    projection = (px * dx + py * dy) / length_squared
+    if projection <= 0:
+        return math.hypot(px, py)
+    if projection >= 1:
+        return math.hypot(point[0] - end[0], point[1] - end[1])
+    # Векторное произведение сохраняет точный ноль коллинеарных EMU-точек:
+    # восстановление проекции умножением способно дать крошечный ложный зазор.
+    return abs(px * dy - py * dx) / math.sqrt(length_squared)
+
+
+@dataclass(frozen=True)
+class LineJunction:
+    """Связная группа отрезков; терминалы — (shape_id линии, конец 0 или 1)."""
+
+    lines: tuple[Shape, ...]
+    terminals: tuple[tuple[int, int], ...]
+
+
+def line_junctions(
+    lines: Sequence[Shape], tolerance: float = JUNCTION_TOLERANCE,
+) -> list[LineJunction]:
+    """Группы из двух и более линий, соединённых непривязанными концами.
+
+    Пересечение середин двух линий не стык. Привязанный конец — терминал узла,
+    даже когда другие стрелки пришли в тот же узел: [50]/[56]/[57] слайда 9
+    нельзя склеить по общей привязке [5]. У неприкреплённого конца проверяется
+    расстояние до всего другого отрезка, поэтому Т-стыки и наложения работают.
+    """
+    if not math.isfinite(tolerance) or not 0 <= tolerance < 38_519:
+        raise ValueError("допуск стыков должен быть в пределах 0 <= tol < 38519 EMU")
+    ordered = sorted(lines, key=lambda line: line.sid)
+    points = [raw_line_endpoints(line) for line in ordered]
+    parents = list(range(len(ordered)))
+    touching: set[tuple[int, int]] = set()
+
+    def root(index: int) -> int:
+        while parents[index] != index:
+            parents[index] = parents[parents[index]]
+            index = parents[index]
+        return index
+
+    for index, line in enumerate(ordered):
+        for endpoint, binding in enumerate((line.start_sid, line.end_sid)):
+            if binding is not None:
+                continue
+            for other, (start, end) in enumerate(points):
+                if index == other:
+                    continue
+                if segment_distance(points[index][endpoint], start, end) <= tolerance:
+                    parents[root(index)] = root(other)
+                    touching.add((index, endpoint))
+    groups: dict[int, list[int]] = {}
+    for index in range(len(ordered)):
+        groups.setdefault(root(index), []).append(index)
+    return [
+        LineJunction(
+            tuple(ordered[index] for index in group),
+            tuple((ordered[index].sid, endpoint) for index in group for endpoint in (0, 1)
+                  if (index, endpoint) not in touching),
+        )
+        for group in groups.values() if len(group) > 1
+    ]
 
 
 def rank_candidates(
@@ -3691,7 +3781,7 @@ def count_warnings(stage: dict) -> int:
     return max(len(distinct), node_warnings)
 
 
-def is_artifact_box(shape: Shape) -> bool:
+def is_artifact_box(shape: Shape, fill: str = ARTIFACT_FILL) -> bool:
     """
     Плашка-артефакт: вход или выход процесса, нарисованный автофигурой.
 
@@ -3701,7 +3791,7 @@ def is_artifact_box(shape: Shape) -> bool:
     заливкой scheme:accent2. Без этого предиката они стали бы обычными шагами:
     прогон существующего build_stage давал 17 узлов и НОЛЬ data-узлов.
     """
-    return shape.kind == "auto" and shape.has_text and shape.fill == ARTIFACT_FILL
+    return shape.kind == "auto" and shape.has_text and shape.fill == fill
 
 
 def build_single_slide_map(
@@ -4329,32 +4419,508 @@ def build_process_map(
     return process_map, reports, questions, ids.counts
 
 
+def node_type_by_text(shape: Shape) -> str:
+    """Тип шага L2: серая заливка здесь не означает интеграцию (9mn.31)."""
+    if INTEGRATION_TEXT_RE.search(shape.text):
+        return "integration"
+    if WARNING_TEXT_RE.search(shape.text):
+        return "warning"
+    return "step"
+
+
+def phase_of_step(shape: Shape, band: PhaseBand) -> int:
+    """Индекс этапа (0-based): полоса по X, контейнеры по двум координатам."""
+    if band.rule == "containers":
+        phase = innermost_container(
+            [(container, str(index)) for index, container in enumerate(band.shapes)],
+            shape.box,
+        )
+        if phase is not None:
+            return int(phase)
+    elif band.rule == "top-row":
+        matches = [
+            index for index, phase in enumerate(band.shapes)
+            if phase.box.left <= shape.box.cx <= phase.box.right
+        ]
+        if len(matches) == 1:
+            return matches[0]
+    else:
+        raise ValueError(f"Неизвестное правило этапов: {band.rule}")
+    raise SystemExit(f"шаг [{shape.sid}] «{shape.text}»: этап не определён однозначно")
+
+
+def caption_host(caption: Shape, steps: Sequence[NodeDraft]) -> NodeDraft | None:
+    """Правило подписи SNP/MRP; у L2 подпись остаётся отдельной подробностью."""
+    candidates: list[tuple[tuple[float, float], NodeDraft]] = []
+    for step in steps:
+        if step.node_type in {"data", "detail"} or step.box.height < CAPTION_MIN_NODE_HEIGHT:
+            continue
+        gap = caption.box.top - step.box.bottom
+        if not CAPTION_MIN_GAP <= gap <= CAPTION_MAX_GAP:
+            continue
+        overlap = min(caption.box.right, step.box.right) - max(caption.box.left, step.box.left)
+        if overlap <= 0:
+            continue
+        covers_step = caption.box.left <= step.box.left and caption.box.right >= step.box.right
+        coverage = overlap / (step.box.width if covers_step else caption.box.width)
+        if coverage >= CAPTION_MIN_OVERLAP:
+            candidates.append(((gap, abs(caption.box.left - step.box.left)), step))
+    return min(candidates, key=lambda candidate: candidate[0])[1] if candidates else None
+
+
+@dataclass
+class ThreeTierDetail:
+    """Разбор одного слайда для 14.5/14.6, без сборки документа карты.
+
+    phase_of_node хранит индексы в band (0-based) только для шагов и подробностей.
+    Этапы артефактов определит 14.6 по связям после сведения линий.
+    flow_edges не включают подробности: по ним проверяется изоляция шагов.
+    lines хранит ВСЕ линии: стык 14.5 может включать уже разрешённый отрезок.
+    unresolved_lines — диагностика, её одной для сведения стыков недостаточно.
+    """
+
+    band: PhaseBand
+    tiers: TierSplit
+    artifacts: tuple[Shape, ...]
+    drafts: list[NodeDraft]
+    phase_of_node: dict[str, int]
+    node_of_sid: dict[int, str]
+    flow_edges: list[tuple[str, str]]
+    detail_edges: list[dict]
+    unresolved_lines: list[Shape]
+    lines: tuple[Shape, ...] = ()
+
+
+def junction_edges(
+    junctions: Sequence[LineJunction], detail: ThreeTierDetail, report: SlideReport,
+) -> tuple[list[tuple[str, str]], list[Shape]]:
+    """Связи компоненты по терминалам: со стрелкой — цель, прочие — источники.
+
+    Привязки разрешаются строго в названный узел/контейнер; геометрия только
+    для непривязанных терминалов, без второго прохода и прокси-подробностей.
+    Неопределённый терминал оставляет всю компоненту в отчёте, без догадок.
+    """
+    node_boxes = [(d.box, d.node_id) for d in detail.drafts if d.node_type != "detail"]
+    detail_boxes = [(s.box, str(s.sid)) for s in detail.tiers.details]
+    detail_sids = {s.sid for s in detail.tiers.details}
+    members_of = {
+        shape.sid: [(d.box, d.node_id) for d in detail.drafts
+                    if d.node_type not in {"data", "detail"}
+                    and detail.phase_of_node.get(d.node_id) == index]
+        for index, shape in enumerate(detail.band.shapes)
+        if detail.band.rule == "containers"
+    }
+    edges: list[tuple[str, str]] = []
+    unresolved: list[Shape] = []
+    seen: set[tuple[str, str]] = set()
+    for junction in junctions:
+        by_sid = {line.sid: line for line in junction.lines}
+        sources: set[str] = set()
+        targets: set[str] = set()
+        unknown: list[str] = []
+        for sid, endpoint in junction.terminals:
+            line = by_sid[sid]
+            point = raw_line_endpoints(line)[endpoint]
+            binding = (line.start_sid, line.end_sid)[endpoint]
+            arrow = (line.head_arrow, line.tail_arrow)[endpoint]
+            node = None
+            on_detail: str | int | None = None
+            if binding in detail_sids:
+                on_detail = binding
+            elif binding is not None:
+                node = detail.node_of_sid.get(binding)
+                if node is None:
+                    node = nearest_target(members_of.get(binding, []), point, EDGE_SNAP_DETAIL)
+            else:
+                ranked = rank_candidates(node_boxes, point)
+                near_detail = rank_candidates(detail_boxes, point)
+                if (near_detail and near_detail[0][0] <= EDGE_SNAP_DETAIL
+                        and (not ranked or near_detail[0][0] < ranked[0][0])):
+                    on_detail = near_detail[0][1]
+                else:
+                    node = nearest_target(node_boxes, point, EDGE_SNAP_DETAIL)
+            if on_detail is not None:
+                report.lines_on_details.append(
+                    f"слайд {report.slide_no}: терминал линии [{sid}], конец {endpoint + 1} "
+                    f"на подробности [{on_detail}] — не конец ребра"
+                )
+            if node is None:
+                unknown.append(f"[{sid}]/{endpoint + 1}")
+            else:
+                bucket = targets if arrow else sources
+                bucket.add(node)
+        prefix = (f"слайд {report.slide_no}: стык линий "
+                  + ", ".join(f"[{line.sid}]" for line in junction.lines))
+        if unknown or not targets or not sources:
+            if unknown:
+                reason = "не определены терминалы " + ", ".join(unknown)
+            elif not targets:
+                reason = "нет терминала со стрелкой"
+            else:
+                reason = "нет терминала-источника"
+            report.line_junctions.append(f"{prefix} — {reason}; без рёбер")
+            unresolved.extend(junction.lines)
+            continue
+        pairs = [(source, target) for source in sorted(sources) for target in sorted(targets)
+                 if source != target]
+        if not pairs:
+            report.line_junctions.append(f"{prefix} — петля; без рёбер")
+            unresolved.extend(junction.lines)
+            continue
+        report.line_junctions.append(
+            f"{prefix} — " + "; ".join(f"{source} → {target}" for source, target in pairs)
+        )
+        for pair in pairs:
+            if pair not in seen:
+                edges.append(pair)
+                seen.add(pair)
+    return edges, unresolved
+
+
+def detail_line_edges(
+    lines: Sequence[Shape],
+    detail: ThreeTierDetail,
+    report: SlideReport,
+) -> tuple[list[tuple[str, str]], list[Shape]]:
+    """Привязки, затем два прохода геометрии; подробности не заменяют шаги.
+
+    Привязка к контейнеру разрешается в ближайший его шаг, как у single-slide.
+    arrow_edges здесь не применяется: белые автофигуры L2 — не связи.
+    """
+    node_boxes = [(d.box, d.node_id) for d in detail.drafts if d.node_type != "detail"]
+    detail_boxes = [(s.box, str(s.sid)) for s in detail.tiers.details]
+    detail_sids = {s.sid for s in detail.tiers.details}
+    members_of = {
+        container.sid: [
+            (d.box, d.node_id) for d in detail.drafts
+            if d.node_type not in {"data", "detail"}
+            and detail.phase_of_node.get(d.node_id) == index
+        ]
+        for index, container in enumerate(detail.band.shapes)
+        if detail.band.rule == "containers"
+    }
+    edges: list[tuple[str, str]] = []
+    unresolved: list[Shape] = []
+    seen: set[tuple[str, str]] = set()
+    for line in lines:
+        start, end = line_endpoints(line)
+        bindings = (line.start_sid, line.end_sid)
+        # line_endpoints разворачивает линию со стрелкой у начала; привязки
+        # тоже относятся к исходным концам DrawingML и должны развернуться.
+        if line.head_arrow and not line.tail_arrow:
+            bindings = bindings[::-1]
+        ranked = [rank_candidates(node_boxes, point) for point in (start, end)]
+        resolved: list[str | None] = [None, None]
+        forbidden = [False, False]
+        bound = False
+        for index, (sid, point) in enumerate(zip(bindings, (start, end))):
+            target = detail.node_of_sid.get(sid) if sid not in detail_sids else None
+            if target is None and sid not in detail_sids:
+                target = nearest_target(members_of.get(sid, []), point, EDGE_SNAP_DETAIL)
+            if target is not None:
+                resolved[index] = target
+                bound = True
+                continue
+            near_detail = rank_candidates(detail_boxes, point)
+            on_detail = sid in detail_sids or (
+                sid is None and near_detail and near_detail[0][0] <= EDGE_SNAP_DETAIL
+                and (not ranked[index] or near_detail[0][0] < ranked[index][0][0])
+            )
+            if on_detail:
+                forbidden[index] = True
+                detail_sid = sid if sid in detail_sids else near_detail[0][1]
+                report.lines_on_details.append(
+                    f"слайд {report.slide_no}: линия [{line.sid}], конец {index + 1} "
+                    f"на подробности [{detail_sid}] — не конец ребра и не заместитель шага"
+                )
+            elif ranked[index] and ranked[index][0][0] <= EDGE_SNAP_DETAIL:
+                resolved[index] = ranked[index][0][1]
+        source, target = resolved
+        if source is not None and target is None and not forbidden[1]:
+            target = resolve_second_pass(ranked[1], source)
+        elif target is not None and source is None and not forbidden[0]:
+            source = resolve_second_pass(ranked[0], target)
+        if source is None or target is None or source == target:
+            unresolved.append(line)
+            reason = "петля" if source is not None and source == target else "конец не определён"
+            report.lines_skipped.append(f"слайд {report.slide_no}: линия [{line.sid}] — {reason}")
+            continue
+        if (source, target) not in seen:
+            seen.add((source, target))
+            edges.append((source, target))
+            if bound:
+                report.cxn_edges.append(f"слайд {report.slide_no}: [{line.sid}] {source} → {target}")
+    return edges, unresolved
+
+
+def read_three_tier_detail(
+    shapes: Sequence[Shape], spec: MapSpec, ids: IdFactory, report: SlideReport,
+) -> ThreeTierDetail:
+    """Ярусы, этапы, узлы и концы линий L2 (process-map-9mn.14.4)."""
+    artifacts = tuple(s for s in shapes if is_artifact_box(s, fill=spec.artifact_fill))
+    artifact_sids = {s.sid for s in artifacts}
+    filtered = [s for s in shapes if s.sid not in artifact_sids]
+    band = phase_band(filtered, report)
+    if band is None or len(band.shapes) != spec.stage_count:
+        raise SystemExit(
+            f"слайд {report.slide_no}: ожидалось {spec.stage_count} этапов, "
+            f"найдено {len(band.shapes) if band else 0}"
+        )
+    tiers = split_tiers(filtered, band)
+    result = ThreeTierDetail(
+        band, tiers, artifacts, [], {}, {}, [], [], [],
+        lines=tuple(s for s in shapes if s.kind == "line"),
+    )
+    for shape in tiers.steps:
+        draft = NodeDraft(
+            ids.make(shape.text, report.slide_no, shape.sid),
+            node_type_by_text(shape), shape.text, shape.box,
+        )
+        result.drafts.append(draft)
+        result.node_of_sid[shape.sid] = draft.node_id
+        result.phase_of_node[draft.node_id] = phase_of_step(shape, band)
+    steps = list(result.drafts)
+    for shape in tiers.details:
+        host = caption_host(shape, steps)
+        if host is None:
+            raise SystemExit(
+                f"слайд {report.slide_no}: подробность [{shape.sid}] «{shape.text}"
+                f"» без хозяина — импорт остановлен"
+            )
+        draft = NodeDraft(
+            ids.make(shape.text, report.slide_no, shape.sid),
+            "detail", "\n".join(shape.paragraphs), shape.box,
+        )
+        result.drafts.append(draft)
+        result.node_of_sid[shape.sid] = draft.node_id
+        result.phase_of_node[draft.node_id] = result.phase_of_node[host.node_id]
+        result.detail_edges.append({
+            "id": f"e-{host.node_id}--{draft.node_id}",
+            "source": host.node_id, "target": draft.node_id, "kind": "data",
+        })
+        report.detail_attachments.append(
+            f"слайд {report.slide_no}: {host.node_id} → {draft.node_id} — "
+            "по расположению коробки под шагом; стрелки на слайде нет"
+        )
+    for shape in artifacts:
+        draft = NodeDraft(
+            ids.make(shape.text, report.slide_no, shape.sid), "data", shape.text, shape.box,
+            direction="in" if shape.box.left <= LEFT_MARGIN_LIMIT else "out",
+        )
+        result.drafts.append(draft)
+        result.node_of_sid[shape.sid] = draft.node_id
+    # Составные линии разбираются целиком: их внутренние стыки не являются
+    # узлами процесса. В частности, [75] слайда 7 нельзя тянуть к подробности.
+    # Этот путь вызывается только здесь; профили SNP/MRP стыки не сводят.
+    junctions = line_junctions(result.lines)
+    joined_sids = {line.sid for junction in junctions for line in junction.lines}
+    result.flow_edges, result.unresolved_lines = detail_line_edges(
+        [line for line in result.lines if line.sid not in joined_sids], result, report,
+    )
+    joined_edges, unresolved = junction_edges(junctions, result, report)
+    result.flow_edges = list(dict.fromkeys(result.flow_edges + joined_edges))
+    result.unresolved_lines.extend(unresolved)
+    accounted = set(result.node_of_sid) | {s.sid for s in band.shapes + band.title_shapes}
+    for shape in shapes:
+        if shape.has_text and shape.kind != "placeholder" and shape.sid not in accounted:
+            report.text_skipped.append(
+                f"слайд {report.slide_no}: [{shape.sid}] «{shape.text}"
+                "» — не этап, шаг, подробность или артефакт"
+            )
+    report.nodes = len(steps) + len(tiers.details)
+    report.data_nodes = len(artifacts)
+    report.groups = len(band.shapes)
+    report.edges = len(result.flow_edges) + len(result.detail_edges)
+    report.lines_total = len(result.lines)
+    return result
+
+
+def apply_declared_external_io(
+    process_map: dict, entries: Sequence[dict], report: SlideReport,
+) -> None:
+    """Внешние системы — только явные решения, проверенные в своём этапе."""
+    stages = {s["number"]: s for s in process_map["stages"]}
+    owners = {sid: m["id"] for m in process_map["modules"] for sid in m["stageIds"]}
+    module_ids = {m["id"].casefold() for m in process_map["modules"]}
+    for entry in entries:
+        stage = stages.get(entry.get("stage"))
+        system, label, direction = (entry.get(k) for k in ("system", "label", "direction"))
+        if (
+            stage is None or direction not in {"in", "out"}
+            or not isinstance(system, str) or not system
+            or system.casefold() in module_ids or system not in SYSTEM_CODES
+            or not isinstance(label, str) or not label
+        ):
+            raise SystemExit(f"OWNER_DECISION_EXTERNAL_IO: неверная декларация {entry!r}")
+        if "module" in entry and entry["module"] != owners[stage["id"]]:
+            raise SystemExit(f"OWNER_DECISION_EXTERNAL_IO: module не владеет этапом {entry['stage']}")
+        texts = {
+            normalize_text(text).casefold()
+            for node in stage["nodes"]
+            for text in ([node["label"]] + (node["label"].splitlines() if node["type"] == "detail" else []))
+        }
+        if normalize_text(label).casefold() not in texts:
+            raise SystemExit(f"OWNER_DECISION_EXTERNAL_IO: этап {entry['stage']} не содержит «{label}»")
+        bucket = stage["inputs" if direction == "in" else "outputs"]
+        if any(normalize_text(io["label"]).casefold() == normalize_text(label).casefold() for io in bucket):
+            raise SystemExit(f"OWNER_DECISION_EXTERNAL_IO: повторная подпись «{label}»")
+        bucket.append({"system": system, "label": label, "stage": stage["number"], "direction": direction})
+        source, target = (system, stage["id"]) if direction == "in" else (stage["id"], system)
+        edge = {"id": f"ov-{source}--{target}", "source": source, "target": target, "kind": "integration"}
+        if not any(e["id"] == edge["id"] for e in process_map["overviewEdges"]):
+            process_map["overviewEdges"].append(edge)
+        report.owner_external_io.append(f"этап {stage['number']}: {system} — «{label}» ({direction})")
+
+
+def assemble_three_tier_map(
+    spec: MapSpec, registry: Sequence[ModuleRef], overview: ModulesSlide,
+    details: Mapping[str, ThreeTierDetail], ids: IdFactory,
+    reports: Sequence[SlideReport], external_io: Sequence[dict],
+) -> dict:
+    """Сборка из результатов чтения; геометрия и исходные рёбра не переопределяются."""
+    overview_report = reports[0]
+    stages: list[dict] = []
+    modules: list[dict] = []
+    by_module: dict[str, list[dict]] = {}
+    overview_edges: dict[str, dict] = {}
+    for module in registry:
+        detail = details[module.id]
+        report = next(r for r in reports if r.slide_no == module.detail_slide + 1)
+        module_stages = []
+        for title in detail.band.labels:
+            number = len(stages) + 1
+            short_title = re.split(r"\s/|/\s|\s\+\s", title)[0].strip()
+            stage = {
+                "id": slugify(f"stage-{number}-{short_title}"), "number": number,
+                "title": title, "shortTitle": short_title, "keyOutputs": [],
+                "groups": [], "nodes": [], "edges": [], "inputs": [], "outputs": [],
+            }
+            module_stages.append(stage)
+            stages.append(stage)
+        by_module[module.id] = module_stages
+        phase_of = dict(detail.phase_of_node)
+        by_id = {d.node_id: d for d in detail.drafts}
+        for draft in detail.drafts:
+            if draft.node_type != "data":
+                continue
+            # Выход обязан быть целью, вход — источником. Этап берётся у шага,
+            # не у положения артефакта на слайде и не у соседней подробности.
+            neighbors = [
+                a if draft.direction == "out" else b
+                for a, b in detail.flow_edges
+                if (b if draft.direction == "out" else a) == draft.node_id
+                and by_id[a if draft.direction == "out" else b].node_type not in {"data", "detail"}
+            ]
+            phases = {phase_of[n] for n in neighbors}
+            if len(phases) != 1:
+                raise SystemExit(f"слайд {report.slide_no}: артефакт «{draft.label}» не связан с шагом одного этапа")
+            phase_of[draft.node_id] = phases.pop()
+        for draft in sorted(detail.drafts, key=lambda d: (d.box.top, d.box.left, d.node_id)):
+            module_stages[phase_of[draft.node_id]]["nodes"].append(serialize_node(draft))
+        connected = {n for pair in detail.flow_edges for n in pair}
+        for draft in detail.drafts:
+            if draft.node_type not in {"data", "detail"} and draft.node_id not in connected:
+                report.isolated_flow.append(f"{module.code}: «{draft.label}» ({draft.node_id})")
+            mentions = [m.code for m in registry if re.search(r"(?<!\w)" + re.escape(m.code) + r"(?!\w)", draft.label, re.I)]
+            if mentions:
+                report.unused_module_mentions.append(
+                    f"{module.code}: «{draft.label}» — {', '.join(mentions)}; упоминание не создаёт внешнюю систему или ребро"
+                )
+        for source, target in detail.flow_edges:
+            source_stage, target_stage = (module_stages[phase_of[n]] for n in (source, target))
+            if source_stage is target_stage:
+                kind = "data" if any(by_id[n].node_type == "data" for n in (source, target)) else "process"
+                source_stage["edges"].append({"id": f"e-{source}--{target}", "source": source, "target": target, "kind": kind})
+            else:
+                a, b = source_stage["id"], target_stage["id"]
+                edge_id = f"ov-{a}--{b}"
+                overview_edges[edge_id] = {"id": edge_id, "source": a, "target": b, "kind": "process"}
+        for edge in detail.detail_edges:
+            module_stages[phase_of[edge["source"]]]["edges"].append(dict(edge))
+        modules.append({
+            "id": module.id, "number": module.number, "title": module.title,
+            "shortTitle": f"{module.code} · {module.title}", "label": f"Модуль {module.code}",
+            "keyOutputs": [], "stageIds": [s["id"] for s in module_stages],
+        })
+
+    refs = {m.id: m for m in registry}
+    module_edges: list[dict] = []
+    for transfer in overview.transfers:
+        for module_id, direction in ((transfer.source, "out"), (transfer.target, "in")):
+            if module_id is None:
+                continue
+            stage = by_module[module_id][-1 if direction == "out" else 0]
+            if any(normalize_text(n["label"]).casefold() == normalize_text(transfer.label).casefold() for n in stage["nodes"]):
+                overview_report.dedup_key_outputs.append(
+                    f"этап {stage['number']}: «{transfer.label}» уже есть — узел передачи пропущен"
+                )
+                continue
+            node = NodeDraft(
+                ids.make(f"{transfer.label} {refs[module_id].code}", overview_report.slide_no, transfer.sid),
+                "data", transfer.label, transfer.box, direction=direction,
+            )
+            stage["nodes"].append(serialize_node(node))
+        if transfer.source is not None and transfer.target is not None:
+            module_edges.append({
+                "id": f"mod-{transfer.source}--{transfer.target}",
+                "source": transfer.source, "target": transfer.target,
+                "kind": "process", "label": transfer.label,
+            })
+    for stage in stages:
+        stage["keyOutputs"] = list(dict.fromkeys(n["label"] for n in stage["nodes"] if n.get("direction") == "out"))[:4]
+    for module in modules:
+        outputs = list(dict.fromkeys(t.label for t in overview.transfers if t.source == module["id"]))
+        source = f"слайд {overview_report.slide_no}, передачи"
+        if not outputs:
+            outputs = list(dict.fromkeys(d.label for d in details[module["id"]].drafts if d.direction == "out"))
+            source = f"слайд {refs[module['id']].detail_slide + 1}, out-артефакты детализации (фолбэк)"
+        module["keyOutputs"] = outputs[:4]
+        overview_report.key_output_sources.append(f"{module['id']}: {source} — {', '.join(outputs) or 'нет выходов'}")
+    document = {
+        "version": MAP_VERSION, "id": spec.map_id, "updatedAt": spec.updated_at,
+        "title": spec.title, "moduleLabel": spec.module_label,
+        "modules": [reorder_keys(m, MODULE_KEY_ORDER) for m in modules],
+        "moduleEdges": module_edges, "stages": stages, "overviewEdges": list(overview_edges.values()),
+    }
+    if overview.lanes:
+        document["lanes"] = [reorder_keys({"id": lane.id, "title": lane.title}, LANE_KEY_ORDER) for lane in overview.lanes]
+    apply_declared_external_io(document, external_io, overview_report)
+    document["stages"] = [reorder_keys(s, STAGE_KEY_ORDER) for s in stages]
+    return reorder_keys(document, MAP_KEY_ORDER)
+
+
 def build_three_tier_map(
     collisions: dict[str, int] | None,
     spec: MapSpec,
 ) -> tuple[dict, list[SlideReport], list[str], Counter[str]]:
-    """
-    Профиль «три уровня» (карта inplan, process-map-9mn.14) — ПОКА ЗАГЛУШКА.
-
-    Сам построитель пишет подзадача process-map-9mn.14.6 (подзадачи 14.2–14.5
-    готовят для него разбор слайдов); эта функция только останавливает импорт с
-    понятным сообщением. Почему профиль всё же зарегистрирован, а не оставлен
-    неизвестным, — см. PROFILE_BUILDERS.
-
-    Готово для него:
-      · реестр модулей с навигационных слайдов — read_module_index
-        (process-map-9mn.14.2);
-      · слайд 1 — read_modules_slide: колонки ряда модулей, передачи между
-        модулями, полосы (FP&A); reconcile_activity_lists — сверка списков
-        действий слайда 1 с шагами детализации, только в отчёт
-        (process-map-9mn.14.3).
-    Отсюда они пока НЕ вызываются: заглушка останавливает импорт раньше первого
-    чтения презентации.
-    """
-    raise SystemExit(
-        f"Профиль «three-tier» (карта «{spec.key}») объявлен, но его построитель ещё "
-        f"не написан — это подзадача process-map-9mn.14.6. Ничего не записано."
+    """Навигация → модули → этапы и узлы; общий IdFactory для всей колоды."""
+    if not spec.pptx.exists():
+        raise SystemExit(f"Не найдена презентация: {spec.pptx}")
+    if spec.overview_slide is None:
+        raise SystemExit(f"карта «{spec.key}»: не задан overview_slide")
+    presentation = Presentation(str(spec.pptx))
+    if int(presentation.slide_width) != SLIDE_WIDTH_EMU:
+        raise SystemExit(f"Неожиданная ширина слайда {presentation.slide_width} EMU (ожидалось {SLIDE_WIDTH_EMU})")
+    if len(presentation.slides) != spec.slides:
+        raise SystemExit(f"Ожидалось {spec.slides} слайдов, найдено {len(presentation.slides)}")
+    if not 0 <= spec.overview_slide < spec.slides:
+        raise SystemExit(f"Неверный overview_slide: {spec.overview_slide}")
+    all_reports = [SlideReport(i + 1, role="overview" if i == spec.overview_slide else "detail") for i in range(spec.slides)]
+    slides = [read_slide(slide, report) for slide, report in zip(presentation.slides, all_reports)]
+    overview_report = all_reports[spec.overview_slide]
+    registry = read_module_index(slides, spec, overview_report)
+    overview = read_modules_slide(slides[spec.overview_slide], registry, overview_report)
+    ids = IdFactory(collisions)
+    details = {m.id: read_three_tier_detail(slides[m.detail_slide], spec, ids, all_reports[m.detail_slide]) for m in registry}
+    reports = [overview_report] + [all_reports[m.detail_slide] for m in registry]
+    reconcile_activity_lists(slides[spec.overview_slide], overview.row, {
+        m.id: [d.label for d in details[m.id].drafts if d.node_type not in {"data", "detail"}]
+        for m in registry
+    }, overview_report)
+    document = assemble_three_tier_map(
+        spec, registry, overview, details, ids, reports, decisions_for(spec, "OWNER_DECISION_EXTERNAL_IO"),
     )
+    return document, reports, [q for r in reports for q in r.questions], ids.counts
 
 
 # Сигнатура построителя карты: (коллизии slug'ов или None для первой фазы,
@@ -4373,15 +4939,6 @@ Builder = Callable[
 # известных (builder_for), а добавить профиль можно только строкой в этом
 # словаре, на виду.
 #
-# ПОЧЕМУ 'three-tier' ЗАРЕГИСТРИРОВАН ЗАГЛУШКОЙ, А НЕ ОСТАВЛЕН НЕИЗВЕСТНЫМ.
-# PROFILE_READS уже объявляет, что читает этот профиль, — и ключи двух реестров
-# обязаны совпадать (это проверяет самопроверка): профиль с построителем, но
-# без объявления, уронил бы decisions_for, а объявление без построителя —
-# мёртвая запись, по которой unread_decisions судит о чтении, которого нет.
-# Заглушка к тому же честнее «неизвестного профиля»: запись карты inplan в MAPS,
-# появись она раньше 14.6, остановит импорт словами «построитель ещё не написан,
-# 14.6», а не ложным «такого профиля нет». Разобрать ею не получится ничего —
-# она останавливает импорт до первого чтения презентации.
 PROFILE_BUILDERS: dict[str, Builder] = {
     "overview+details": build_process_map,
     "single-slide": build_single_slide_map,
@@ -4902,6 +5459,33 @@ def print_report(
         [item for report in reports for item in report.activity_check],
     )
 
+    print_report_block(
+        "ПОДРОБНОСТИ ПО РАСПОЛОЖЕНИЮ ПОД ШАГОМ",
+        ("Одна коробка — один узел detail; ребро kind data выведено из положения, не стрелки.",),
+        [item for report in reports for item in report.detail_attachments],
+    )
+    print_report_block(
+        "ЛИНИИ НА ПОДРОБНОСТЬ — НЕ РЁБРА ПРОЦЕССА",
+        ("Подробности не служат концами линий или заместителями шагов.",),
+        [item for report in reports for item in report.lines_on_details],
+    )
+
+    print_report_block(
+        "СТЫКИ ЛИНИЙ — СОСТАВНЫЕ СВЯЗИ THREE-TIER",
+        ("Непривязанные концы соединяют отрезки; крайние концы со стрелкой — цели,",
+         "остальные — источники. Привязанные концы сами по себе не создают стыка."),
+        [item for report in reports for item in report.line_junctions],
+    )
+
+    print_report_block(
+        "ИСТОЧНИКИ KEYOUTPUTS МОДУЛЕЙ", (),
+        [item for report in reports for item in report.key_output_sources],
+    )
+    print_report_block(
+        "УПОМИНАНИЯ МОДУЛЕЙ — НЕ ДЕКЛАРАЦИИ ВНЕШНИХ СИСТЕМ", (),
+        [item for report in reports for item in report.unused_module_mentions],
+    )
+
     # Узлы, ставшие интеграциями не по заливке, а по коду системы (7v1).
     promoted = [item for report in reports for item in report.promoted_integrations]
     print("\n" + "=" * 78)
@@ -4920,19 +5504,26 @@ def print_report(
     print("=" * 78)
     print("  Связи для них не достраиваются: в исходнике их действительно нет.")
     print("  Эти узлы нужно связать вручную или подтвердить, что связи быть не должно.")
-    total_orphans = 0
-    for stage in process_map["stages"]:
-        orphans = isolated_nodes(stage)
-        total_orphans += len(orphans)
-        print(f"\n  этап {stage['number']} «{stage['shortTitle']}»: {len(orphans)}")
-        for node in orphans:
-            group = node.get("group")
-            print(f"    · {node['id']}")
-            print(
-                f"        {node['type']:<11} «{node['label']}»"
-                + (f"   [группа: {group}]" if group else "")
-            )
-    print(f"\n  всего изолированных не-data узлов: {total_orphans}")
+    if spec.profile == "three-tier":
+        orphans = [item for report in reports for item in report.isolated_flow]
+        print("  Проверены исходные рёбра потока до свёртки этапов, без связей подробностей.")
+        for item in orphans:
+            print(f"    · {item}")
+        print(f"\n  всего изолированных не-data узлов: {len(orphans)}")
+    else:
+        total_orphans = 0
+        for stage in process_map["stages"]:
+            orphans = isolated_nodes(stage)
+            total_orphans += len(orphans)
+            print(f"\n  этап {stage['number']} «{stage['shortTitle']}»: {len(orphans)}")
+            for node in orphans:
+                group = node.get("group")
+                print(f"    · {node['id']}")
+                print(
+                    f"        {node['type']:<11} «{node['label']}»"
+                    + (f"   [группа: {group}]" if group else "")
+                )
+        print(f"\n  всего изолированных не-data узлов: {total_orphans}")
 
     if questions:
         print("\n" + "=" * 78)
@@ -5082,6 +5673,25 @@ def carry_over_manual_fields(fresh: dict, previous: dict | None) -> CarryOverRep
     prev_nodes, prev_stages = index_previous(previous)
     report.previous_nodes = len(prev_nodes)
 
+    prev_modules = {
+        m["id"]: m for m in previous.get("modules") or []
+        if isinstance(m, dict) and isinstance(m.get("id"), str)
+    }
+    fresh_module_ids = {m["id"] for m in fresh.get("modules", [])}
+    for module in fresh.get("modules", []):
+        old = prev_modules.get(module["id"], {})
+        for name in PRESERVED_MODULE_FIELDS:
+            carry_field(module, old, name, f"модуль «{module['id']}»", report)
+    for module_id, old in sorted(prev_modules.items()):
+        if module_id not in fresh_module_ids:
+            for name in PRESERVED_MODULE_FIELDS:
+                if old.get(name) is not None:
+                    report.lost.append(f"модуля «{module_id}» больше нет — потеряно {describe_lost(old, name)}")
+                    if name == "screen":
+                        report.screens_lost += 1
+    if "modules" in fresh:
+        fresh["modules"] = [reorder_keys(module, MODULE_KEY_ORDER) for module in fresh["modules"]]
+
     fresh_node_ids: set[str] = set()
     fresh_labels: dict[str, list[str]] = {}
     for stage in fresh["stages"]:
@@ -5208,6 +5818,11 @@ def write_json(path: Path, payload: object) -> None:
 def check_unique_ids(process_map: dict) -> None:
     node_ids: set[str] = set()
     edge_ids: set[str] = set()
+    module_lane_ids: set[str] = set()
+    for item in process_map.get("modules", []) + process_map.get("lanes", []):
+        if item["id"] in module_lane_ids:
+            raise SystemExit(f"Неуникальный id модуля/полосы: {item['id']}")
+        module_lane_ids.add(item["id"])
     for stage in process_map["stages"]:
         for node in stage["nodes"]:
             if node["id"] in node_ids:
@@ -5217,7 +5832,7 @@ def check_unique_ids(process_map: dict) -> None:
             if edge["id"] in edge_ids:
                 raise SystemExit(f"Неуникальный id ребра: {edge['id']}")
             edge_ids.add(edge["id"])
-    for edge in process_map["overviewEdges"]:
+    for edge in process_map["overviewEdges"] + process_map.get("moduleEdges", []):
         if edge["id"] in edge_ids:
             raise SystemExit(f"Неуникальный id ребра: {edge['id']}")
         edge_ids.add(edge["id"])
@@ -6251,15 +6866,6 @@ def run_self_test() -> int:
             spec.profile in PROFILE_BUILDERS,
             f"у карты {spec.key} профиль {spec.profile} без построителя",
         )
-    # Заглушка three-tier останавливает импорт и называет подзадачу, которая её
-    # заменит. Проверка уходит вместе с заглушкой в process-map-9mn.14.6.
-    try:
-        build_three_tier_map(None, replace(MAPS["snp"], key="inplan", profile="three-tier"))
-    except SystemExit as error:
-        check("14.6" in str(error), f"заглушка three-tier не называет подзадачу 14.6: {error}")
-    else:
-        check(False, "заглушка three-tier не остановила импорт")
-
     # 12. main() целиком: командная строка, сторожа до сборки, --dry-run.
     #
     #     main() гоняется на подставных реестрах (параметры maps/tables/builders
@@ -7692,6 +8298,404 @@ def run_self_test() -> int:
         not any(header in empty_text for header in slide1_headers),
         "блоки слайда 1 напечатаны в отчёте, где слайда модулей не читали",
     )
+
+    # 14.4. Разбор детализации целиком, а не только изолированные предикаты.
+    def detail_shape(sid: int, box: Box, text: str, fill: str = "scheme:accent1") -> Shape:
+        return Shape(sid, "auto", box, text.split("\n") if text else [], fill,
+                     False, False, 0.0, False, False, fill_key=fill)
+
+    def expect_detail_error(action: Callable[[], object], fragment: str) -> None:
+        try:
+            action()
+        except SystemExit as error:
+            check(fragment in str(error), f"ожидалась ошибка {fragment!r}, получено {error}")
+        else:
+            check(False, f"не отказал разбор: {fragment}")
+
+    l2_spec = replace(MAPS["snp"], profile="three-tier", stage_count=3,
+                      artifact_fill="scheme:accent3")
+    l2_phases = [detail_shape(100 + i, Box(i * 3_000_000, 0, 2_800_000, 500_000),
+                              f"Этап {i + 1}") for i in range(3)]
+    l2_steps = [detail_shape(110 + i, Box(100_000 + i * 3_000_000, 1_000_000,
+                                         1_000_000, 500_000), text)
+                for i, text in enumerate(("Управление данными",
+                                         "Передача плана в модуль PS",
+                                         "Анализ предупреждений"))]
+    # Серая фаза и шаг в L2 — step; старый классификатор намеренно иной.
+    l2_phases[0] = replace(l2_phases[0], fill=INTEGRATION_FILL, fill_key=INTEGRATION_FILL)
+    l2_steps[0] = replace(l2_steps[0], fill=INTEGRATION_FILL, fill_key=INTEGRATION_FILL)
+    l2_caption = detail_shape(120, Box(0, 1_550_000, 1_400_000, 700_000),
+                              "Первая строка\nВторая строка", "scheme:tx2")
+    l2_artifact = detail_shape(130, Box(9_000_000, 1_000_000, 1_000_000, 500_000),
+                               "Артефакт", "scheme:accent3")
+    l2_line = replace(detail_shape(140, Box(0, 0, 0, 0), ""), kind="line",
+                      start_sid=110, end_sid=112)
+    l2_shapes = l2_phases + l2_steps + [l2_caption, l2_artifact, l2_line]
+    l2_report = SlideReport(3)
+    l2_detail = read_three_tier_detail(l2_shapes, l2_spec, IdFactory(), l2_report)
+    l2_nodes = {sid: next(d for d in l2_detail.drafts if d.node_id == nid)
+                for sid, nid in l2_detail.node_of_sid.items()}
+    check([l2_nodes[sid].node_type for sid in (110, 111, 112)] ==
+          ["step", "integration", "warning"], "L2: типы шагов должны зависеть только от текста")
+    check(node_type_for(l2_steps[0]) == "integration",
+          "старый профиль потерял интеграцию по A6A6A6")
+    check(l2_nodes[120].node_type == "detail" and
+          l2_nodes[120].label == "Первая строка\nВторая строка",
+          "коробка подробности должна остаться одним узлом с абзацами")
+    check(l2_detail.phase_of_node[l2_nodes[120].node_id] == 0 and
+          l2_detail.phase_of_node[l2_nodes[112].node_id] == 2,
+          "этап подробности должен совпасть с этапом хозяина")
+    check(l2_detail.detail_edges == [{"id": f"e-{l2_nodes[110].node_id}--{l2_nodes[120].node_id}",
+                                     "source": l2_nodes[110].node_id,
+                                     "target": l2_nodes[120].node_id, "kind": "data"}],
+          "подробность потеряла единственное входящее ребро data")
+    check(l2_nodes[130].node_type == "data" and l2_nodes[130].direction == "out" and
+          130 not in {s.sid for s in l2_detail.tiers.details},
+          "accent3 нужно отсеять до split_tiers")
+    check(MapSpec.__dataclass_fields__["artifact_fill"].default == ARTIFACT_FILL and
+          not is_artifact_box(l2_artifact) and
+          is_artifact_box(l2_artifact, fill=l2_spec.artifact_fill),
+          "умолчание артефактов старого профиля изменилось")
+    check(l2_detail.flow_edges == [(l2_nodes[110].node_id, l2_nodes[112].node_id)],
+          "привязка должна победить геометрию")
+    check(l2_detail.lines == (l2_line,) and not l2_detail.unresolved_lines,
+          "для сведения стыков должны сохраниться и уже разрешённые линии")
+    expect_detail_error(lambda: read_three_tier_detail(
+        l2_phases + l2_steps + [replace(l2_caption, box=Box(0, 9_000_000, 1_400_000, 700_000))],
+        l2_spec, IdFactory(), SlideReport(3)), "без хозяина")
+    expect_detail_error(lambda: phase_of_step(
+        replace(l2_steps[0], box=Box(20_000_000, 0, 1, 1)), l2_detail.band),
+        "этап не определён однозначно")
+    expect_detail_error(lambda: phase_of_step(l2_steps[0], replace(
+        l2_detail.band, shapes=(l2_phases[0], l2_phases[0]))), "этап не определён однозначно")
+    # Границы правила подписи: широкий текст, допустимое налезание, слишком
+    # большой разрыв и слабое перекрытие. Старые профили пока не рефакторим (fik).
+    check(caption_host(replace(l2_caption, box=Box(0, 1_400_000, 1_400_000, 1)),
+                       [l2_nodes[110]]) is l2_nodes[110], "допустимое налезание подписи потеряно")
+    check(caption_host(replace(l2_caption, box=Box(0, 1_900_001, 1_400_000, 1)),
+                       [l2_nodes[110]]) is None, "подпись за CAPTION_MAX_GAP принята")
+    check(caption_host(replace(l2_caption, box=Box(1_000_000, 1_550_000, 1_000_000, 1)),
+                       [l2_nodes[110]]) is None, "недостаточное перекрытие подписи принято")
+    # Координаты контейнеров слайда 9: нижний шаг по X попал бы и в верхний.
+    upper = detail_shape(8, Box(2_173_256, 1_219_200, 5_324_824, 748_947), "", "noFill")
+    lower = detail_shape(28, Box(188_073, 4_014_182, 6_721_087, 763_499), "", "noFill")
+    lower_step = detail_shape(26, Box(1_964_250, 4_107_228, 1_512_000, 576_000), "Нижний шаг")
+    container_band = PhaseBand("containers", (upper, lower), ("Верх", "Низ"), ())
+    check(phase_of_step(lower_step, container_band) == 1,
+          "двухрядный слайд 9: шаг должен уйти в нижний контейнер")
+    nested = replace(lower, sid=29, box=lower_step.box)
+    check(phase_of_step(lower_step, replace(container_band, shapes=(lower, nested))) == 1,
+          "должен выбираться самый маленький контейнер")
+
+    # Ловушка слайда 7: [75] подходит ближе к подробности [54], чем к шагу [57].
+    # Сами координаты из колоды, без чтения pptx в CI; стыки ещё не сводятся.
+    trap_steps = [detail_shape(56, Box(573_992, 3_960_602, 1_574_591, 741_503), "Спрос"),
+                  detail_shape(57, Box(2_804_516, 3_960_602, 1_449_974, 741_503), "Анализ"),
+                  detail_shape(38, Box(573_993, 5_144_892, 1_574_589, 741_503), "MEIO")]
+    trap_caption = detail_shape(54, Box(2_747_778, 4_877_208, 1_566_850, 1_554_272),
+                                "Подробность", "noFill")
+    trap = ThreeTierDetail(PhaseBand("top-row", (), (), ()),
+                           TierSplit((), tuple(trap_steps), (trap_caption,), (), frozenset(), None),
+                           (), [NodeDraft(str(s.sid), "step", s.text, s.box) for s in trap_steps] +
+                           [NodeDraft("54", "detail", trap_caption.text, trap_caption.box)],
+                           {}, {s.sid: str(s.sid) for s in trap_steps + [trap_caption]}, [], [], [])
+    trap_line = replace(detail_shape(75, Box(2_136_670, 5_451_942, 335_344, 0), ""), kind="line")
+    trap_report = SlideReport(7)
+    trap_edges, unresolved = detail_line_edges([trap_line], trap, trap_report)
+    check(not trap_edges and unresolved == [trap_line],
+          "слайд 7 [75]: подробность попала в концы линий или стала заместителем шага")
+    check(any("[75]" in line and "[54]" in line for line in trap_report.lines_on_details),
+          "слайд 7 [75]: линия на подробность отсутствует в отчёте")
+    forbidden_line = replace(l2_line, end_sid=120)
+    check(not detail_line_edges([forbidden_line], l2_detail, SlideReport(3))[0],
+          "явная привязка к подробности не должна перенаправляться на шаг")
+    reverse_line = replace(l2_line, head_arrow=True)
+    check(detail_line_edges([reverse_line], l2_detail, SlideReport(3))[0] ==
+          [(l2_nodes[112].node_id, l2_nodes[110].node_id)],
+          "стрелка у начала должна развернуть и привязки")
+    # Один известный конец, другой на 500k от шага: только второй проход.
+    geometry_line = replace(l2_line, start_sid=None, end_sid=None,
+                           box=Box(1_100_000, 1_250_000, 1_500_000, 0))
+    check(detail_line_edges([geometry_line], l2_detail, SlideReport(3))[0] ==
+          [(l2_nodes[110].node_id, l2_nodes[111].node_id)], "второй проход геометрии не работает")
+    # Контейнер разрешается только в свои шаги, не в подробности или артефакты.
+    container_detail = replace(l2_detail,
+        band=PhaseBand("containers", (replace(l2_phases[0], sid=150),), ("Этап",), ()))
+    container_line = replace(l2_line, start_sid=150,
+                             box=Box(100_000, 1_250_000, 0, 0))
+    check(detail_line_edges([container_line], container_detail, SlideReport(3))[0] ==
+          [(l2_nodes[110].node_id, l2_nodes[112].node_id)], "привязка к контейнеру потеряна")
+    check(detail_line_edges([replace(l2_line, start_sid=130)], l2_detail, SlideReport(3))[0] ==
+          [(l2_nodes[130].node_id, l2_nodes[112].node_id)], "артефакт исключён из концов линий")
+    check("ПОДРОБНОСТИ ПО РАСПОЛОЖЕНИЮ" in _report_text(l2_report) and
+          "ЛИНИИ НА ПОДРОБНОСТЬ" in _report_text(trap_report) and
+          "ПОДРОБНОСТИ ПО РАСПОЛОЖЕНИЮ" not in empty_text,
+          "новые блоки отчёта должны печататься только при наличии записей")
+
+    # 14.5. Стыки: точная геометрия колоды, а не «почти похожая» схема.
+    def junction_line(
+        sid: int, start: tuple[int, int], end: tuple[int, int],
+        start_sid: int | None = None, end_sid: int | None = None,
+        head: bool = False, tail: bool = False,
+    ) -> Shape:
+        return replace(
+            detail_shape(sid, Box(min(start[0], end[0]), min(start[1], end[1]),
+                                  abs(end[0] - start[0]), abs(end[1] - start[1])), ""),
+            kind="line", start_sid=start_sid, end_sid=end_sid,
+            flip_h=end[0] < start[0], flip_v=end[1] < start[1],
+            head_arrow=head, tail_arrow=tail,
+        )
+
+    raw_example = junction_line(200, (0, 0), (100, 0), head=True)
+    check(raw_line_endpoints(raw_example) == ((0, 0), (100, 0)) and
+          line_endpoints(raw_example) == ((100, 0), (0, 0)),
+          "raw_line_endpoints не должен разворачивать линию по стрелке")
+    rotated = raw_line_endpoints(replace(raw_example, flip_h=True, rot=90))
+    check(all(math.isclose(actual, expected, abs_tol=1e-9)
+              for point, wanted in zip(rotated, ((50, 50), (50, -50)))
+              for actual, expected in zip(point, wanted)),
+          "сырые концы потеряли отражение или поворот")
+    check([segment_distance((3, 3), (0, 0), (6, 6)),
+           segment_distance((2, 4), (0, 0), (4, 0)),
+           segment_distance((-3, -4), (0, 0), (4, 0)),
+           segment_distance((7, 4), (0, 0), (4, 0)),
+           segment_distance((3, 4), (0, 0), (0, 0))] == [0, 4, 5, 5, 5],
+          "расстояние до отрезка: середина, оба продолжения или нулевая длина")
+    check(0 <= JUNCTION_TOLERANCE < 38_519, "допуск стыков вышел за границу 38519 EMU")
+    for invalid_tolerance in (-1, 38_519, 40_000, float("nan"), float("inf")):
+        try:
+            line_junctions([], invalid_tolerance)
+        except ValueError:
+            check(True, "недопустимый допуск отклонён")
+        else:
+            check(False, f"недопустимый допуск {invalid_tolerance} принят")
+
+    snp_segments = [
+        junction_line(74, (2_136_670, 4_331_354), (2_472_014, 4_331_354)),
+        junction_line(75, (2_136_670, 5_451_942), (2_472_014, 5_451_942)),
+        junction_line(76, (2_472_014, 4_331_354), (2_472_014, 5_451_942)),
+        junction_line(77, (2_196_128, 4_331_354), (2_804_516, 4_331_354),
+                      end_sid=57, tail=True),
+    ]
+    snp_junctions = line_junctions(snp_segments)
+    check(len(snp_junctions) == 1 and
+          snp_junctions[0].terminals == ((74, 0), (75, 0), (77, 1)),
+          "слайд 7: два источника и одна стрелка должны остаться терминалами")
+    check(line_junctions(list(reversed(snp_segments))) == snp_junctions,
+          "стыки зависят от порядка обхода фигур")
+    joined_report = SlideReport(7)
+    snp_pairs, snp_unresolved = junction_edges(snp_junctions, trap, joined_report)
+    check(set(snp_pairs) == {("56", "57"), ("38", "57")} and not snp_unresolved,
+          f"слайд 7: сведение отрезков должно дать 56→57 и 38→57, получено {snp_pairs}")
+    check(not joined_report.lines_on_details and any(
+        "38 → 57" in line and "[75]" in line for line in joined_report.line_junctions),
+        "внутренний стык не должен попадать на подробность; новая связь нужна в отчёте")
+    no_arrow = line_junctions([replace(line, tail_arrow=False) for line in snp_segments])
+    no_arrow_report = SlideReport(7)
+    check(not junction_edges(no_arrow, trap, no_arrow_report)[0] and
+          any("нет терминала со стрелкой" in line for line in no_arrow_report.line_junctions),
+          "компонента без стрелки выдумала ребро или пропала из отчёта")
+
+    # Реальные привязанные линии слайда 9 сходятся в узле [5], это НЕ стык.
+    mrp_bound = [
+        junction_line(50, (1_805_309, 3_143_165), (2_255_826, 1_577_669), 49, 5, tail=True),
+        junction_line(56, (1_805_309, 1_745_905), (2_255_826, 1_577_669), 45, 5, tail=True),
+        junction_line(57, (1_805_737, 2_424_978), (2_255_826, 1_577_669), 47, 5, tail=True),
+    ]
+    check(not line_junctions(mrp_bound), "привязанные [50]/[56]/[57] слайда 9 слились")
+    mrp_near = [
+        junction_line(52, (11_171_936, 1_600_310), (3_011_826, 1_289_669), 60, 5, tail=True),
+        junction_line(91, (9_249_409, 1_552_673), (9_564_604, 1_552_673), tail=True),
+    ]
+    check(not line_junctions(mrp_near), "близкие линии [91]/[52] слайда 9 слились")
+    near_a = junction_line(201, (0, 0), (1_000_000, 0))
+    near_b = junction_line(202, (1_038_519, 0), (2_000_000, 0))
+    check(not line_junctions([near_a, near_b], 38_518), "зазор 38519 ошибочно признан стыком")
+    exact_b = junction_line(202, (1_000_000, 0), (2_000_000, 0))
+    check(len(line_junctions([near_a, exact_b], 0)) == 1, "нулевой зазор не сведён")
+    crossing = junction_line(203, (500_000, -500_000), (500_000, 500_000))
+    check(not line_junctions([near_a, crossing]), "пересечение середин ошибочно стало стыком")
+
+    # Т-стык — конец касается середины отрезка; крайний конец со стрелкой — цель.
+    tee = [junction_line(204, (0, 0), (2_000_000, 0), 110, 112, tail=True),
+           junction_line(205, (1_000_000, -1_000_000), (1_000_000, 0), 111)]
+    tee_junctions = line_junctions(tee)
+    check(len(tee_junctions) == 1 and
+          tee_junctions[0].terminals == ((204, 0), (204, 1), (205, 0)), "Т-стык не сведён")
+    check(set(junction_edges(tee_junctions, l2_detail, SlideReport(3))[0]) == {
+        (l2_nodes[110].node_id, l2_nodes[112].node_id),
+        (l2_nodes[111].node_id, l2_nodes[112].node_id),
+    }, "Т-стык перепутал направление стрелки или потерял привязку")
+    no_source = line_junctions([replace(tee[0], head_arrow=True), replace(tee[1], head_arrow=True)])
+    no_source_report = SlideReport(3)
+    check(not junction_edges(no_source, l2_detail, no_source_report)[0] and
+          any("нет терминала-источника" in line for line in no_source_report.line_junctions),
+          "компонента без источника должна остаться без рёбер с объяснением")
+    reversed_tee = line_junctions([replace(tee[0], head_arrow=True, tail_arrow=False), tee[1]])
+    check(set(junction_edges(reversed_tee, l2_detail, SlideReport(3))[0]) == {
+        (l2_nodes[111].node_id, l2_nodes[110].node_id),
+        (l2_nodes[112].node_id, l2_nodes[110].node_id),
+    }, "head_arrow компоненты должна задавать цель у сырого начала линии")
+    unknown_tee = line_junctions([replace(tee[0], start_sid=9999), tee[1]])
+    unknown_report = SlideReport(3)
+    unknown_pairs, unknown_lines = junction_edges(unknown_tee, l2_detail, unknown_report)
+    check(not unknown_pairs and len(unknown_lines) == 2 and
+          any("не определены терминалы" in line for line in unknown_report.line_junctions),
+          "компонента с неразрешённой привязкой должна остаться в диагностике")
+    detail_tee = line_junctions([replace(tee[0], start_sid=120), tee[1]])
+    check(not junction_edges(detail_tee, l2_detail, SlideReport(3))[0],
+          "терминал-подробность ошибочно превращён в узел потока")
+    # Непривязанный источник слайда 7 на 500k левее шага: второй проход запрещён.
+    far_segments = [replace(snp_segments[0], box=Box(73_992, 4_331_354, 2_398_022, 0)),
+                    *snp_segments[1:]]
+    check(not junction_edges(line_junctions(far_segments), trap, SlideReport(7))[0],
+          "терминал дальше EDGE_SNAP_DETAIL подтянулся вторым проходом")
+
+    # Вызывающий обязан применить сведение; иначе все тесты хелперов зелёные,
+    # а реальный read_three_tier_detail по-прежнему потеряет составную связь.
+    composed_report = SlideReport(3)
+    composed = read_three_tier_detail(
+        l2_shapes[:-1] + tee, l2_spec, IdFactory(), composed_report,
+    )
+    check(set(composed.flow_edges) == {
+        (composed.node_of_sid[110], composed.node_of_sid[112]),
+        (composed.node_of_sid[111], composed.node_of_sid[112]),
+    } and not composed.unresolved_lines and bool(composed_report.line_junctions),
+          "read_three_tier_detail не применил сведение к составным линиям")
+    # Прямое ребро и составное совпали: в результате должна быть одна пара.
+    duplicate = read_three_tier_detail(
+        l2_shapes + tee, l2_spec, IdFactory(), SlideReport(3),
+    )
+    check(len(duplicate.flow_edges) == 2 and len(set(duplicate.flow_edges)) == 2,
+          "составная связь продублировала прямую")
+    no_arrow_composed = read_three_tier_detail(
+        l2_shapes[:-1] + [replace(line, tail_arrow=False) for line in tee],
+        l2_spec, IdFactory(), SlideReport(3),
+    )
+    check(not no_arrow_composed.flow_edges and len(no_arrow_composed.unresolved_lines) == 2,
+          "отвергнутая компонента без стрелки разобрана повторно как отдельные линии")
+    check("СТЫКИ ЛИНИЙ" in _report_text(joined_report) and
+          "38 → 57" in _report_text(joined_report) and "СТЫКИ ЛИНИЙ" not in empty_text,
+          "блок стыков должен печататься только при наличии записей")
+
+    # 18. Сборка двух модулей из результатов чтения (без настоящей колоды).
+    def assembled_fixture(collisions=None, *, duplicate=False, reverse_output=False):
+        spec = replace(MAPS["snp"], profile="three-tier", stage_count=2)
+        registry = (ModuleRef("DP", "Спрос", 1, 1, 2), ModuleRef("MRP", "Материалы", 2, 3, 4))
+        factory = IdFactory(collisions)
+        reports = [SlideReport(1, role="overview"), SlideReport(3), SlideReport(5)]
+        details = {}
+        for module in registry:
+            labels = ["Общий шаг", f"Публикация {module.code}", "Первая строка\nПередача в NRM базового прогноза"]
+            drafts = [NodeDraft(factory.make(label, module.detail_slide + 1, i + 10),
+                                "detail" if i == 2 else "step", label, Box(i * EMU_PER_PX, 0, 1, 1))
+                      for i, label in enumerate(labels)]
+            first, last, caption = [d.node_id for d in drafts]
+            phases = {first: 0, last: 1, caption: 0}
+            flow = [(first, last)]
+            attachments = [{"id": f"e-{first}--{caption}", "source": first, "target": caption, "kind": "data"}]
+            if module.id == "mrp":
+                output = NodeDraft(factory.make("Заявки", 5, 20), "data", "Заявки", Box(0, 0, 1, 1), direction="out")
+                drafts.append(output)
+                flow.append((output.node_id, last) if reverse_output else (last, output.node_id))
+            if duplicate and module.id == "dp":
+                drafts[1].label = "Прогноз"
+            details[module.id] = ThreeTierDetail(
+                PhaseBand("top-row", (), ("Получение", "Публикация"), ()),
+                TierSplit((), (), (), (), frozenset(), None), (), drafts, phases, {}, flow, attachments, [],
+            )
+        overview = ModulesSlide(ChevronRow((), 0, 1), (
+            ModuleTransfer(None, "dp", "История", Box(2 * EMU_PER_PX, 3 * EMU_PER_PX, 1, 1), 30),
+            ModuleTransfer("dp", "mrp", "Прогноз", Box(4 * EMU_PER_PX, 5 * EMU_PER_PX, 1, 1), 31),
+        ), (ModuleLane("fpa", "FP&A · Финансы", "FP&A", Box(0, 0, 1, 1), 40),))
+        doc = assemble_three_tier_map(spec, registry, overview, details, factory, reports, ())
+        return doc, reports, factory.counts
+
+    _, _, first_counts = assembled_fixture()
+    assembled, assembly_reports, final_counts = assembled_fixture(dict(first_counts))
+    check(first_counts == final_counts, "две фазы сборки считают разные узлы")
+    check_unique_ids(assembled)
+    check([s["number"] for s in assembled["stages"]] == [1, 2, 3, 4], "нумерация этапов не сквозная")
+    check([s["id"] for s in assembled["stages"]] == [
+        slugify(f"stage-{n}-{title}") for n, title in enumerate(("Получение", "Публикация") * 2, 1)
+    ], "id этапов не из номера и shortTitle")
+    step_ids = [n["id"] for st in assembled["stages"] for n in st["nodes"] if n["label"] == "Общий шаг"]
+    check(len(set(step_ids)) == 2 and all("~" not in i for i in step_ids), "коллизии между модулями не разрешены")
+    check([[n["label"] for n in st["nodes"] if n["type"] == "data"] for st in assembled["stages"]]
+          == [["История"], ["Прогноз"], ["Прогноз"], ["Заявки"]], "передачи должны идти из последнего в первый этап")
+    check(assembled["stages"][2]["nodes"][-1]["slidePosition"] == {"x": 4, "y": 5}, "передача потеряла коробку обзора")
+    check([m["keyOutputs"] for m in assembled["modules"]] == [["Прогноз"], ["Заявки"]], "выходы модуля: передача и фолбэк")
+    check([s["keyOutputs"] for s in assembled["stages"]] == [[], ["Прогноз"], [], ["Заявки"]], "выходы не своего этапа")
+    check("фолбэк" in assembly_reports[0].key_output_sources[1], "источник фолбэка не отражён в отчёте")
+    check(assembled["moduleEdges"] == [{"id": "mod-dp--mrp", "source": "dp", "target": "mrp", "kind": "process", "label": "Прогноз"}],
+          "moduleEdges не соответствуют передаче")
+    check(len(assembled["overviewEdges"]) == 2 and all(e["kind"] == "process" for e in assembled["overviewEdges"]),
+          "межэтапные рёбра не свёрнуты в overviewEdges")
+    check(all(e["kind"] == "data" for st in assembled["stages"] for e in st["edges"]), "связи подробностей/артефактов не data")
+    check(not any(r.isolated_flow for r in assembly_reports), "свёртка межэтапных рёбер создала ложную изоляцию")
+    check(all("warningsCount" not in s for s in assembled["stages"]), "three-tier пишет warningsCount")
+    check(list(assembled) == [k for k in MAP_KEY_ORDER if k in assembled], "порядок ключей карты")
+    check(list(assembled["lanes"][0]) == list(LANE_KEY_ORDER), "порядок ключей полосы")
+    dedup, dedup_reports, _ = assembled_fixture(duplicate=True)
+    check(sum(n["label"] == "Прогноз" for n in dedup["stages"][1]["nodes"]) == 1
+          and bool(dedup_reports[0].dedup_key_outputs), "дубликат передачи не пропущен с отчётом")
+    try:
+        assembled_fixture(reverse_output=True)
+    except SystemExit:
+        check(True, "выход без входящего ребра отклонён")
+    else:
+        check(False, "артефакт-выход не обязан быть целью ребра")
+
+    declaration = {"stage": 1, "system": "NRM", "label": "Передача в NRM базового прогноза", "direction": "out", "module": "dp"}
+    external_doc = json.loads(json.dumps(assembled))
+    apply_declared_external_io(external_doc, (declaration,), SlideReport(1))
+    check(external_doc["stages"][0]["outputs"][0]["system"] == "NRM", "не найдена отдельная строка подробности")
+    check(external_doc["overviewEdges"][-1]["id"] == f"ov-{external_doc['stages'][0]['id']}--NRM", "нет внешнего ребра out")
+    apply_declared_external_io(external_doc, ({**declaration, "direction": "in"},), SlideReport(1))
+    check(external_doc["overviewEdges"][-1]["id"] == f"ov-NRM--{external_doc['stages'][0]['id']}", "нет внешнего ребра in")
+    check(all("system" not in n for st in external_doc["stages"] for n in st["nodes"]), "декларация поставила node.system")
+    for changes in ({"stage": 2}, {"stage": 99}, {"system": "Dp"}, {"system": "unknown"},
+                    {"module": "mrp"}, {"label": "Другой текст"}, {"direction": "sideways"}):
+        try:
+            apply_declared_external_io(json.loads(json.dumps(assembled)), ({**declaration, **changes},), SlideReport(1))
+        except SystemExit:
+            check(True, "неверная декларация отклонена")
+        else:
+            check(False, f"принята неверная внешняя декларация: {changes}")
+
+    module_screen = {"title": "Экран спроса", "url": "https://example.com/dp"}
+    previous_modules = json.loads(json.dumps(assembled))
+    previous_modules["modules"][0]["screen"] = module_screen
+    carried = json.loads(json.dumps(assembled))
+    carry_report = carry_over_manual_fields(carried, previous_modules)
+    check(carried["modules"][0]["screen"] == module_screen and carry_report.screens_transferred == 1, "не перенесён module.screen")
+    check(list(carried["modules"][0]) == list(MODULE_KEY_ORDER), "module.screen не перед stageIds: нужен reorder_keys")
+    check("screen" not in carried["modules"][1], "отсутствующее поле screen создано")
+    again = json.loads(json.dumps(assembled))
+    carry_over_manual_fields(again, carried)
+    check(json.dumps(again, ensure_ascii=False) == json.dumps(carried, ensure_ascii=False), "перенос модуля не идемпотентен побайтово")
+    for value, bucket in ((None, "cleared"), ({"url": "broken"}, "invalid")):
+        prev = json.loads(json.dumps(previous_modules))
+        prev["modules"][0]["screen"] = value
+        fresh = json.loads(json.dumps(assembled))
+        report = carry_over_manual_fields(fresh, prev)
+        check("screen" not in fresh["modules"][0] and bool(getattr(report, bucket)) and not report.lost,
+              f"module.screen: неверное поведение {bucket}")
+    lost = json.loads(json.dumps(previous_modules))
+    lost["modules"][0]["id"] = "removed"
+    lost_report = carry_over_manual_fields(json.loads(json.dumps(assembled)), lost)
+    check(lost_report.screens_lost == 1 and "removed" in lost_report.lost[0] and module_screen["url"] in lost_report.lost[0],
+          "потеря module.screen не сообщена с id и URL")
+    for section, item in (("modules", assembled["modules"][0]), ("lanes", assembled["lanes"][0]),
+                          ("lanes", {"id": "dp", "title": "collision"}), ("moduleEdges", assembled["moduleEdges"][0])):
+        invalid = json.loads(json.dumps(assembled))
+        invalid[section].append(item)
+        try:
+            check_unique_ids(invalid)
+        except SystemExit:
+            check(True, "повторный id отклонён")
+        else:
+            check(False, f"не проверена уникальность {section}")
 
     print(f"САМОПРОВЕРКА ПРОЙДЕНА: {checks} проверок")
     return 0
