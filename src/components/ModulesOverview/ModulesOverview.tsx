@@ -3,7 +3,7 @@
 // FP&A. Клик по карточке уводит на экран этапов модуля (navigateToModule).
 //
 // ЗЕРКАЛО Overview.tsx, и намеренно: та же оболочка (шапка, полотно React Flow
-// с сеткой, тулбар, легенда под полотном, пересчёт вида по режиму и карте) и
+// с сеткой, тулбар, легенда под полотном, пересчёт вида по ключу fitKeyOf) и
 // те же CSS-классы — Overview.module.css берётся как есть. Читатель, у которого
 // на соседних адресах живут карты обеих форм, не должен замечать, что корень у
 // них собран разными компонентами. Отличаются только граф (modulesGraph.ts),
@@ -37,6 +37,7 @@ import { Legend } from '../Legend';
 import { IntegrationNode } from '../nodes/IntegrationNode';
 import { LaneNode } from '../nodes/LaneNode';
 import { ModuleNode } from '../nodes/ModuleNode';
+import { SystemsBadge } from '../nodes/SystemsBadge';
 import { OverviewHeader } from '../Overview/OverviewHeader';
 import {
   FIT_VIEW_PADDING,
@@ -46,6 +47,7 @@ import {
   MIN_ZOOM,
 } from '../Overview/overviewGraph';
 import { RefitViewport } from '../Overview/RefitViewport';
+import { fitKeyOf } from '../Overview/RefitViewportKey';
 import { Toolbar } from '../Toolbar';
 import { buildModulesGraph } from './modulesGraph';
 import styles from '../Overview/Overview.module.css';
@@ -60,6 +62,9 @@ const nodeTypes = {
   moduleLane: LaneNode,
   lane: LaneNode,
   system: IntegrationNode,
+  // Строка-бейдж компактного режима вместо свимлейнов (process-map-9mn.19) —
+  // тот же узел и тот же тип, что на компактном обзоре этапов.
+  systemsBadge: SystemsBadge,
 } satisfies NodeTypes;
 
 const edgeTypes = {
@@ -134,8 +139,14 @@ export function ModulesOverview() {
               proOptions={proOptions}
             >
               <Background variant={BackgroundVariant.Dots} gap={GRID_GAP} size={GRID_DOT_SIZE} />
+              {/* Экран в ключе (process-map-9mn.19): прежний ключ
+                  `compact + map.id` был ключом «обзора карты» вообще и от ключа
+                  экрана этапов той же карты отличался только модулем — то есть
+                  держался на том, что модуль у того экрана есть. Модуля у этого
+                  экрана нет: на полотне все модули сразу. Довод целиком —
+                  FitKeyParts в RefitViewportKey.ts. */}
               <RefitViewport
-                fitKey={`${String(compact)}:${map.id}`}
+                fitKey={fitKeyOf({ screen: 'modules', compact, mapId: map.id, moduleId: null })}
                 fitViewOptions={fitViewOptions}
               />
             </ReactFlow>

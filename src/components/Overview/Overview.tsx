@@ -55,6 +55,7 @@ import {
   MIN_ZOOM,
 } from './overviewGraph';
 import { RefitViewport } from './RefitViewport';
+import { fitKeyOf } from './RefitViewportKey';
 import styles from './Overview.module.css';
 
 // Объекты объявлены на уровне модуля: React Flow предупреждает, если nodeTypes
@@ -207,19 +208,22 @@ export function Overview({ stages, overviewEdges, frameLabel, module, header }: 
             >
               <Background variant={BackgroundVariant.Dots} gap={GRID_GAP} size={GRID_DOT_SIZE} />
               {/* SPEC §4.5: при смене режима вид подгоняется заново — карточки
-                  этапов меняют и размер, и координаты. Модуль в ключе — по
-                  тому же доводу, что версия (RefitViewport.tsx): другой модуль
-                  — другой состав полотна. Сегодня экран модуля между двумя
-                  модулями размонтируется (путь лежит через экран модулей), но
-                  ключ не должен держаться на маршруте, который выбрал
-                  интерфейс. На двухуровневой карте модуля нет, и ключ
-                  прежний. */}
+                  этапов меняют и размер, и координаты. Экран и модуль в ключе
+                  — по тому же доводу, что версия (FitKeyParts в
+                  RefitViewportKey.ts): другой модуль — другой состав полотна.
+                  Сегодня экран модуля между двумя модулями размонтируется
+                  (путь лежит через экран модулей), но ключ не должен держаться
+                  на маршруте, который выбрал интерфейс: смена модуля при
+                  смонтированном экране обязана подогнать вид
+                  (tests/refitScreens.test.tsx). На двухуровневой карте модуля
+                  нет, и moduleId — null. */}
               <RefitViewport
-                fitKey={
-                  module === undefined
-                    ? `${String(compact)}:${map.id}`
-                    : `${String(compact)}:${map.id}:${module.id}`
-                }
+                fitKey={fitKeyOf({
+                  screen: 'stages',
+                  compact,
+                  mapId: map.id,
+                  moduleId: module?.id ?? null,
+                })}
                 fitViewOptions={fitViewOptions}
               />
             </ReactFlow>

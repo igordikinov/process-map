@@ -15,6 +15,7 @@
 // раскладка обязаны читать один и тот же порядок). Вариант валиден — это
 // проверяется, а не предполагается: validateIntegrity упорядочивает блоки
 // этапов по module.number, а не по месту модуля в массиве.
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
   buildModulesGraph,
@@ -24,6 +25,7 @@ import {
   INTERACTIVE_NODE_STYLE,
   LANE_IN_ID,
   LANE_OUT_ID,
+  SYSTEMS_BADGE_ID,
   systemNodeId,
 } from '../src/components/Overview/overviewGraph';
 import { hasModules, type MapWithModules } from '../src/data/modules';
@@ -33,6 +35,7 @@ import {
   EDGE_LABEL_WRAP_MAX_WIDTH,
   MODULE_NODE_SIZE,
   MODULE_NODE_SIZE_COMPACT,
+  STAGE_NODE_SIZE_COMPACT,
 } from '../src/theme/sizes';
 import {
   LANE_FPA,
@@ -429,5 +432,162 @@ describe('buildModulesGraph: внешние системы', () => {
     // Предпосылка всего файла, а не формальность: без модулей сборка уровня 1
     // не вызывается, и тип MapWithModules держал бы тесты на честном слове.
     expect(hasModules(fixture())).toBe(true);
+  });
+});
+
+/*
+ * КОМПАКТНЫЙ УРОВЕНЬ 1 (SPEC §4.5, задача process-map-9mn.19). Правила те же,
+ * что у компактного обзора этапов (tests/compact.test.tsx): карточки 228×200,
+ * свимлейны свёрнуты в одну строку-бейдж. Своё у уровня 1 — полоса FP&A: в
+ * компакте она ОСТАЁТСЯ, тонкой и с тем же заголовком (решение владельца
+ * process-map-9mn.31, п. 5). Геометрия подписей рёбер в компакте — в
+ * tests/artifactLabelGeometry.test.ts, проводка режима до экрана — в
+ * tests/modulesOverview.test.tsx.
+ */
+describe('buildModulesGraph: компактный режим (SPEC §4.5)', () => {
+  function compactGraph(map: MapWithModules = fixture(), showIntegrations = true) {
+    return buildModulesGraph(map, showIntegrations, true);
+  }
+
+  it('карточки модулей 228×200 — размер компактной карточки этапа', () => {
+    const cards = modulesOf(compactGraph().nodes);
+    expect(cards).toHaveLength(MODULE_IDS.length);
+    for (const card of cards) {
+      expect({ width: card.width, height: card.height }, card.id).toEqual({
+        width: 228,
+        height: 200,
+      });
+    }
+    // Число — не своё: то же, что у компактной карточки этапа (sizes.ts).
+    expect(MODULE_NODE_SIZE_COMPACT).toEqual(STAGE_NODE_SIZE_COMPACT);
+  });
+
+  it('карточки в одном ряду, слева направо по массиву, не накладываются', () => {
+    const cards = [...modulesOf(compactGraph().nodes)].sort((a, b) => a.position.x - b.position.x);
+    expect(cards.map((card) => card.id)).toEqual(MODULE_IDS);
+    expect(new Set(cards.map((card) => card.position.y)).size).toBe(1);
+    for (let index = 1; index < cards.length; index += 1) {
+      const previous = cards[index - 1] as ModulesNode;
+      const current = cards[index] as ModulesNode;
+      expect(current.position.x, `${current.id} правее ${previous.id}`).toBeGreaterThan(
+        previous.position.x + MODULE_NODE_SIZE_COMPACT.width,
+      );
+    }
+  });
+
+  it('свимлейнов и карточек систем нет — вместо них одна строка-бейдж', () => {
+    const { nodes } = compactGraph();
+
+    expect(nodes.filter((node) => node.type === 'lane')).toEqual([]);
+    expect(nodes.some((node) => node.id === LANE_IN_ID || node.id === LANE_OUT_ID)).toBe(false);
+    expect(nodes.filter((node) => node.type === 'system')).toEqual([]);
+
+    const badges = nodes.filter((node) => node.type === 'systemsBadge');
+    expect(badges.map((badge) => badge.id)).toEqual([SYSTEMS_BADGE_ID]);
+  });
+
+  it('строка-бейдж перечисляет концы-системы в порядке появления, без повторов', () => {
+    const map = fixture();
+    // Вторая связь с BI — уже приёмником: система в строке всё равно одна.
+    map.moduleEdges = [
+      ...(map.moduleEdges ?? []),
+      {
+        id: 'module-edge-bi-out',
+        source: MODULE_SUPPLY,
+        target: SYSTEM_OUTSIDE_IO,
+        kind: 'integration',
+      },
+    ];
+    expect(validateIntegrity(map), 'вариант обязан оставаться валидной картой').toEqual([]);
+
+    const badge = nodeById(compactGraph(map).nodes, SYSTEMS_BADGE_ID);
+    expect(badge.data).toEqual({ systems: [SYSTEM_OUTSIDE_IO, SYSTEM_OUTSIDE_IO_2] });
+  });
+
+  it('строка-бейдж стоит над карточками и с их левого края', () => {
+    const { nodes } = compactGraph();
+    const badge = nodeById(nodes, SYSTEMS_BADGE_ID);
+    const cardTop = Math.min(...modulesOf(nodes).map((card) => card.position.y));
+    const cardsLeft = Math.min(...modulesOf(nodes).map((card) => card.position.x));
+    // Высоты у строки в графе нет (она меряется по содержимому), поэтому
+    // проверяется запас под её высоту из токена, которым её задаёт CSS.
+    const token = /--pm-systems-badge-height:\s*(\d+)px/.exec(
+      readFileSync('src/theme/tokens.css', 'utf8'),
+    );
+    const badgeHeight = Number(token?.[1]);
+    expect(badgeHeight, 'токен --pm-systems-badge-height не найден').toBeGreaterThan(0);
+    expect(badge.position.y + badgeHeight).toBeLessThan(cardTop);
+    expect(badge.position.x).toBe(cardsLeft);
+  });
+
+  it('связи с системами в компакте не рисуются, связи модулей остаются', () => {
+    const { edges } = compactGraph();
+    expect(edges.filter((edge) => edge.type === 'artifactIntegration')).toEqual([]);
+    expect(edges.map((edge) => edge.id)).toEqual(['module-edge-1', 'module-edge-2']);
+  });
+
+  it('выключенный тумблер убирает и строку-бейдж', () => {
+    const { nodes } = compactGraph(fixture(), false);
+    expect(nodes.filter((node) => node.type === 'systemsBadge')).toEqual([]);
+  });
+
+  it('карта без концов-систем строки-бейджа не получает (так будет у inplan)', () => {
+    const map = fixture();
+    map.moduleEdges = (map.moduleEdges ?? []).filter(
+      (edge) => edge.source !== SYSTEM_OUTSIDE_IO && edge.target !== SYSTEM_OUTSIDE_IO_2,
+    );
+    expect(compactGraph(map).nodes.filter((node) => node.type === 'systemsBadge')).toEqual([]);
+  });
+
+  it('полоса FP&A остаётся: тот же тип, тот же заголовок, тонкая', () => {
+    const map = fixture();
+    const band = nodeById(compactGraph(map).nodes, LANE_FPA);
+    const normal = nodeById(buildModulesGraph(map, true).nodes, LANE_FPA);
+
+    expect(band.type).toBe('moduleLane');
+    expect(band.data).toEqual({ title: map.lanes?.[0]?.title });
+    expect(band.ariaRole).toBe('group');
+    expect(band.ariaLabel).toBe(normal.ariaLabel);
+    // Тонкая — ниже обычной, но не схлопнута: заголовок обязан поместиться.
+    expect(Number(band.style?.height)).toBeLessThan(Number(normal.style?.height));
+    expect(Number(band.style?.height)).toBeGreaterThan(0);
+  });
+
+  it('полоса — под карточками, на всю ширину ряда', () => {
+    const { nodes } = compactGraph();
+    const band = nodeById(nodes, LANE_FPA);
+    const cards = modulesOf(nodes);
+    const cardsBottom = Math.max(...cards.map((card) => card.position.y + (card.height ?? 0)));
+    const cardsLeft = Math.min(...cards.map((card) => card.position.x));
+    const cardsRight = Math.max(...cards.map((card) => card.position.x + (card.width ?? 0)));
+
+    expect(band.position.y).toBeGreaterThan(cardsBottom);
+    expect(band.position.x).toBeLessThanOrEqual(cardsLeft);
+    expect(band.position.x + Number(band.style?.width)).toBeGreaterThanOrEqual(cardsRight);
+  });
+
+  it('полоса стоит на месте при любом положении тумблера и в компакте', () => {
+    const on = nodeById(compactGraph(fixture(), true).nodes, LANE_FPA);
+    const off = nodeById(compactGraph(fixture(), false).nodes, LANE_FPA);
+    expect(off.position).toEqual(on.position);
+    expect(off.style).toEqual(on.style);
+  });
+
+  it('несколько полос в компакте тоже идут стопкой и не накладываются', () => {
+    const map = fixture();
+    map.lanes = [...(map.lanes ?? []), { id: 'hr', title: 'Кадровое планирование' }];
+    const bands = compactGraph(map)
+      .nodes.filter((node) => node.type === 'moduleLane')
+      .sort((a, b) => a.position.y - b.position.y);
+    expect(bands.map((band) => band.id)).toEqual([LANE_FPA, 'hr']);
+    const [upper, lower] = bands as [ModulesNode, ModulesNode];
+    expect(lower.position.y).toBeGreaterThanOrEqual(upper.position.y + Number(upper.style?.height));
+  });
+
+  it('обычный режим не задет: свимлейны на месте, строки-бейджа нет', () => {
+    const { nodes } = buildModulesGraph(fixture(), true);
+    expect(nodes.some((node) => node.id === LANE_IN_ID)).toBe(true);
+    expect(nodes.some((node) => node.id === LANE_OUT_ID)).toBe(true);
+    expect(nodes.filter((node) => node.type === 'systemsBadge')).toEqual([]);
   });
 });

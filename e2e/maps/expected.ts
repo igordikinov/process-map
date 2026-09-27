@@ -10,6 +10,7 @@
 // того же места, откуда его берёт приложение.
 
 export interface MapExpectations {
+  levels: 2 | 3;
   /** Подпись рамки вокруг потока этапов (.react-flow__node-flowLane). */
   moduleLabel: string;
   /** Заголовок вкладки: его подставляет плагин сборки из данных карты. */
@@ -17,11 +18,14 @@ export interface MapExpectations {
 }
 
 export const MAP_EXPECTATIONS: Record<string, MapExpectations> = {
+  inplan: { levels: 3, moduleLabel: 'Все процессы In.Plan', pageTitle: 'Карта процессов In.Plan' },
   snp: {
+    levels: 2,
     moduleLabel: 'Модуль SNP',
     pageTitle: 'E2E-процесс планирования поставок',
   },
   mrp: {
+    levels: 2,
     moduleLabel: 'Модуль MRP',
     pageTitle: 'Процесс планирования потребности в материалах',
   },
@@ -35,7 +39,7 @@ export const MAP_EXPECTATIONS: Record<string, MapExpectations> = {
  * тогда смоук гоняется против карты по умолчанию.
  */
 export function expectationsFor(projectName: string): MapExpectations {
-  const id = projectName === '' ? 'snp' : projectName;
+  const id = projectName === '' ? 'inplan' : projectName;
   const expectations = MAP_EXPECTATIONS[id];
   if (expectations === undefined) {
     throw new Error(

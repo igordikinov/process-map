@@ -478,6 +478,17 @@ export function buildStageGraph(stage: Stage, showIntegrations = true): StageGra
   const containers: GroupNodeType[] = [];
   const children: StageDetailNode[] = [];
   const loose: StageDetailNode[] = [];
+  const hidden = new Set(
+    stage.nodes.filter((n) => !showIntegrations && n.type === 'integration').map((n) => n.id),
+  );
+  for (const edge of stage.edges) {
+    if (
+      hidden.has(edge.source) &&
+      stage.nodes.some((n) => n.id === edge.target && n.type === 'detail')
+    ) {
+      hidden.add(edge.target);
+    }
+  }
 
   // ── группы шагов ──
   const byGroup = new Map<string, ProcessNode[]>();
@@ -505,7 +516,7 @@ export function buildStageGraph(stage: Stage, showIntegrations = true): StageGra
     // process-map-7v1 такая группа появилась: все четыре узла «Публикации
     // планов» — интеграции, и при выключенном toggle от неё оставалась рамка
     // 323×336 с заголовком и пустотой внутри.
-    if (!showIntegrations && members.every((node) => node.type === 'integration')) {
+    if (members.every((node) => hidden.has(node.id))) {
       continue;
     }
     // Габарит считается по ПОЛНОМУ набору узлов, а не по видимым: иначе
@@ -561,7 +572,7 @@ export function buildStageGraph(stage: Stage, showIntegrations = true): StageGra
     // свимлейнами/системами уровня 1 (overviewGraph.ts). Геометрия групп
     // выше уже посчитана по полному набору — здесь только не кладём карточку
     // в children/loose, дырка в контейнере остаётся, раскладка не прыгает.
-    if (node.type === 'integration' && !showIntegrations) {
+    if (hidden.has(node.id)) {
       continue;
     }
     if (node.type === 'data') {
@@ -594,9 +605,7 @@ export function buildStageGraph(stage: Stage, showIntegrations = true): StageGra
     // React Flow получил бы edge.source/target без соответствующего node.id.
     if (
       !showIntegrations &&
-      (edge.kind === 'integration' ||
-        source.type === 'integration' ||
-        target.type === 'integration')
+      (edge.kind === 'integration' || hidden.has(source.id) || hidden.has(target.id))
     ) {
       continue;
     }

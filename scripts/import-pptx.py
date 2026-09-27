@@ -187,7 +187,7 @@ MAP_ID_INPLAN = "inplan"
 MAP_TITLE_INPLAN = "Карта процессов In.Plan"
 MAP_MODULE_LABEL_INPLAN = "Все процессы In.Plan"
 MAP_UPDATED_AT_INPLAN = "2026-09-27"
-MAP_DATA_FINGERPRINT_INPLAN = "c6cbcaaadf3190bd27fbaab1454c2e467296db0f9423c4106ce5f439a658f966"
+MAP_DATA_FINGERPRINT_INPLAN = "c21505281cc1b884b6e341b5a02f94545b9a42639ddbe55b8e77b83c96171216"
 
 
 # Сколько этапов у карты, если профиль не сказал иного (MapSpec.stage_count).
@@ -328,7 +328,7 @@ MAPS: dict[str, MapSpec] = {
     ),
 }
 
-DEFAULT_MAP = "snp"
+DEFAULT_MAP = "inplan"
 
 # 1 px = 9525 EMU (96 dpi). Слайд 12192000 EMU = 1280 px по ширине.
 EMU_PER_PX = 9525

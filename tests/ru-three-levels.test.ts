@@ -108,9 +108,9 @@ describe('тексты владельца — дословно', () => {
     expect(ru.overview.versionLabels['inplan']).toBe('Процессы');
   });
 
-  it('подписи соседних версий не тронуты (их меняет process-map-9mn.20)', () => {
-    expect(ru.overview.versionLabels['snp']).toBe('Основные этапы');
-    expect(ru.overview.versionLabels['inplan-model']).toBe('Полная модель');
+  it('полная модель названа BPMN; у SNP нет второй версии', () => {
+    expect(ru.overview.versionLabels).not.toHaveProperty('snp');
+    expect(ru.overview.versionLabels['inplan-model']).toBe('Полная модель (BPMN)');
   });
 
   it('бейдж уровня 2 — «Модуль N»', () => {

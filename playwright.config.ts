@@ -26,16 +26,18 @@ export default defineConfig({
     trace: 'on-first-retry',
   },
 
-  // Проект на карту (process-map-3wh.13). Имя проекта — id карты: по нему
-  // e2e/maps/expected.ts выбирает, что ожидать на экране.
-  //
-  // ПОЧЕМУ У MRP ТОЛЬКО СМОУК. Остальные десять спеков — про механику
-  // интерфейса и содержат подписи и id узлов SNP дословно. Второй прогон для
-  // другой карты не добавил бы сигнала, зато добавил бы времени и новый класс
-  // падений. Требования, которые эти спеки молча предъявляют к данным, подняты
-  // в tests/mapContract.test.ts и проверяются там для КАЖДОЙ карты.
+  // Сценарии SNP остаются на SNP. Три уровня и версии проверяет inplan.
   projects: [
-    { name: 'snp', use: { baseURL: 'http://localhost:5173' } },
+    {
+      name: 'inplan',
+      testMatch: ['**/modules.spec.ts', '**/version-switch.spec.ts', '**/maps/*.spec.ts'],
+      use: { baseURL: 'http://localhost:5173' },
+    },
+    {
+      name: 'snp',
+      testIgnore: ['**/modules.spec.ts', '**/version-switch.spec.ts'],
+      use: { baseURL: 'http://localhost:5175' },
+    },
     { name: 'mrp', testDir: './e2e/maps', use: { baseURL: 'http://localhost:5174' } },
   ],
 
@@ -45,8 +47,9 @@ export default defineConfig({
   // Порт второй карты закреплён только здесь и в скрипте dev:mrp: в CI
   // reuseExistingServer=false, и занятый порт уронит прогон.
   webServer: [
+    { command: 'npm run dev:snp', url: 'http://localhost:5175', reuseExistingServer: !isCI },
     {
-      command: 'npm run dev',
+      command: 'npm run dev:inplan',
       url: 'http://localhost:5173',
       reuseExistingServer: !isCI,
     },

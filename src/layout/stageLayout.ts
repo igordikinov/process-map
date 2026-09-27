@@ -216,7 +216,28 @@ function bySlideOrder(a: ProcessNode, b: ProcessNode): number {
  * получается компактным прямоугольником, а не размазанным по всей раскладке.
  */
 function layoutFlow(stage: Stage): Map<string, Placement> {
-  const flow = [...stage.nodes.filter((node) => node.type !== 'data')].sort(bySlideOrder);
+  // Подробность занимает место под хозяином, а не следующий ранг потока.
+  // Dagre получает общий габарит блока, чтобы соседние ветви обходили его.
+  const details = new Map<string, ProcessNode[]>();
+  const attached = new Set<string>();
+  for (const edge of stage.edges) {
+    const target = stage.nodes.find((n) => n.id === edge.target && n.type === 'detail');
+    const source = stage.nodes.find((n) => n.id === edge.source);
+    if (target && source && source.type !== 'data' && source.type !== 'detail') {
+      details.set(source.id, [...(details.get(source.id) ?? []), target].sort(bySlideOrder));
+      attached.add(target.id);
+    }
+  }
+  const detailGap = 24;
+  const blockSize = (node: ProcessNode): Size => ({
+    width: NODE_SIZE[node.type].width,
+    height:
+      NODE_SIZE[node.type].height +
+      (details.get(node.id)?.length ?? 0) * (DETAIL_NODE_SIZE.height + detailGap),
+  });
+  const flow = [
+    ...stage.nodes.filter((node) => node.type !== 'data' && !attached.has(node.id)),
+  ].sort(bySlideOrder);
   const placements = new Map<string, Placement>();
   if (flow.length === 0) {
     return placements;
@@ -244,7 +265,7 @@ function layoutFlow(stage: Stage): Map<string, Placement> {
   }
 
   for (const node of flow) {
-    const size = NODE_SIZE[node.type];
+    const size = blockSize(node);
     graph.setNode(node.id, { width: size.width, height: size.height });
     if (node.group !== undefined && usedGroups.has(node.group)) {
       graph.setParent(node.id, `cluster:${node.group}`);
@@ -266,10 +287,20 @@ function layoutFlow(stage: Stage): Map<string, Placement> {
   let minY = Number.POSITIVE_INFINITY;
   for (const node of flow) {
     const laid = graph.node(node.id);
-    const size = NODE_SIZE[node.type];
+    const size = blockSize(node);
     const x = laid.x - size.width / 2;
     const y = laid.y - size.height / 2;
     placements.set(node.id, { x, y });
+    (details.get(node.id) ?? []).forEach((detail, index) => {
+      placements.set(detail.id, {
+        x,
+        y:
+          y +
+          NODE_SIZE[node.type].height +
+          detailGap +
+          index * (DETAIL_NODE_SIZE.height + detailGap),
+      });
+    });
     minX = Math.min(minX, x);
     minY = Math.min(minY, y);
   }

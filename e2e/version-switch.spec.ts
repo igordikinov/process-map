@@ -29,8 +29,8 @@ const NARROW = { width: 1024, height: 600 };
  * корпуса: e2e проверяет то, что видит пользователь, и переименование ключа в
  * i18n не должно проходить незамеченным.
  */
-const DEFAULT_VERSION = { id: 'snp', label: 'Основные этапы', stages: 4 };
-const ALT_VERSION = { id: 'inplan-model', label: 'Полная модель', stages: 10 };
+const DEFAULT_VERSION = { id: 'inplan', label: 'Процессы', stages: 5 };
+const ALT_VERSION = { id: 'inplan-model', label: 'Полная модель (BPMN)', stages: 10 };
 const VERSION_GROUP = 'Версия карты';
 
 /** Кнопка версии внутри группы переключателя, а не любая кнопка с таким текстом. */
@@ -61,6 +61,7 @@ async function clickVersion(page: Page, label: string): Promise<void> {
   await expect(button).toHaveAttribute('aria-pressed', 'true');
 }
 
+const MODULE_CARD = '.react-flow__node-module';
 const STAGE_CARD = '.react-flow__node-stage';
 const STEP_CARD = '.react-flow__node-step';
 
@@ -72,7 +73,7 @@ const STEP_CARD = '.react-flow__node-step';
  * `.react-flow__node-stage` там висит до таймаута. Ошибка была в этом хелпере,
  * а не в приложении.
  */
-async function openApp(page: Page, search = '', waitFor: string = STAGE_CARD): Promise<void> {
+async function openApp(page: Page, search = '', waitFor: string = MODULE_CARD): Promise<void> {
   await page.setViewportSize(VIEWPORT);
   await page.goto(`/${search}`);
   await page.waitForSelector(waitFor);
@@ -100,7 +101,7 @@ test.describe('переключатель версий', () => {
     await openApp(page);
     const heading = page.getByRole('heading', { level: 1 });
     const before = await heading.textContent();
-    await expect(page.locator(STAGE_CARD)).toHaveCount(DEFAULT_VERSION.stages);
+    await expect(page.locator(MODULE_CARD)).toHaveCount(DEFAULT_VERSION.stages);
 
     await clickVersion(page, ALT_VERSION.label);
 
@@ -132,8 +133,9 @@ test.describe('переключатель версий', () => {
 
     await expect(page.getByRole('group', { name: VERSION_GROUP })).toHaveCount(0);
 
-    await page.getByRole('button', { name: 'Назад к обзору процесса' }).click();
-    await page.waitForSelector(STAGE_CARD);
+    await page.getByRole('button', { name: 'Назад к этапам модуля' }).click();
+    await page.getByRole('button', { name: 'Назад ко всем модулям' }).click();
+    await page.waitForSelector(MODULE_CARD);
     await clickVersion(page, ALT_VERSION.label);
 
     await expect(page.locator(STAGE_CARD)).toHaveCount(ALT_VERSION.stages);
@@ -161,7 +163,7 @@ test.describe('версия в адресе', () => {
   test('неизвестная версия оставляет карту по умолчанию', async ({ page }) => {
     await openApp(page, '?version=версии-такой-нет');
 
-    await expect(page.locator(STAGE_CARD)).toHaveCount(DEFAULT_VERSION.stages);
+    await expect(page.locator(MODULE_CARD)).toHaveCount(DEFAULT_VERSION.stages);
     await expect(versionButton(page, DEFAULT_VERSION.label)).toHaveAttribute(
       'aria-pressed',
       'true',
@@ -173,7 +175,7 @@ test.describe('версия в адресе', () => {
    * вики обросла бы параметром, который ничего не меняет.
    */
   test('адрес версии по умолчанию не обрастает параметром', async ({ page }) => {
-    await openApp(page, `?version=${ALT_VERSION.id}`);
+    await openApp(page, `?version=${ALT_VERSION.id}`, STAGE_CARD);
     expect(new URL(page.url()).searchParams.get('version')).toBe(ALT_VERSION.id);
 
     await clickVersion(page, DEFAULT_VERSION.label);
@@ -208,7 +210,7 @@ test.describe('узкий экран 1024×600', () => {
   test('шапка 44 px, обе кнопки версии целиком в кадре', async ({ page }) => {
     await page.setViewportSize(NARROW);
     await page.goto('/');
-    await page.waitForSelector(STAGE_CARD);
+    await page.waitForSelector(MODULE_CARD);
 
     const header = await page.locator('header').boundingBox();
     expect(Math.round(header?.height ?? 0)).toBe(44);
@@ -230,7 +232,7 @@ test.describe('узкий экран 1024×600', () => {
   test('переключение на узком экране доходит и меняет полотно', async ({ page }) => {
     await page.setViewportSize(NARROW);
     await page.goto('/');
-    await page.waitForSelector(STAGE_CARD);
+    await page.waitForSelector(MODULE_CARD);
 
     await clickVersion(page, ALT_VERSION.label);
 
@@ -259,7 +261,7 @@ test('переключение не даёт ни ошибок страницы,
   await clickVersion(page, ALT_VERSION.label);
   await expect(page.locator(STAGE_CARD)).toHaveCount(ALT_VERSION.stages);
   await clickVersion(page, DEFAULT_VERSION.label);
-  await expect(page.locator(STAGE_CARD)).toHaveCount(DEFAULT_VERSION.stages);
+  await expect(page.locator(MODULE_CARD)).toHaveCount(DEFAULT_VERSION.stages);
 
   expect(pageErrors).toEqual([]);
   expect(consoleErrors.filter((text) => text.includes('same key'))).toEqual([]);

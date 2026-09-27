@@ -9,9 +9,10 @@
 // Двухуровневая карта экрана 'modules' не получает никогда: currentScreen
 // отвечает 'stages' при любом currentModuleId, если модулей у документа нет.
 //
-// Deep-link (?stage=&node=, SPEC §4.7) разбирается хуком useDeepLink: он
-// подставляет id в store сразу после монтирования и дальше синхронизирует URL
-// (replaceState) при любой навигации — см. src/hooks/useDeepLink.ts.
+// Deep-link (?version=&module=&stage=&node=, SPEC §4.7, process-map-9mn.18)
+// разбирается хуком useDeepLink: он подставляет id в store сразу после
+// монтирования и дальше синхронизирует URL (replaceState) при любой навигации —
+// см. src/hooks/useDeepLink.ts.
 import { useEffect, useMemo, type ReactElement } from 'react';
 import { ImportReport } from './components/ImportReport';
 import { ModulesOverview } from './components/ModulesOverview';
@@ -114,8 +115,12 @@ function App() {
    * КАКОЙ уровень адресует состояние, а не валидно ли оно), поэтому id модуля,
    * которого в документе нет, законно приводит на экран 'stages' — и это тупик:
    * экрана модуля нет, а «Назад» с него вёл бы на корень лишь по счастливой
-   * случайности. Откуда берётся такой id: подмена карты, смена версии, будущий
-   * ?module= в адресе (process-map-9mn.18).
+   * случайности. Откуда такой id может взяться: прямой вызов store, путь,
+   * которого сегодня нет. Известные пути его не дают: подмена карты и смена
+   * версии сбрасывают уровень (resetLevel), а ?module= из адреса useDeepLink
+   * выбирает, только если модуль в документе есть (process-map-9mn.18).
+   * Защита стоит по тем же доводам, что вторая защита в StageDetail: причин
+   * попасть в тупик может оказаться больше, чем мы знаем сегодня.
    *
    * Признак «не найден» — ТОЛЬКО moduleById(...) === undefined (шапка
    * moduleById): пустой список этапов бывает и у существующего модуля, такой

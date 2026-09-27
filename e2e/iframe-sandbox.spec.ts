@@ -30,7 +30,7 @@ const OPEN_IN_MODULE = 'Открыть в модуле';
  * Хозяин и фрейм на ОДНОМ origin — и это не упрощение, а вынужденно.
  *
  * В проде они на разных доменах (SPEC §6), и первая версия спека это
- * воспроизводила: хозяин по 127.0.0.1:5173, фрейм по localhost:5173 — тот же
+ * воспроизводила: хозяин по 127.0.0.1:5175, фрейм по localhost:5175 — тот же
  * сервер, разные origin. Chromium такой фрейм не грузит вовсе:
  * ERR_BLOCKED_BY_LOCAL_NETWORK_ACCESS_CHECKS — запрос со страницы на 127.0.0.1
  * к localhost считается обращением в локальную сеть и блокируется до всякого
@@ -44,7 +44,7 @@ const OPEN_IN_MODULE = 'Открыть в модуле';
  * сама по себе — но её ось (доступ к top.document) из кода удалена в
  * process-map-6ap и больше ни на что не влияет.
  */
-const APP_ORIGIN = 'http://localhost:5173';
+const APP_ORIGIN = 'http://localhost:5175';
 const HOST_ORIGIN = APP_ORIGIN;
 const HOST_PATH = '/__e2e-sandbox-host.html';
 
@@ -106,7 +106,7 @@ async function readyOpenButton(frame: FrameLocator) {
   const dialog = frame.getByRole('dialog');
   await expect(dialog).toBeVisible();
   // Заголовок панели — доказательство, что deep-link разобран и открыт ИМЕННО
-  // тот узел. Без этой проверки диагностика при чужом dev-сервере на 5173
+  // тот узел. Без этой проверки диагностика при чужом dev-сервере на 5175
   // свелась бы к таймауту в пустоту.
   await expect(dialog.getByRole('heading', { level: 2 })).toHaveText(NODE_LABEL);
 

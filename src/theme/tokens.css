@@ -431,7 +431,7 @@
   --pm-data-node-height: 56px;
 
   /* DetailNode — подробность под шагом (process-map-9mn.32). Размер
-     временный, итог по макету — process-map-9mn.26. */
+     подтверждён измерением самой длинной коробки L2 — process-map-9mn.26. */
   --pm-detail-node-width: 318px;
   --pm-detail-node-height: 170px;
 

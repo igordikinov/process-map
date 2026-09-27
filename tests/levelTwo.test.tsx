@@ -270,9 +270,10 @@ describe('Breadcrumbs: экран этапа (3 уровня, уровень 3)'
   });
 
   /*
-   * ЭТАП БЕЗ МОДУЛЯ В STORE (deep-link ?stage=N без ?module=). store владельца
-   * не знает, и голый back() увёл бы на корень — подпись «Назад к этапам
-   * модуля» стала бы неправдой. Крошки знают владельца из документа.
+   * ЭТАП БЕЗ МОДУЛЯ В STORE (прямой navigateToStage(id); deep-link с
+   * process-map-9mn.18 владельца передаёт сам). store владельца не знает, и
+   * голый back() увёл бы на корень — подпись «Назад к этапам модуля» стала бы
+   * неправдой. Крошки знают владельца из документа.
    */
   it('«Назад» ведёт к этапам модуля-владельца и тогда, когда модуля нет в store', () => {
     useProcessStore.getState().navigateToStage(STAGE_4.id);
@@ -468,20 +469,29 @@ describe('экран этапа трёхуровневой карты в при�
   });
 
   /*
-   * DEEP-LINK ?stage=N БЕЗ ?module=. useDeepLink зовёт navigateToStage(id) без
-   * модуля, и store приходит на уровень 3 с currentModuleId === null. Это
-   * единственный путь, на котором «модуль из store» и «модуль-владелец по
-   * документу» расходятся, поэтому только он проверяет, ОТКУДА StageDetail
-   * берёт модуль для крошек (moduleOfStage). Возьми он модуль из store —
-   * крошки ушли бы в двухуровневую форму: корень-<span>, «Этап 4» вместо
-   * «Этап 2 из 3», ни звена модуля, «Назад к обзору процесса» с back() на
-   * корень вместо этапов модуля-владельца.
+   * ЭТАП БЕЗ МОДУЛЯ В STORE. Состояние законно (второй аргумент navigateToStage
+   * необязателен, шапка useProcessStore.ts), и это единственное состояние, в
+   * котором «модуль из store» и «модуль-владелец по документу» расходятся,
+   * поэтому только оно проверяет, ОТКУДА StageDetail берёт модуль для крошек
+   * (moduleOfStage). Возьми он модуль из store — крошки ушли бы в
+   * двухуровневую форму: корень-<span>, «Этап 4» вместо «Этап 2 из 3», ни
+   * звена модуля, «Назад к обзору процесса» с back() на корень вместо этапов
+   * модуля-владельца.
+   *
+   * Раньше сюда вёл deep-link ?stage=N без ?module=. С задачи
+   * process-map-9mn.18 useDeepLink передаёт store владельца этапа, и адрес в
+   * это состояние больше не приводит (deep-link — tests/deepLinkModules.test.tsx).
+   * Поэтому состояние задаётся прямым вызовом store: защита крошек от него
+   * нужна по-прежнему, а путь, которым оно достигается, предметом проверки
+   * здесь не является.
    */
-  describe('deep-link ?stage=N без модуля', () => {
-    async function openStage4ByLink() {
-      window.history.replaceState({}, '', `/?stage=${STAGE_4.number}`);
+  describe('этап без модуля в store', () => {
+    async function openStage4WithoutModule() {
       const result = await renderApp();
-      // Предпосылка: адрес привёл на этап, а модуля в store нет.
+      await act(async () => {
+        useProcessStore.getState().navigateToStage(STAGE_4.id);
+      });
+      // Предпосылка: открыт этап, а модуля в store нет.
       expect(useProcessStore.getState()).toMatchObject({
         currentModuleId: null,
         currentStageId: STAGE_4.id,
@@ -490,7 +500,7 @@ describe('экран этапа трёхуровневой карты в при�
     }
 
     it('крошки на три звена по модулю-владельцу: «Этап 2 из 3», подпись уровня 3', async () => {
-      const { container } = await openStage4ByLink();
+      const { container } = await openStage4WithoutModule();
 
       expect(
         screen.getByRole('region', { name: ru.stageDetail.moduleStageCanvasLabel }),
@@ -504,7 +514,7 @@ describe('экран этапа трёхуровневой карты в при�
     });
 
     it('«Назад к этапам модуля» — на экран модуля-владельца, а не на корень', async () => {
-      await openStage4ByLink();
+      await openStage4WithoutModule();
       await click(screen.getByRole('button', { name: ru.breadcrumbs.backToModuleStages }));
 
       expect(
@@ -517,7 +527,7 @@ describe('экран этапа трёхуровневой карты в при�
     });
 
     it('звено модуля — на экран модуля-владельца', async () => {
-      await openStage4ByLink();
+      await openStage4WithoutModule();
       await click(screen.getByRole('button', { name: SUPPLY.shortTitle }));
 
       expect(

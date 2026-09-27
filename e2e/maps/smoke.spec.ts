@@ -14,13 +14,18 @@ import { expectationsFor } from './expected';
 
 const VIEWPORT = { width: 1280, height: 720 };
 
-test.beforeEach(async ({ page }) => {
+test.beforeEach(async ({ page }, testInfo) => {
   await page.setViewportSize(VIEWPORT);
   await page.goto('/');
-  await page.waitForSelector('.react-flow__node-stage');
+  await page.waitForSelector(
+    expectationsFor(testInfo.project.name).levels === 3
+      ? '.react-flow__node-module'
+      : '.react-flow__node-stage',
+  );
 });
 
-test('обзор: шапка, четыре карточки этапов, дата', async ({ page }) => {
+test('обзор: шапка, карточки и дата', async ({ page }, testInfo) => {
+  const three = expectationsFor(testInfo.project.name).levels === 3;
   // Здесь же ловится дефект относительных путей к ассетам (base: './'): при
   // нерабочем base бандл не загрузился бы и полотно осталось бы пустым.
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
@@ -31,9 +36,11 @@ test('обзор: шапка, четыре карточки этапов, дат
    * у неё непустой, поэтому Playwright считает её видимой, и getByText без
    * уточнения резолвился в два элемента.
    */
-  await expect(page.getByText('4 этапа', { exact: true })).toBeVisible();
+  await expect(page.getByText(three ? '5 модулей' : '4 этапа', { exact: true })).toBeVisible();
   await expect(page.getByText(/^Обновлено /)).toBeVisible();
-  await expect(page.locator('.react-flow__node-stage')).toHaveCount(4);
+  await expect(
+    page.locator(three ? '.react-flow__node-module' : '.react-flow__node-stage'),
+  ).toHaveCount(three ? 5 : 4);
 });
 
 test('заголовок вкладки — заголовок этой карты', async ({ page }, testInfo) => {
@@ -44,6 +51,11 @@ test('заголовок вкладки — заголовок этой карт
 });
 
 test('поток этапов обведён рамкой с подписью своего модуля', async ({ page }, testInfo) => {
+  if (expectationsFor(testInfo.project.name).levels === 3) {
+    await expect(page.locator('.react-flow__node-flowLane')).toHaveCount(0);
+    await expect(page.locator('.react-flow__node-moduleLane')).toContainText('FP&A');
+    return;
+  }
   const frame = page.locator('.react-flow__node-flowLane');
   await expect(frame).toHaveCount(1);
   await expect(frame).toHaveText(expectationsFor(testInfo.project.name).moduleLabel);
@@ -51,6 +63,8 @@ test('поток этапов обведён рамкой с подписью с
 
 test('переход на уровень 2 и возврат кнопкой «Назад»', async ({ page }, testInfo) => {
   const expectations = expectationsFor(testInfo.project.name);
+  if (expectations.levels === 3)
+    await page.locator('.react-flow__node-module button').first().click();
   const card = page.locator('.react-flow__node-stage button').first();
   await expect(card).toHaveAttribute('aria-label', /^Этап \d: /);
 
@@ -78,6 +92,10 @@ test('переход на уровень 2 и возврат кнопкой «Н
    * требует «Модуль MRP» и мутация «вернуть константу» её краснит.
    */
   await expect(page.getByText(expectations.moduleLabel)).toBeVisible();
-  await page.getByRole('button', { name: 'Назад к обзору процесса' }).click();
+  await page
+    .getByRole('button', {
+      name: expectations.levels === 3 ? 'Назад к этапам модуля' : 'Назад к обзору процесса',
+    })
+    .click();
   await expect(page.locator('.react-flow__node-stage')).toHaveCount(4);
 });

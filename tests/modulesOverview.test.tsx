@@ -19,10 +19,12 @@
 //     перенос — на самом компоненте ребра (tests/artifactEdge.test.tsx).
 //     САМИ хэндлы при этом рисуются (разметка без геометрии), и их сторона
 //     проверяется здесь — по атрибутам, которые React Flow ставит без layout.
+import { readFileSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import App from '../src/App';
 import { Legend } from '../src/components/Legend';
+import headerStyles from '../src/components/Overview/OverviewHeader.module.css';
 import { MODULE_HANDLE } from '../src/components/nodes/ModuleNode';
 import { clearImportedMap, setImportedMap } from '../src/data/activeMap';
 import { loadBaseProcessMap } from '../src/data/loader';
@@ -31,10 +33,16 @@ import { listVersions, resetSelectedVersion } from '../src/data/versions';
 import { refreshProcessMap } from '../src/hooks/useProcessMap';
 import { ru } from '../src/i18n/ru';
 import { createInitialState, useProcessStore } from '../src/store/useProcessStore';
-import { MODULE_NODE_SIZE, MODULE_NODE_SIZE_COMPACT } from '../src/theme/sizes';
+import { MODULE_NODE_SIZE, MODULE_NODE_SIZE_COMPACT, SIZE_TOKENS } from '../src/theme/sizes';
 import { THREE_LEVEL_PAGE_ALT_ID, THREE_LEVEL_PAGE_DEFAULT_ID } from './fixtures/pageMocks';
 import { buildSampleProcessMap } from './fixtures/sample-process';
-import { LANE_FPA, MODULE_SUPPLY, buildThreeLevelProcessMap } from './fixtures/three-level-process';
+import {
+  LANE_FPA,
+  MODULE_SUPPLY,
+  SYSTEM_OUTSIDE_IO,
+  SYSTEM_OUTSIDE_IO_2,
+  buildThreeLevelProcessMap,
+} from './fixtures/three-level-process';
 
 // Порядок и форма — дословно из шапки tests/fixtures/pageMocks.ts.
 vi.mock('@map/process.json', async () =>
@@ -286,25 +294,33 @@ describe('защита «модуль не найден»', () => {
   /*
    * ЗАЩИТА СТОИТ ТОЛЬКО НА ЭКРАНЕ 'stages'. Этап без модуля — законное
    * состояние (комментарий к navigateToStage в useProcessStore.ts: «этап
-   * задан, модуль нет»): в него ведёт deep-link ?stage=N, useDeepLink зовёт
-   * navigateToStage(stageId) без модуля.
+   * задан, модуль нет»): store принимает navigateToStage(stageId) без модуля.
    * Защита, расширенная на всякий экран кроме корня (`screen !== 'modules'`),
    * выбрасывала бы такого читателя на корень — и ни один тест выше этого не
    * замечал (ревью 9mn.16).
+   *
+   * Раньше в это состояние вёл deep-link ?stage=N. С задачи process-map-9mn.18
+   * useDeepLink передаёт store владельца этапа, и состояние задаётся прямым
+   * вызовом store: через адрес модуль в store уже был бы, и мутант защиты
+   * этим тестом не ловился бы.
    */
-  it('deep-link ?stage=N без модуля защита не трогает: открыт этап, модуль не задан', async () => {
+  it('этап без модуля в store защита не трогает: открыт этап, модуль не задан', async () => {
     const stage = THREE.stages.find((candidate) => candidate.number === 2);
-    expect(stage).toBeDefined();
-    window.history.replaceState({}, '', '/?stage=2');
+    if (stage === undefined) {
+      throw new Error('В трёхуровневой фикстуре нет этапа 2');
+    }
 
     const { container } = await renderApp();
+    await act(async () => {
+      useProcessStore.getState().navigateToStage(stage.id);
+    });
 
-    expect(useProcessStore.getState().currentStageId).toBe(stage?.id);
+    expect(useProcessStore.getState().currentStageId).toBe(stage.id);
     expect(useProcessStore.getState().currentModuleId).toBeNull();
     // Экран шагов именно этого этапа, а не корень: узел этапа 2 на полотне.
     // По id узла, а не по подписи полотна — подпись экрана шагов трёхуровневой
     // карты ещё поменяется (ru.stageDetail.moduleStageCanvasLabel).
-    expect(container.querySelector(`[data-id="${stage?.nodes[0]?.id ?? ''}"]`)).not.toBeNull();
+    expect(container.querySelector(`[data-id="${stage.nodes[0]?.id ?? ''}"]`)).not.toBeNull();
     expect(screen.queryByRole('region', { name: ru.overview.allModulesCanvasLabel })).toBeNull();
   });
 });
@@ -363,13 +379,12 @@ function setElementSize(element: HTMLElement, width: number, height: number): vo
 }
 
 /*
- * КОМПАКТНЫЙ РЕЖИМ ЭКРАНА (SPEC §4.5). Доводка компактного уровня 1 — задача
- * process-map-9mn.19; здесь экран обязан лишь рисоваться. Но «рисоваться» —
- * это ещё и «получить режим»: граф проверен с compact=true отдельно
- * (tests/modulesGraph.test.ts), а экран, звавший сборку с жёстким false,
- * проходил все тесты (ревью 9mn.16). Поэтому фрейм опускается ниже порога
- * настоящим путём — через useFrameSize, — и проверяется, что режим доехал и до
- * карточек, и до шапки с легендой.
+ * КОМПАКТНЫЙ РЕЖИМ ЭКРАНА (SPEC §4.5). Раскладка компактного уровня 1
+ * (process-map-9mn.19) проверена на графе (tests/modulesGraph.test.ts), но
+ * граф — ещё не экран: экран, звавший сборку с жёстким false, проходил все
+ * тесты графа (ревью 9mn.16). Поэтому фрейм опускается ниже порога настоящим
+ * путём — через useFrameSize, — и проверяется, что режим доехал до карточек,
+ * шапки и легенды (первый тест) и до строки-бейджа и полосы FP&A (второй).
  */
 describe('компактный режим экрана модулей', () => {
   const originalResizeObserver = globalThis.ResizeObserver;
@@ -424,6 +439,85 @@ describe('компактный режим экрана модулей', () => {
     expect(screen.getByText(ru.overview.modulesBadge(THREE.modules.length))).toBeInTheDocument();
     // Легенда свёрнута в кнопку — режим доехал и до неё.
     expect(screen.getByRole('button', { name: ru.legend.expand })).toBeInTheDocument();
+  });
+
+  /*
+   * ДОВОДКА КОМПАКТНОГО УРОВНЯ 1 (process-map-9mn.19): режим доезжает не
+   * только до карточек, но и до шапки, свимлейнов и полосы FP&A. Раскладка
+   * проверена на графе (tests/modulesGraph.test.ts); здесь — то, чего граф не
+   * видит: что экран регистрирует узел строки-бейджа (незарегистрированный тип
+   * React Flow молча рисует узлом по умолчанию, и строка исчезла бы с полотна,
+   * оставив пустую рамку) и что шапка получает компактный класс.
+   *
+   * Высоту шапки в пикселях jsdom не посчитает (layout нет), поэтому цепочка
+   * проверяется по звеньям: класс на шапке → правило этого класса задаёт
+   * высоту токеном --pm-header-height-compact → токен равен 44 (SIZE_TOKENS,
+   * его значение в tokens.css сторожит tests/sizes.test.ts). В браузере
+   * 44 px шапки меряет e2e/compact.spec.ts.
+   */
+  it('низкий фрейм: шапка 44 px, строка-бейдж вместо свимлейнов, тонкая полоса с тем же заголовком', async () => {
+    const { container } = await renderApp();
+    const root = screen.getByRole('region', {
+      name: ru.overview.allModulesCanvasLabel,
+    }).parentElement;
+    if (root === null) {
+      throw new Error('У полотна модулей нет корневого элемента экрана');
+    }
+    const header = () => container.querySelector('header');
+    const band = () => container.querySelector<HTMLElement>(`[data-id="${LANE_FPA}"]`);
+    const bandTitle = THREE.lanes[0]?.title ?? '';
+    expect(bandTitle, 'у фикстуры есть полоса FP&A с заголовком').not.toBe('');
+
+    // До подмены — обычный режим: свимлейны на месте, строки-бейджа нет.
+    expect(header()).not.toHaveClass(headerStyles.compact as string);
+    expect(container.querySelectorAll('.react-flow__node-lane')).toHaveLength(2);
+    expect(container.querySelectorAll('.react-flow__node-systemsBadge')).toHaveLength(0);
+    const normalBandHeight = parseFloat(band()?.style.height ?? '');
+    expect(normalBandHeight).toBeGreaterThan(0);
+
+    const observers = ControllableResizeObserver.instances.filter((instance) =>
+      instance.targets.has(root),
+    );
+    expect(observers.length, 'useFrameSize обязан наблюдать корень экрана').toBeGreaterThan(0);
+    setElementSize(root, 1024, 600);
+    act(() => {
+      for (const observer of observers) {
+        observer.emit(root);
+      }
+    });
+
+    // Шапка компактная — звенья цепочки из комментария выше.
+    expect(header()).toHaveClass(headerStyles.compact as string);
+    const headerCss = readFileSync('src/components/Overview/OverviewHeader.module.css', 'utf8');
+    expect(/\.compact\s*\{([^}]*)\}/.exec(headerCss)?.[1]).toMatch(
+      /height:\s*var\(--pm-header-height-compact\)/,
+    );
+    expect(SIZE_TOKENS['--pm-header-height-compact']).toBe(44);
+
+    // Свимлейны свёрнуты в строку-бейдж с кодами обеих систем.
+    expect(container.querySelectorAll('.react-flow__node-lane')).toHaveLength(0);
+    const badge = container.querySelector<HTMLElement>('.react-flow__node-systemsBadge');
+    if (badge === null) {
+      throw new Error('Строки-бейджа на полотне нет: узел systemsBadge не зарегистрирован?');
+    }
+    // По атрибутам, а не запросом по роли, — и это не поблажка: размера у
+    // строки в графе нет (она меряется по содержимому), и React Flow держит
+    // такой узел visibility: hidden до первого замера. В jsdom замера не
+    // бывает никогда, а у скрытого узла Testing Library не вычисляет имени
+    // даже с hidden: true. В браузере строку видит e2e/compact.spec.ts на
+    // обзоре этапов — тем же узлом SystemsBadge.
+    const group = badge.querySelector('[role="group"]');
+    expect(group).toHaveAttribute('aria-label', ru.overview.compactSystemsAriaLabel);
+    expect(group?.textContent).toContain(SYSTEM_OUTSIDE_IO);
+    expect(group?.textContent).toContain(SYSTEM_OUTSIDE_IO_2);
+
+    // Полоса на месте, с тем же заголовком и тоньше обычной.
+    const compactBand = band();
+    if (compactBand === null) {
+      throw new Error('Полоса FP&A пропала в компактном режиме');
+    }
+    expect(within(compactBand).getByText(bandTitle)).toBeInTheDocument();
+    expect(parseFloat(compactBand.style.height)).toBeLessThan(normalBandHeight);
   });
 });
 

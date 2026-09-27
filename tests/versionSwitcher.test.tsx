@@ -82,7 +82,7 @@ describe('переключатель версий: разметка', () => {
 
     const buttons = within(group()).getAllByRole('button');
     expect(buttons.map((button) => button.textContent)).toEqual([
-      ru.overview.versionLabels['snp'],
+      'E2E-процесс планирования поставок',
       ru.overview.versionLabels['inplan-model'],
     ]);
     expect(buttons.filter((button) => button.getAttribute('aria-pressed') === 'true')).toHaveLength(
@@ -109,9 +109,9 @@ describe('переключатель версий: разметка', () => {
   it('подсказка называет версию и число этапов', () => {
     renderHeader();
 
-    expect(within(group()).getByRole('button', { name: 'Полная модель' })).toHaveAttribute(
+    expect(within(group()).getByRole('button', { name: 'Полная модель (BPMN)' })).toHaveAttribute(
       'title',
-      ru.overview.versionHint('Полная модель', ru.overview.stagesCount(10)),
+      ru.overview.versionHint('Полная модель (BPMN)', ru.overview.stagesCount(10)),
     );
   });
 
@@ -119,7 +119,7 @@ describe('переключатель версий: разметка', () => {
     const onSelectVersion = vi.fn();
     renderHeader({ onSelectVersion });
 
-    fireEvent.click(within(group()).getByRole('button', { name: 'Полная модель' }));
+    fireEvent.click(within(group()).getByRole('button', { name: 'Полная модель (BPMN)' }));
 
     expect(onSelectVersion).toHaveBeenCalledWith('inplan-model');
   });
@@ -132,7 +132,7 @@ describe('переключатель версий: разметка', () => {
     renderHeader({ selectedVersionId: 'inplan-model' });
 
     expect(screen.getByRole('status')).toHaveTextContent(
-      ru.overview.versionAnnouncement('Полная модель', ru.overview.stagesCount(10)),
+      ru.overview.versionAnnouncement('Полная модель (BPMN)', ru.overview.stagesCount(10)),
     );
   });
 

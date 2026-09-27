@@ -162,8 +162,9 @@ export function StageDetail() {
   return (
     <div className={compact ? `${styles.root} ${styles.compact}` : styles.root} ref={rootRef}>
       {/* module — ВЛАДЕЛЕЦ этапа по документу (moduleOfStage), а не
-          currentModuleId из store: этап без модуля в store законен (deep-link
-          ?stage=N без ?module=), а документ владельца знает всегда. На
+          currentModuleId из store: этап без модуля в store законен (прямой
+          navigateToStage(id); deep-link владельца передаёт сам,
+          process-map-9mn.18), а документ владельца знает всегда. На
           двухуровневой карте — undefined, и крошки побайтово прежние
           (process-map-9mn.17). */}
       <Breadcrumbs
@@ -188,7 +189,7 @@ export function StageDetail() {
             store — см. Toolbar.tsx) на миг унаследовал бы масштаб/сдвиг
             предыдущего этапа, пока StartViewport его не перезапишет. Раскладки
             отличаются в разы (3942×1088 у этапа 2 против 3528×296 у этапа 1). */}
-        <ReactFlowProvider key={stage.id}>
+        <ReactFlowProvider key={`${map.id}:${stage.id}`}>
           <EdgeMarkers>
             <ReactFlow
               nodes={graph.nodes}

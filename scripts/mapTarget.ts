@@ -4,7 +4,7 @@
 // (src/data/<id>/process.json). Выбор делается на сборке, а не в рантайме:
 // роутера и переключателя карт в интерфейсе нет (решение владельца), в бандл
 // попадает ровно один JSON, а разные карты раздаются с разных адресов
-// (корень — snp, подкаталог /mrp/ — mrp).
+// (корень — inplan, подкаталоги /snp/ и /mrp/ — отдельные карты).
 //
 // ПОЧЕМУ ЗДЕСЬ, А НЕ В КАЖДОМ КОНФИГЕ. vitest.config.ts — отдельный файл, и
 // Vitest при его наличии vite.config.ts НЕ ЧИТАЕТ ВОВСЕ (заменяет, а не
@@ -23,7 +23,7 @@ import { fileURLToPath } from 'node:url';
  * реестр MAPS в scripts/import-pptx.py (там же презентации и профили разбора);
  * их совпадение сторожит tests/mapRegistry.test.ts.
  */
-export const MAP_IDS = ['snp', 'mrp', 'inplan'] as const;
+export const MAP_IDS = ['inplan', 'snp', 'mrp'] as const;
 export type MapId = (typeof MAP_IDS)[number];
 
 /**
@@ -42,7 +42,7 @@ export type BpmnMapId = (typeof BPMN_MAP_IDS)[number];
 export type DataMapId = MapId | BpmnMapId;
 
 /** Карта, которая раздаётся из корня сайта и собирается без флагов. */
-export const DEFAULT_MAP: MapId = 'snp';
+export const DEFAULT_MAP: MapId = 'inplan';
 
 /**
  * Страница, на которой идут ЮНИТ-ТЕСТЫ (vitest.config.ts), — snp, и навсегда
@@ -69,8 +69,8 @@ export const DEFAULT_MAP: MapId = 'snp';
  * Другие страницы юнит-тесты не проверяют и не должны. Каждую собираемую
  * страницу проверяет e2e на её собственной сборке (свой проект Playwright и
  * свой сервер с её MAP, playwright.config.ts), но НЕ одинаково полно: страницу
- * по умолчанию — весь корпус e2e/, остальные — только смоук
- * e2e/maps/smoke.spec.ts. Требования к ДАННЫМ каждой карты, а не только snp,
+ * SNP — прежний корпус e2e/, In.Plan — модули и версии, MRP — смоук;
+ * общий e2e/maps/smoke.spec.ts — все три. Требования к ДАННЫМ каждой карты, а не только snp,
  * живут в tests/mapContract.test.ts: он читает все src/data/<id>/process.json
  * с диска, мимо алиасов.
  *
@@ -180,7 +180,7 @@ export function mapJsonPath(id: DataMapId): string {
  * версией и будет доступна читателю переключателем. Нет записи — нет второй
  * версии, и переключатель на этом адресе не рендерится вовсе.
  */
-export const MAP_ALT_VERSION: Partial<Record<MapId, BpmnMapId>> = { snp: 'inplan-model' };
+export const MAP_ALT_VERSION: Partial<Record<MapId, BpmnMapId>> = { inplan: 'inplan-model' };
 
 /**
  * Алиасы данных для resolve.alias в vite.config.ts И в vitest.config.ts.

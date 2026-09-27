@@ -58,8 +58,9 @@ export const MODULE_NODE_SIZE: NodeSize = {
 
 /**
  * Карточка модуля в компактном режиме (SPEC §4.5). Тот же довод: 228×200, как у
- * компактной карточки этапа. Доводку компактного уровня 1 (строка-бейдж,
- * тонкая полоса) делает задача process-map-9mn.19.
+ * компактной карточки этапа. Остальная раскладка компактного уровня 1
+ * (строка-бейдж вместо свимлейнов, тонкая полоса FP&A) — в modulesGraph.ts
+ * (process-map-9mn.19): это координаты, а не размер карточки.
  */
 export const MODULE_NODE_SIZE_COMPACT: NodeSize = {
   width: STAGE_NODE_SIZE_COMPACT.width,
@@ -80,10 +81,40 @@ export const MODULE_NODE_SIZE_COMPACT: NodeSize = {
  * на знак, плюс подложка по 4 px с каждой стороны и запас. box-sizing в
  * проекте border-box (global.css), поэтому подложка входит в эту ширину. Слово
  * длиннее ширины не вылезает за подложку, а рвётся посреди слова
- * (overflow-wrap в EdgeLabel.module.css). Замер на реальной карте — задача
- * process-map-9mn.19 (визуальная доводка уровня 1).
+ * (overflow-wrap в EdgeLabel.module.css). Замер на реальной карте ждёт её
+ * данных: process-map-9mn.19 довела геометрию уровня 1 (высоту подписи ниже,
+ * отступ ребра, компактный режим), но настоящих артефактов у неё не было.
  */
 export const EDGE_LABEL_WRAP_MAX_WIDTH = 104;
+
+/**
+ * Высота строки подписи ребра — токен --pm-line-height-15, которым
+ * EdgeLabel.module.css задаёт line-height подписи (process-map-9mn.19).
+ *
+ * Число здесь по тому же доводу, что ширина выше: от высоты подписи зависит
+ * раскладка уровня 1. Ребро, ведомое СНИЗУ карточек (обратная связь, связь
+ * через модуль), кладёт подпись на свой горизонтальный отрезок, и насколько
+ * этот отрезок опустить, чтобы подпись не легла на карточки, решает её высота
+ * (ARTIFACT_EDGE_OFFSET в components/edges/ArtifactEdge/artifactGeometry.ts).
+ * Вертикальной подложки у подписи нет — только горизонтальная, — поэтому
+ * высота подписи ровно строки. Совпадение с CSS сторожат tests/sizes.test.ts
+ * (SIZE_TOKENS ниже) и tests/artifactLabelGeometry.test.ts (что подпись берёт
+ * именно этот токен и не добавляет к строкам вертикальной подложки).
+ */
+export const EDGE_LABEL_LINE_HEIGHT = 15;
+
+/**
+ * Сколько строк переносимой подписи-артефакта раскладка уровня 1 обязана
+ * уместить между карточками и полосой FP&A.
+ *
+ * Это БЮДЖЕТ, а не предел: подпись не клампится (многоточие съело бы
+ * артефакт, см. EdgeLabel wrap), и четвёртая строка просто легла бы на
+ * соседнее. Три — столько занимает самый длинный известный артефакт,
+ * «Итоговый неограниченный прогноз», при ширине EDGE_LABEL_WRAP_MAX_WIDTH.
+ * Появится длиннее — растёт это число, а вслед за ним отступ ребра и зазор
+ * под карточками; раскладка считается от него, а не от литералов.
+ */
+export const EDGE_LABEL_WRAP_MAX_LINES = 3;
 
 /** Карточка внешней системы в свимлейне уровня 1 (макет A1). */
 export const IO_NODE_SIZE: NodeSize = { width: 200, height: 40 };
@@ -101,16 +132,11 @@ export const DATA_NODE_SIZE: NodeSize = { width: 200, height: 56 };
  * DetailNode — подробность под шагом, уровень 2 (NodeType 'detail',
  * process-map-9mn.32).
  *
- * РАЗМЕР ВРЕМЕННЫЙ. Ширина — ширина карточки шага: подробность стоит под
- * своим шагом и шире него быть не должна. Поэтому она ВЫВЕДЕНА из
- * STEP_NODE_SIZE, а не переписана числом: литерал 318 здесь молча разошёлся
- * бы с шагом при первой же правке его ширины. Высота 170 — запас под
- * несколько абзацев без обрезки (текст не клампится, в отличие от шага).
- *
- * Итоговые числа по макету назначит задача process-map-9mn.26. Раскладка
- * (stageLayout.ts, stageGraph.ts) берёт их отсюда сама, а токены
- * --pm-detail-node-* в tokens.css — это вторая запись тех же чисел, и править
- * её нужно руками: расхождение ловит tests/sizes.test.ts (SIZE_TOKENS).
+ * Ширина совпадает с шагом. Высота 170 подтверждена измерением Chromium
+ * с Open Sans 12.5/15: самая длинная коробка L2 (слайд 9 [18], 7 абзацев)
+ * занимает 136 px текста + 24 px отступов + 2 px рамки; запас 8 px.
+ * Подробность размещается под хозяином с зазором 24 px (9mn.26).
+ * Токены --pm-detail-node-* сверяются с этой константой в tests/sizes.test.ts.
  */
 export const DETAIL_NODE_SIZE: NodeSize = { width: STEP_NODE_SIZE.width, height: 170 };
 
@@ -136,6 +162,7 @@ export const SIZE_TOKENS: Readonly<Record<string, number>> = {
   '--pm-module-node-width-compact': MODULE_NODE_SIZE_COMPACT.width,
   '--pm-module-node-height-compact': MODULE_NODE_SIZE_COMPACT.height,
   '--pm-edge-label-wrap-max-width': EDGE_LABEL_WRAP_MAX_WIDTH,
+  '--pm-line-height-15': EDGE_LABEL_LINE_HEIGHT,
   '--pm-io-node-width': IO_NODE_SIZE.width,
   '--pm-io-node-height': IO_NODE_SIZE.height,
   '--pm-step-node-width': STEP_NODE_SIZE.width,

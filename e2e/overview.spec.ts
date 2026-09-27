@@ -145,42 +145,11 @@ test('настоящий клик мышью по карточке уводит 
   await expect(page.getByText('Модуль SNP')).toBeVisible();
 });
 
-/*
- * ПОРЯДОК ОБХОДА КЛАВИАТУРОЙ ЗАКРЕПЛЯЕТСЯ ПОШАГОВО (process-map-0c5.10).
- *
- * Раньше тест звался «до первой карточки этапа один Tab» и утверждал только
- * итог. Появление переключателя версий в шапке сдвинуло обход на две
- * остановки — и это правильно: контрол уровня страницы законно предшествует
- * содержимому. Но старая форма теста ловила бы такой сдвиг лишь как «стало не
- * то», не говоря, что именно вклинилось.
- *
- * Поэтому проверяется КАЖДЫЙ шаг поимённо: следующая кнопка, добавленная в
- * шапку, обязана явиться в этом списке, а не сдвинуть обход молча.
- */
-test('обход Tab: сначала переключатель версий, потом карточка этапа 1', async ({ page }) => {
+test('SNP: переключателя нет, первый Tab ведёт на этап 1', async ({ page }) => {
+  await expect(page.getByRole('group', { name: 'Версия карты' })).toHaveCount(0);
   await page.locator('body').click({ position: { x: 2, y: 2 } });
-
-  const stops: { tag: string | null; label: string | null; text: string | null }[] = [];
-  for (let index = 0; index < 3; index += 1) {
-    await page.keyboard.press('Tab');
-    stops.push(
-      await page.evaluate(() => {
-        const el = document.activeElement;
-        return {
-          tag: el?.tagName ?? null,
-          label: el?.getAttribute('aria-label') ?? null,
-          text: el?.textContent?.trim() ?? null,
-        };
-      }),
-    );
-  }
-
-  expect(stops[0]?.tag).toBe('BUTTON');
-  expect(stops[0]?.text).toBe('Основные этапы');
-  expect(stops[1]?.tag).toBe('BUTTON');
-  expect(stops[1]?.text).toBe('Полная модель');
-  expect(stops[2]?.tag).toBe('BUTTON');
-  expect(stops[2]?.label).toMatch(/^Этап 1: /);
+  await page.keyboard.press('Tab');
+  await expect(page.locator(':focus')).toHaveAttribute('aria-label', /^Этап 1: /);
 });
 
 test('узлы не перетаскиваются (CLAUDE.md, v1)', async ({ page }) => {

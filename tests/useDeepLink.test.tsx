@@ -115,6 +115,48 @@ describe('useDeepLink — устойчивость', () => {
     expect(useProcessStore.getState().currentStageId).toBeNull();
     expect(useProcessStore.getState().selectedNodeId).toBeNull();
   });
+
+  /*
+   * ?module= НА ДВУХУРОВНЕВОЙ КАРТЕ (process-map-9mn.18). Модулей у snp нет, и
+   * параметр не значит ничего: не читается (в store модуля нет) и стирается из
+   * адреса. Адреса snp обязаны остаться побайтово прежними — по тому же
+   * правилу, по которому не пишется версия по умолчанию, — поэтому адрес
+   * сверяется ЦЕЛИКОМ, а не по одному ключу.
+   *
+   * Вторая половина — модуль, залипший в store (подмена карты): и он в адрес
+   * двухуровневой карты не попадает. Без неё запись модуля «из store, если он
+   * есть» проходила бы первую половину: после `?module=dp` модуля в store нет.
+   * Проверяется НА ОБОИХ уровнях, потому что модуль для адреса на них берётся
+   * из разных мест (moduleForAddress в useDeepLink.ts): на детализации — из
+   * документа по этапу, на обзоре — из store, но только существующий в
+   * документе. Обзор здесь — возврат через back(): он снимает этап, а модуль
+   * оставляет, и залипший 'dp' доходит до записи адреса как есть (защиты
+   * «модуль не найден» на двухуровневой карте нет — App.tsx).
+   */
+  it('?module=dp на двухуровневой карте игнорируется и стирается из адреса', () => {
+    setUrl('?module=dp');
+    render(<App />);
+
+    expect(useProcessStore.getState().currentModuleId).toBeNull();
+    expect(screen.getByLabelText(ru.overview.canvasLabel)).toBeInTheDocument();
+    expect(window.location.search).toBe('');
+
+    act(() => {
+      useProcessStore.setState({ currentModuleId: 'dp' });
+      useProcessStore.getState().navigateToStage(stage2.id);
+    });
+
+    expect(window.location.search).toBe(`?stage=${stage2.number}`);
+
+    act(() => {
+      useProcessStore.getState().back();
+    });
+
+    // Предпосылка: модуль в store по-прежнему есть, на экране — обзор.
+    expect(useProcessStore.getState().currentModuleId).toBe('dp');
+    expect(screen.getByLabelText(ru.overview.canvasLabel)).toBeInTheDocument();
+    expect(window.location.search).toBe('');
+  });
 });
 
 describe('useDeepLink — синхронизация URL', () => {
