@@ -51,7 +51,7 @@ export function useFitsWithoutClamp(
     };
     measure();
 
-    // Шрифты подключены с font-display: swap (theme/fonts.css): пока Open Sans
+    // Шрифты подключены с font-display: swap (theme/fonts.css): пока Manrope
     // грузится, текст свёрстан запасным шрифтом, и первое измерение относится
     // к нему. Панель, открытая сразу по deep-link (?node=…, SPEC §4.7), —
     // ровно этот случай: после подмены шрифта абзац, уместившийся в две

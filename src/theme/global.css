@@ -5,13 +5,10 @@
  * .material-icons, .secondary-section и т.п.), которые здесь не используются,
  * не перенесены.
  *
- * Шрифт: в ДС 'Open Sans' подключается через @import с fonts.googleapis.com
- * (tokens/fonts.css). В этой задаче CDN-импорт НЕ переносится — приложение
- * встраивается в iframe в In.Plan, где CSP может заблокировать внешний
- * запрос. Ограничиваемся системным фолбэком; self-host через
- * @fontsource/open-sans — задача process-map-j4x.
+ * Шрифт Manrope поставляется локально через fonts.css, фирменные токены —
+ * через brand.css. Встраивание в iframe не требует внешних запросов.
  *
- * Хардкод hex разрешён только в этом файле и в src/theme/tokens.css
+ * Цветовые значения задаются в src/theme/, включая фирменный слой brand.css
  * (см. исключение src/theme/** в eslint.config.js).
  */
 
@@ -52,6 +49,23 @@ button {
 input,
 textarea {
   font-family: inherit;
+}
+
+/* Внутренняя рамка видна и в сегментированных группах с overflow:hidden.
+   Специфичность сохраняет фокус поверх локальных hover-стилей компонентов. */
+#root button:focus-visible,
+#root a:focus-visible {
+  outline: var(--pm-control-focus-width) solid var(--scp-border-brand-default);
+  outline-offset: var(--pm-control-focus-offset);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
 }
 
 /* Скроллбар (WebKit) — из tokens/base.css, значения из --scp-scrollbar-* */

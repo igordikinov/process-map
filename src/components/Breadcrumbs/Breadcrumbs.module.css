@@ -63,6 +63,7 @@
 /* Кегль крошек в макете — 13px (замер артборда A2), а не 12px из шкалы ДС. */
 .crumbs {
   display: flex;
+  min-width: 0;
   align-items: center;
   color: var(--scp-color-neutral-500);
   font-size: var(--pm-font-size-13);
@@ -110,6 +111,7 @@
 }
 
 .crumbSeparator {
+  flex: none;
   color: var(--scp-color-neutral-300);
 }
 
@@ -145,6 +147,7 @@
 }
 
 .counter {
+  flex: none;
   color: var(--scp-content-secondary);
   font-size: var(--scp-font-sizes-12);
   white-space: nowrap;

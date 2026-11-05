@@ -51,7 +51,7 @@
   height: var(--pm-form-input-height);
   box-sizing: border-box;
   padding: 0 var(--pm-space-10);
-  border: 1px solid var(--scp-color-neutral-200);
+  border: 1px solid var(--scp-border-neutral-default);
   border-radius: var(--scp-radius-button);
   background: var(--scp-background-primary);
   color: var(--scp-content-primary);
@@ -65,6 +65,7 @@
 
 .input:focus {
   border-color: var(--scp-border-brand-default);
+  box-shadow: inset 0 0 0 1px var(--scp-border-brand-default);
   outline: none;
 }
 
@@ -73,6 +74,11 @@
 .inputInvalid,
 .inputInvalid:hover {
   border-color: var(--scp-border-error-default);
+}
+
+.inputInvalid:focus {
+  border-color: var(--scp-border-error-default);
+  box-shadow: inset 0 0 0 1px var(--scp-border-error-default);
 }
 
 .error {
@@ -128,16 +134,24 @@
   outline: none;
 }
 
+.buttonPrimary:active {
+  background: var(--scp-background-action-brand-primary-active);
+}
+
 .buttonSecondary {
-  border-color: var(--scp-color-neutral-200);
-  background: var(--scp-background-action-brand-secondary-default);
+  border-color: var(--scp-border-neutral-default);
+  background: var(--scp-background-primary);
   color: var(--scp-content-primary);
 }
 
 .buttonSecondary:hover,
 .buttonSecondary:focus-visible {
-  background: var(--scp-background-action-brand-secondary-hover);
+  background: var(--scp-background-action-neutral-secondary-default);
   outline: none;
+}
+
+.buttonSecondary:active {
+  background: var(--scp-background-action-neutral-secondary-active);
 }
 
 /* Удаление — текстовое действие в красном, а не третья равновесная кнопка:

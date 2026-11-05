@@ -89,6 +89,15 @@
   font-weight: var(--scp-font-weight-semi-bold);
 }
 
+.modeButton:active,
+.zoomButton:active {
+  background: var(--scp-background-action-neutral-secondary-active);
+}
+
+.modeActive:active {
+  background: var(--scp-background-action-brand-tertiary-active);
+}
+
 .toggle {
   display: flex;
   height: var(--pm-toolbar-control-size);
@@ -107,6 +116,10 @@
 .toggle:focus-visible {
   border-color: var(--scp-border-neutral-hover);
   outline: none;
+}
+
+.toggle:active {
+  background: var(--scp-background-action-neutral-secondary-active);
 }
 
 .switchTrack {

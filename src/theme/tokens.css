@@ -4,6 +4,7 @@
  * design/_ds/in-plan-design-system-.../tokens/{colors,typography,spacing,components}.css
  * (SPEC.md §5). Это перенос, а не переосмысление — не переименовывать,
  * не «улучшать» значения.
+ * Актуальные фирменные цвета и Manrope задаёт brand.css поверх этого слоя.
  *
  * Хардкод hex разрешён только в этом файле и в src/theme/global.css
  * (см. исключение src/theme/** в eslint.config.js).

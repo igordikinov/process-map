@@ -40,6 +40,10 @@
   outline: none;
 }
 
+.button:active {
+  background: var(--scp-background-action-neutral-secondary-active);
+}
+
 /* Настоящий <input type="file"> не показывается: его открывает кнопка
    «Импорт JSON». display:none не мешает ни programmatic click(), ни
    Playwright setInputFiles. */

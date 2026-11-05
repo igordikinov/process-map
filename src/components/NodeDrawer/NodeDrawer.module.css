@@ -225,3 +225,7 @@
   color: var(--scp-text-neutral-disable);
   cursor: default;
 }
+
+.buttonPrimary:active:not(:disabled) {
+  background: var(--scp-background-action-brand-primary-active);
+}
