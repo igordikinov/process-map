@@ -27,8 +27,7 @@
   fill: var(--pm-grid-dot);
 }
 
-/* Узлы не перетаскиваются (CLAUDE.md, v1) — курсор не должен обещать обратное;
-   кликабельны сами карточки, они <button>. */
+/* В просмотре кликабельны карточки; перемещение включается в редакторе. */
 .canvas :global(.react-flow__node) {
   cursor: default;
 }
@@ -42,6 +41,36 @@
   border: 0;
   background: transparent;
   opacity: 0;
+}
+
+.canvas[data-editing='true'] :global(.react-flow__handle) {
+  z-index: 2;
+  width: var(--scp-spacing-md);
+  height: var(--scp-spacing-md);
+  border: 1px solid var(--scp-content-constant);
+  background: var(--scp-accent-primary);
+  opacity: 1;
+  pointer-events: all;
+}
+
+.canvas[data-editing='true'] :global(.react-flow__node):not(:global(.react-flow__node-groupBox)) {
+  cursor: grab;
+}
+
+.canvas[data-editing='true'] :global(.pm-group-handle) {
+  padding: 0;
+  background: transparent;
+  cursor: grab;
+  text-align: left;
+}
+
+.canvas :global(.react-flow__edge.pm-editor-selected .react-flow__edge-path) {
+  stroke: var(--scp-accent-primary);
+  stroke-width: 3;
+}
+
+.canvas :global(.react-flow__node-groupBox.pm-editor-selected) {
+  outline: 2px solid var(--scp-accent-primary);
 }
 
 /* Контейнеры групп и колонок лежат под своими узлами. */

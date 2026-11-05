@@ -59,6 +59,35 @@ textarea {
   outline-offset: var(--pm-control-focus-offset);
 }
 
+.pm-editor-confirm {
+  position: fixed;
+  z-index: 30;
+  top: 50%;
+  left: 50%;
+  width: var(--pm-editor-confirm-width);
+  max-width: calc(100% - var(--scp-spacing-3xl));
+  padding: var(--scp-spacing-2xl);
+  border: 1px solid var(--scp-border-neutral-default);
+  border-radius: var(--scp-border-radius-md);
+  background: var(--scp-background-primary);
+  box-shadow: var(--pm-shadow-drawer);
+  transform: translate(-50%, -50%);
+}
+.pm-editor-confirm-backdrop {
+  position: fixed;
+  z-index: 29;
+  inset: 0;
+}
+.pm-editor-confirm button {
+  min-height: var(--pm-toolbar-control-size);
+  padding: var(--scp-spacing-xs) var(--scp-spacing-sm);
+  border-radius: var(--scp-radius-button);
+  margin: var(--scp-spacing-xs);
+  background: var(--scp-background-action-neutral-secondary-default);
+  color: var(--scp-content-primary);
+  cursor: pointer;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

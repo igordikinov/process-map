@@ -1,3 +1,4 @@
+import { EMPTY_GROUP_SIZE } from '../../editor/geometry';
 // Сборка узлов и рёбер уровня 2 (SPEC §4.2). Чистая функция без React —
 // поэтому полностью покрывается unit-тестами без рендера полотна
 // (по образцу Overview/overviewGraph.ts).
@@ -287,11 +288,16 @@ export interface Box {
   height: number;
 }
 
-function boundingBox(nodes: readonly ProcessNode[]): Box {
+function boundingBox(
+  nodes: readonly ProcessNode[],
+  heights: ReadonlyMap<string, number> = new Map(),
+): Box {
   const x0 = Math.min(...nodes.map((node) => node.position.x));
   const y0 = Math.min(...nodes.map((node) => node.position.y));
   const x1 = Math.max(...nodes.map((node) => node.position.x + sizeOf(node).width));
-  const y1 = Math.max(...nodes.map((node) => node.position.y + sizeOf(node).height));
+  const y1 = Math.max(
+    ...nodes.map((node) => node.position.y + (heights.get(node.id) ?? sizeOf(node).height)),
+  );
   return { x: x0, y: y0, width: x1 - x0, height: y1 - y0 };
 }
 
@@ -474,7 +480,11 @@ function containerNode(
  *   ПОЛНОМУ набору узлов независимо от toggle: раскладка не должна дрожать
  *   при переключении, должны исчезать только сами карточка/линия.
  */
-export function buildStageGraph(stage: Stage, showIntegrations = true): StageGraph {
+export function buildStageGraph(
+  stage: Stage,
+  showIntegrations = true,
+  heights: ReadonlyMap<string, number> = new Map(),
+): StageGraph {
   const containers: GroupNodeType[] = [];
   const children: StageDetailNode[] = [];
   const loose: StageDetailNode[] = [];
@@ -493,7 +503,7 @@ export function buildStageGraph(stage: Stage, showIntegrations = true): StageGra
   // ── группы шагов ──
   const byGroup = new Map<string, ProcessNode[]>();
   for (const node of stage.nodes) {
-    if (node.type === 'data' || node.group === undefined) {
+    if (node.group === undefined) {
       continue;
     }
     const bucket = byGroup.get(node.group);
@@ -507,9 +517,11 @@ export function buildStageGraph(stage: Stage, showIntegrations = true): StageGra
   const groupOrigin = new Map<string, Box>();
   for (const group of stage.groups) {
     const members = byGroup.get(group.id);
-    // Группа без узлов контейнера не получает: пустая dashed-рамка на полотне
-    // не значит ничего.
+    // Пустая рамка остаётся доступной для выбора и заполнения.
     if (members === undefined || members.length === 0) {
+      const box = { ...(group.position ?? { x: 0, y: 0 }), ...EMPTY_GROUP_SIZE };
+      groupOrigin.set(group.id, box);
+      containers.push(containerNode(groupContainerId(group.id), box, group.label, 'group'));
       continue;
     }
     // То же самое, когда выключенный toggle спрятал ВСЕ узлы группы. С задачи
@@ -522,7 +534,7 @@ export function buildStageGraph(stage: Stage, showIntegrations = true): StageGra
     // Габарит считается по ПОЛНОМУ набору узлов, а не по видимым: иначе
     // частично скрытая группа меняла бы размер при переключении toggle и
     // раскладка прыгала бы.
-    const bbox = boundingBox(members);
+    const bbox = boundingBox(members, heights);
     const box: Box = {
       x: bbox.x - GROUP_PADDING.x,
       y: bbox.y - GROUP_PADDING.top,
@@ -540,12 +552,17 @@ export function buildStageGraph(stage: Stage, showIntegrations = true): StageGra
   const split = splitStageDataNodes(stage);
   const columnOrigin = new Map<'in' | 'out', Box>();
   const columns: { direction: 'in' | 'out'; id: string; title: string; nodes: ProcessNode[] }[] = [
-    { direction: 'in', id: COLUMN_IN_ID, title: ru.stageDetail.inputsColumn, nodes: split.inputs },
+    {
+      direction: 'in',
+      id: COLUMN_IN_ID,
+      title: ru.stageDetail.inputsColumn,
+      nodes: split.inputs.filter((node) => node.group === undefined),
+    },
     {
       direction: 'out',
       id: COLUMN_OUT_ID,
       title: ru.stageDetail.outputsColumn,
-      nodes: split.outputs,
+      nodes: split.outputs.filter((node) => node.group === undefined),
     },
   ];
 
@@ -575,7 +592,7 @@ export function buildStageGraph(stage: Stage, showIntegrations = true): StageGra
     if (hidden.has(node.id)) {
       continue;
     }
-    if (node.type === 'data') {
+    if (node.type === 'data' && node.group === undefined) {
       const direction = inputIds.has(node.id) ? 'in' : 'out';
       const origin = columnOrigin.get(direction);
       const parentId =
@@ -683,6 +700,7 @@ export function buildStageGraph(stage: Stage, showIntegrations = true): StageGra
       x: node.position.x,
       y: node.position.y,
       ...sizeOf(node),
+      ...(heights.has(node.id) ? { height: heights.get(node.id)! } : {}),
     })),
     ...[...groupOrigin.values(), ...columnOrigin.values()],
   ];
@@ -698,7 +716,11 @@ export function buildStageGraph(stage: Stage, showIntegrations = true): StageGra
         })();
 
   return {
-    nodes: [...containers, ...children, ...loose],
+    nodes: [...containers, ...children, ...loose].map((node) =>
+      node.type === 'detail' && heights.has(node.id)
+        ? { ...node, height: heights.get(node.id)! }
+        : node,
+    ),
     edges,
     bounds,
     // Якорь считается по ПОЛНОМУ набору узлов и групп, независимо от

@@ -15,6 +15,7 @@
 // см. src/hooks/useDeepLink.ts.
 import { useEffect, useMemo, type ReactElement } from 'react';
 import { ImportReport } from './components/ImportReport';
+import { DraftNotices } from './editor/DraftNotices';
 import { ModulesOverview } from './components/ModulesOverview';
 import { Overview, type OverviewHeaderKind } from './components/Overview';
 import { StageDetail } from './components/StageDetail';
@@ -155,6 +156,7 @@ function App() {
           переход между уровнями, а панель узла живёт внутри полотна и такого
           не умеет (process-map-70e.9). */}
       <ImportReport />
+      <DraftNotices />
     </>
   );
 }

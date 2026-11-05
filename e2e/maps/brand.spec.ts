@@ -79,8 +79,9 @@ for (const size of [
     await url.focus();
     await expect(url).toHaveCSS('border-top-color', 'rgb(71, 105, 255)');
     await page.keyboard.press('Tab');
-    await expect(dialog.getByRole('button', { name: 'Отмена', exact: true })).toBeFocused();
-    await expect(dialog.getByRole('button', { name: 'Отмена', exact: true })).toHaveCSS(
+    const linkForm = dialog.getByRole('form', { name: 'Ссылка на экран' });
+    await expect(linkForm.getByRole('button', { name: 'Отмена', exact: true })).toBeFocused();
+    await expect(linkForm.getByRole('button', { name: 'Отмена', exact: true })).toHaveCSS(
       'outline-color',
       'rgb(71, 105, 255)',
     );

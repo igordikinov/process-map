@@ -187,6 +187,7 @@ export type ProcessNode = z.infer<typeof ProcessNodeSchema>;
 export const GroupSchema = z.object({
   id: z.string(),
   label: z.string(),
+  position: z.object({ x: z.number().finite(), y: z.number().finite() }).optional(),
 });
 export type Group = z.infer<typeof GroupSchema>;
 

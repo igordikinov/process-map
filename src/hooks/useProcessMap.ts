@@ -64,7 +64,9 @@ function subscribe(listener: () => void): () => void {
  * коде предпочтительнее commitOverrides — он не даёт забыть про обновление.
  */
 export function refreshProcessMap(): void {
-  snapshot = loadProcessMap();
+  // Сброс конфликта/статуса записи может сохранить тот же объект карты.
+  // Новая оболочка гарантирует обновление подписчиков и в этом случае.
+  snapshot = { ...loadProcessMap() };
   for (const listener of listeners) {
     listener();
   }

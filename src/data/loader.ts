@@ -19,6 +19,14 @@
 // import.meta.env, ни ветвлений по карте. Какая из версий показывается сейчас —
 // знает src/data/versions.ts, и только он.
 import { getImportedMap } from './activeMap';
+import {
+  discardEditorDraft,
+  readEditorMap,
+  saveImportedRecovery,
+  updateDraftScreen,
+  writeEditorMap,
+  type DraftContext,
+} from './editorDraft';
 import { DEFAULT_VERSION_ID, getSelectedMap, getSelectedVersionId } from './versions';
 import {
   LEGACY_OVERRIDES_MAP_ID,
@@ -248,7 +256,13 @@ export function writeStoredOverrides(overrides: Overrides): boolean {
  * merge, не перечитывая хранилище (и работать даже если запись не удалась).
  */
 export function setNodeOverride(nodeId: string, screen: ScreenLink | null): Overrides {
+  const before = loadProcessMap();
   const next: Overrides = { ...readStoredOverrides(), [nodeId]: { screen } };
+  if (before.stages.some((stage) => stage.nodes.some((node) => node.id === nodeId))) {
+    updateDraftScreen(getEditorContext(), before, nodeId, screen);
+    const imported = getImportedMap();
+    if (imported) saveImportedRecovery(DEFAULT_VERSION_ID, imported, loadProcessMap());
+  }
   writeStoredOverrides(next);
   return next;
 }
@@ -258,21 +272,46 @@ export function removeNodeOverride(nodeId: string): Overrides {
   const next: Overrides = { ...readStoredOverrides() };
   delete next[nodeId];
   writeStoredOverrides(next);
+  const baseNode = loadBaseProcessMap()
+    .stages.flatMap((stage) => stage.nodes)
+    .find((node) => node.id === nodeId);
+  if (baseNode)
+    updateDraftScreen(getEditorContext(), loadProcessMap(), nodeId, baseNode.screen ?? null);
   return next;
 }
 
 /** Полный сброс правок («Сбросить правки», SPEC §4.4). */
 export function resetOverrides(): void {
+  discardEditorDraft(getEditorContext());
   try {
     globalThis.localStorage?.removeItem(activeOverridesKey());
   } catch {
     // Хранилище недоступно — сбрасывать нечего.
   }
+  const imported = getImportedMap();
+  if (imported) saveImportedRecovery(DEFAULT_VERSION_ID, imported, loadProcessMap());
 }
 
 /** Заменяет все overrides целиком (импорт JSON, M3). */
 export function replaceOverrides(overrides: Overrides): boolean {
-  return writeStoredOverrides(overrides);
+  const before = loadProcessMap();
+  const saved = writeStoredOverrides(overrides);
+  const screens = new Map(
+    mergeOverrides(loadBaseProcessMap(), overrides)
+      .stages.flatMap((stage) => stage.nodes)
+      .map((node) => [node.id, node.screen]),
+  );
+  const next = {
+    ...before,
+    stages: before.stages.map((stage) => ({
+      ...stage,
+      nodes: stage.nodes.map((node) =>
+        screens.has(node.id) ? { ...node, screen: screens.get(node.id) } : node,
+      ),
+    })),
+  };
+  writeEditorMap(getEditorContext(), before, next);
+  return saved;
 }
 
 // ───────────────────────────── публичная загрузка ─────────────────────────────
@@ -289,7 +328,16 @@ export function loadBaseProcessMap(): ProcessMap {
 
 /** Карта из process.json с наложенными overrides из localStorage. */
 export function loadProcessMap(): ProcessMap {
-  return mergeOverrides(loadBaseProcessMap(), readStoredOverrides());
+  const base = loadBaseProcessMap();
+  return readEditorMap(getEditorContext(), mergeOverrides(base, readStoredOverrides()));
+}
+
+export function getEditorContext(): DraftContext {
+  const base = loadBaseProcessMap();
+  return {
+    base,
+    scope: getImportedMap() === null ? getSelectedVersionId() : `imported:${base.id}`,
+  };
 }
 
 /**

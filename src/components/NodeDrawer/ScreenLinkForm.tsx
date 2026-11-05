@@ -1,22 +1,8 @@
-// Форма ссылки на экран In.Plan — редактор (SPEC §4.4, артборд A5).
-//
-// В process.json поле screen не заполнено ни у одного из 103 узлов и заполнено
-// не будет: ссылки попадают в приложение ТОЛЬКО через эту форму и живут в
-// overrides localStorage (SPEC §3), которые накладывает src/data/loader.ts.
-//
-// Что здесь НЕ изобретается заново:
-//   - валидация url — utils/url.ts::validateUrl (три различимых состояния:
-//     valid / warning «http:» / invalid с reason);
-//   - тексты ошибок — ru.screenLinkForm, ключи названы 1:1 по `reason`,
-//     поэтому сопоставление ниже — просто таблица, без разбора строк;
-//   - запись — loader.ts::setNodeOverride, где `null` означает «пользователь
-//     удалил ссылку» (и это НЕ откат к значению из JSON);
-//   - обновление экрана после записи — commitOverrides из hooks/useProcessMap.
-//
-// Форма написана руками, без библиотек форм (CLAUDE.md: новые зависимости
-// только через задачу в bd).
+// Форма ссылки применяет изменения через адаптер loader в общий черновик v2.
+// Старые overrides v1 сохраняются для совместимости. URL проверяет utils/url.
 import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
 import { setNodeOverride } from '../../data/loader';
+import { useEditorForm } from '../../editor/interaction';
 import type { ScreenLink } from '../../data/schema';
 import { commitOverrides } from '../../hooks/useProcessMap';
 import { ru } from '../../i18n/ru';
@@ -59,6 +45,7 @@ export function ScreenLinkForm({ nodeId, screen, onClose }: ScreenLinkFormProps)
   // ошибок, ругается на пользователя за то, чего он ещё не делал.
   // Предупреждение про http: — не ошибка, оно показывается сразу.
   const [submitted, setSubmitted] = useState(false);
+  const [saveError, setSaveError] = useState('');
 
   const titleRef = useRef<HTMLInputElement>(null);
   const titleId = useId();
@@ -88,15 +75,25 @@ export function ScreenLinkForm({ nodeId, screen, onClose }: ScreenLinkFormProps)
   const urlMessage =
     urlValidation.status === 'valid' ? undefined : URL_MESSAGES[urlValidation.reason];
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>): void => {
-    event.preventDefault();
+  const apply = (): boolean => {
     setSubmitted(true);
     if (!canSave) {
       // Сохранение заблокировано: тексты ошибок покажет рендер ниже.
-      return;
+      return false;
     }
-    commitOverrides(() => setNodeOverride(nodeId, { title: trimmedTitle, url: url.trim() }));
+    try {
+      commitOverrides(() => setNodeOverride(nodeId, { title: trimmedTitle, url: url.trim() }));
+    } catch (cause) {
+      setSaveError(cause instanceof Error ? cause.message : ru.editor.error);
+      return false;
+    }
     onClose();
+    return true;
+  };
+  useEditorForm(title !== (screen?.title ?? '') || url !== (screen?.url ?? ''), apply);
+  const handleSubmit = (event: FormEvent<HTMLFormElement>): void => {
+    event.preventDefault();
+    apply();
   };
 
   const handleRemove = (): void => {
@@ -104,7 +101,12 @@ export function ScreenLinkForm({ nodeId, screen, onClose }: ScreenLinkFormProps)
     // запись `{ screen: null }` — это «ссылка удалена пользователем», её
     // loader.ts не откатывает к значению из process.json. removeNodeOverride
     // означал бы «вернуть как было в JSON» и здесь был бы ошибкой.
-    commitOverrides(() => setNodeOverride(nodeId, null));
+    try {
+      commitOverrides(() => setNodeOverride(nodeId, null));
+    } catch (cause) {
+      setSaveError(cause instanceof Error ? cause.message : ru.editor.error);
+      return;
+    }
     onClose();
   };
 
@@ -115,6 +117,11 @@ export function ScreenLinkForm({ nodeId, screen, onClose }: ScreenLinkFormProps)
       noValidate
       aria-label={ru.screenLinkForm.ariaLabel}
     >
+      {saveError && (
+        <p className={styles.error} role="alert">
+          {saveError}
+        </p>
+      )}
       <div className={styles.field}>
         <div className={styles.labelRow}>
           <label className={styles.label} htmlFor={titleId}>
@@ -201,7 +208,14 @@ export function ScreenLinkForm({ nodeId, screen, onClose }: ScreenLinkFormProps)
             молчит о причине. Клик показывает тексты ошибок и не пишет
             override — «блокировка сохранения» из SPEC §4.4 сделана в
             handleSubmit, а не отключением кнопки. */}
-        <button type="submit" className={`${styles.button} ${styles.buttonPrimary}`}>
+        <button
+          type="submit"
+          onClick={(event) => {
+            event.preventDefault();
+            apply();
+          }}
+          className={`${styles.button} ${styles.buttonPrimary}`}
+        >
           {ru.screenLinkForm.save}
         </button>
       </div>

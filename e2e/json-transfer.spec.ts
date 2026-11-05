@@ -289,7 +289,11 @@ test.describe('Тулбар редактора: кнопки SPEC §4.4', () => 
     // …а взведённое подтверждение (оно длиннее самой кнопки) тулбар не разносит.
     await expect(page.getByRole('group', { name: MSG.resetConfirm })).toBeVisible();
     for (const name of ['Просмотр', 'Редактор', MSG.resetAccept, MSG.resetCancel]) {
-      const box = await page.getByRole('button', { name, exact: true }).boundingBox();
+      const scope =
+        name === MSG.resetAccept || name === MSG.resetCancel
+          ? page.getByRole('group', { name: MSG.resetConfirm })
+          : page;
+      const box = await scope.getByRole('button', { name, exact: true }).boundingBox();
       expect(box, `кнопка «${name}» без геометрии`).not.toBeNull();
       expect(box?.x ?? -1, `кнопка «${name}» уехала за левый край`).toBeGreaterThanOrEqual(0);
       expect((box?.x ?? 0) + (box?.width ?? 0)).toBeLessThanOrEqual(1024);

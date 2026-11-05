@@ -31,7 +31,15 @@
 //     срезался бы клампом ровно так же, как до этой задачи.
 // У шага, данных и прочих типов заголовок — вся подпись, тела с текстом нет:
 // их панель не меняется ни DOM, ни стилями.
-import { useCallback, useEffect, useId, useMemo, useRef, type KeyboardEvent } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  type KeyboardEvent,
+  type ReactNode,
+} from 'react';
 import { iconUrl } from '../../assets/icons';
 import type { ProcessNode } from '../../data/schema';
 import { ru } from '../../i18n/ru';
@@ -58,9 +66,12 @@ const FOCUSABLE_SELECTOR = [
 export interface NodeDrawerProps {
   /** Узлы текущего этапа: `stage.nodes` из уже загруженной карты (см. loader.ts). */
   nodes: ProcessNode[];
+  nonModal?: boolean;
+  onRequestClose?: () => void;
+  children?: ReactNode;
 }
 
-export function NodeDrawer({ nodes }: NodeDrawerProps) {
+export function NodeDrawer({ nodes, nonModal = false, onRequestClose, children }: NodeDrawerProps) {
   const selectedNodeId = useProcessStore((state) => state.selectedNodeId);
   const closeDrawer = useProcessStore((state) => state.closeDrawer);
 
@@ -73,15 +84,26 @@ export function NodeDrawer({ nodes }: NodeDrawerProps) {
     return null;
   }
 
-  return <NodeDrawerPanel key={node.id} node={node} onClose={closeDrawer} />;
+  return (
+    <NodeDrawerPanel
+      key={node.id}
+      node={node}
+      onClose={onRequestClose ?? closeDrawer}
+      nonModal={nonModal}
+    >
+      {children}
+    </NodeDrawerPanel>
+  );
 }
 
 interface NodeDrawerPanelProps {
   node: ProcessNode;
   onClose: () => void;
+  nonModal: boolean;
+  children?: ReactNode;
 }
 
-function NodeDrawerPanel({ node, onClose }: NodeDrawerPanelProps) {
+function NodeDrawerPanel({ node, onClose, nonModal, children }: NodeDrawerPanelProps) {
   const panelRef = useRef<HTMLDivElement>(null);
   const titleRef = useRef<HTMLHeadingElement>(null);
   const titleId = useId();
@@ -109,6 +131,7 @@ function NodeDrawerPanel({ node, onClose }: NodeDrawerPanelProps) {
   // а не «кнопка Закрыть»), при закрытии — обратно на карточку узла.
   // Регрессия M1: без этого до первого элемента панели было 18 нажатий Tab.
   useEffect(() => {
+    if (nonModal) return;
     const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     panelRef.current?.focus();
 
@@ -120,7 +143,7 @@ function NodeDrawerPanel({ node, onClose }: NodeDrawerPanelProps) {
       const card = document.querySelector<HTMLElement>(`[data-id="${nodeId}"] button`);
       (card ?? opener)?.focus();
     };
-  }, [nodeId]);
+  }, [nodeId, nonModal]);
 
   // Esc слушаем на документе, а не на панели: если фокус по какой-то причине
   // ушёл наружу, Esc обязан закрывать панель всё равно (SPEC §4.3).
@@ -141,48 +164,54 @@ function NodeDrawerPanel({ node, onClose }: NodeDrawerPanelProps) {
   // помечает `inert` (StageDetail.tsx), — но не лишний: `inert` снимает с
   // обхода полотно, крошки и легенду, а тулбар остаётся живым намеренно, и
   // ловушка держит фокус в панели именно от него.
-  const handleKeyDown = useCallback((event: KeyboardEvent<HTMLDivElement>): void => {
-    if (event.key !== 'Tab') {
-      return;
-    }
-    const panel = panelRef.current;
-    if (panel === null) {
-      return;
-    }
-    const focusable = Array.from(panel.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR));
-    const first = focusable[0];
-    const last = focusable[focusable.length - 1];
-    if (first === undefined || last === undefined) {
-      // Фокусируемых элементов нет вовсе — держим фокус на самой панели.
-      event.preventDefault();
-      return;
-    }
-    const active = document.activeElement;
-    if (event.shiftKey) {
-      // Shift+Tab с первого элемента (или с самой панели) — на последний.
-      if (active === first || active === panel) {
-        event.preventDefault();
-        last.focus();
+  const handleKeyDown = useCallback(
+    (event: KeyboardEvent<HTMLDivElement>): void => {
+      if (nonModal) return;
+      if (event.key !== 'Tab') {
+        return;
       }
-      return;
-    }
-    if (active === last) {
-      event.preventDefault();
-      first.focus();
-    }
-  }, []);
+      const panel = panelRef.current;
+      if (panel === null) {
+        return;
+      }
+      const focusable = Array.from(panel.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR));
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (first === undefined || last === undefined) {
+        // Фокусируемых элементов нет вовсе — держим фокус на самой панели.
+        event.preventDefault();
+        return;
+      }
+      const active = document.activeElement;
+      if (event.shiftKey) {
+        // Shift+Tab с первого элемента (или с самой панели) — на последний.
+        if (active === first || active === panel) {
+          event.preventDefault();
+          last.focus();
+        }
+        return;
+      }
+      if (active === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    },
+    [nonModal],
+  );
 
   return (
     <>
       {/* Клик по затемнённому полотну закрывает панель (SPEC §4.3). Элемент
           не интерактивный для скринридера: то же действие даёт и Esc, и
           кнопка «Закрыть» в шапке. */}
-      <div
-        className={styles.scrim}
-        data-testid="drawer-scrim"
-        aria-hidden="true"
-        onClick={onClose}
-      />
+      {!nonModal && (
+        <div
+          className={styles.scrim}
+          data-testid="drawer-scrim"
+          aria-hidden="true"
+          onClick={onClose}
+        />
+      )}
 
       <div
         ref={panelRef}
@@ -223,6 +252,7 @@ function NodeDrawerPanel({ node, onClose }: NodeDrawerPanelProps) {
             не сообщает, а только удлиняет панель. Исключение — «Экран в
             системе»: у неё есть осмысленное пустое состояние. */}
         <div className={styles.content}>
+          {children}
           {/* Полный текст подробности — первым: это продолжение заголовка, а
               не секция SPEC §4.3, и до описания узла (если оно у подробности
               появится) читается раньше него. Подпись — дословно, с \n между

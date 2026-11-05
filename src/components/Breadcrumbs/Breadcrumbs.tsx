@@ -1,3 +1,4 @@
+import { requestEditorAction } from '../../editor/guard';
 // Шапка с хлебными крошками (SPEC §4.2, артборд A2): кнопка «Назад», крошки,
 // бейдж, справа счётчик.
 //
@@ -124,7 +125,7 @@ function CrumbsHeader({ compact, backLabel, onBack, children, counter }: CrumbsH
       <button
         type="button"
         className={styles.backButton}
-        onClick={onBack}
+        onClick={() => requestEditorAction(onBack)}
         aria-label={backLabel}
         title={backLabel}
       >
@@ -166,7 +167,11 @@ function CrumbsHeader({ compact, backLabel, onBack, children, counter }: CrumbsH
  */
 function CrumbLink({ onClick, children }: { onClick: () => void; children: ReactNode }) {
   return (
-    <button type="button" className={`${styles.crumbLabel} ${styles.crumbLink}`} onClick={onClick}>
+    <button
+      type="button"
+      className={`${styles.crumbLabel} ${styles.crumbLink}`}
+      onClick={() => requestEditorAction(onClick)}
+    >
       {children}
     </button>
   );

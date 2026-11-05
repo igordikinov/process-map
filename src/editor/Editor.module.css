@@ -1,0 +1,168 @@
+.tools {
+  display: flex;
+  max-width: 100%;
+  flex-wrap: wrap;
+  border: 1px solid var(--scp-color-neutral-200);
+  border-radius: var(--scp-radius-button);
+  background: var(--scp-background-primary);
+  pointer-events: auto;
+}
+.tools button,
+.button {
+  min-height: var(--pm-toolbar-control-size);
+  padding: var(--scp-spacing-xs) var(--scp-spacing-sm);
+  border: 1px solid transparent;
+  border-radius: var(--scp-radius-button);
+  background: var(--scp-background-primary);
+  color: var(--scp-content-primary);
+  cursor: pointer;
+  font: var(--scp-xs-regular);
+}
+.tools button:hover:not(:disabled),
+.button:hover:not(:disabled) {
+  background: var(--scp-background-action-neutral-secondary-default);
+}
+.tools button:active:not(:disabled),
+.button:active:not(:disabled) {
+  background: var(--scp-background-action-neutral-secondary-active);
+}
+.tools button:disabled {
+  color: var(--scp-text-neutral-disable);
+  cursor: default;
+}
+.primary {
+  background: var(--scp-background-action-brand-primary-default);
+  color: var(--scp-content-constant);
+}
+.primary:hover:not(:disabled) {
+  background: var(--scp-background-action-brand-primary-hover);
+}
+.primary:active:not(:disabled) {
+  background: var(--scp-background-action-brand-primary-active);
+}
+.danger {
+  color: var(--scp-background-action-destructive-default);
+}
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--scp-spacing-md);
+}
+.field {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--scp-spacing-xs);
+  font: var(--scp-xs-regular);
+  color: var(--scp-content-sub-primary);
+}
+.input {
+  width: 100%;
+  min-width: 0;
+  min-height: var(--pm-form-input-height);
+  padding: var(--scp-spacing-xs) var(--scp-spacing-sm);
+  border: 1px solid var(--scp-border-neutral-default);
+  border-radius: var(--scp-radius-button);
+  background: var(--scp-background-primary);
+  color: var(--scp-content-primary);
+  font: var(--scp-xs-regular);
+}
+.input:hover {
+  border-color: var(--scp-border-neutral-hover);
+}
+.input:focus {
+  border-color: var(--scp-border-brand-default);
+  outline: 1px solid var(--scp-border-brand-default);
+}
+textarea.input {
+  min-height: var(--scp-paddings-xxxxl);
+  resize: vertical;
+}
+.actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--scp-spacing-sm);
+}
+.row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--scp-spacing-sm);
+}
+.section {
+  padding-bottom: var(--scp-spacing-lg);
+  border-bottom: 1px solid var(--scp-border-neutral-tertiary);
+}
+.panel {
+  position: absolute;
+  z-index: 6;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  width: var(--pm-drawer-width);
+  max-width: 100%;
+  flex-direction: column;
+  background: var(--scp-background-primary);
+  box-shadow: var(--pm-shadow-drawer);
+}
+.header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  padding: var(--scp-spacing-lg) var(--scp-spacing-2xl);
+  gap: var(--scp-spacing-sm);
+}
+.heading {
+  margin: 0;
+  font: var(--scp-h7-semibold);
+}
+.body {
+  overflow-y: auto;
+  padding: var(--scp-spacing-lg) var(--scp-spacing-2xl);
+}
+.message {
+  margin: 0;
+  padding: var(--scp-spacing-sm);
+  color: var(--scp-color-error-700);
+  background: var(--scp-color-error-50);
+  font: var(--scp-xs-regular);
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+.notices {
+  position: fixed;
+  z-index: 12;
+  bottom: var(--scp-spacing-lg);
+  left: var(--scp-spacing-lg);
+  max-width: calc(100% - var(--scp-spacing-3xl));
+  padding: var(--scp-spacing-md);
+  border: 1px solid var(--scp-color-warning-200);
+  border-radius: var(--scp-border-radius-md);
+  background: var(--scp-color-warning-50);
+  font: var(--scp-xs-regular);
+}
+.notices p {
+  margin: 0 0 var(--scp-spacing-sm);
+}
+.confirm {
+  padding: var(--scp-spacing-md);
+  border: 1px solid var(--scp-color-error-200);
+  border-radius: var(--scp-radius-button);
+  background: var(--scp-color-error-50);
+}
+.confirm p {
+  margin: 0 0 var(--scp-spacing-sm);
+  font: var(--scp-xs-regular);
+}
+.empty {
+  position: absolute;
+  top: 45%;
+  left: var(--scp-spacing-2xl);
+  padding: var(--scp-spacing-lg);
+  border-radius: var(--scp-border-radius-md);
+  background: var(--scp-background-primary);
+}
+.empty p {
+  margin: 0 0 var(--scp-spacing-sm);
+}
