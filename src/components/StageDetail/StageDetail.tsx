@@ -1,13 +1,8 @@
+import { EditorProvider } from '../../editor/EditorContext';
+import { StageFlow } from '../../editor/StageFlow';
 // Экран «Детализация этапа, уровень 2» (SPEC §4.2, артборд A2).
-import { useEffect, useMemo } from 'react';
-import {
-  Background,
-  BackgroundVariant,
-  ReactFlow,
-  ReactFlowProvider,
-  type EdgeTypes,
-  type NodeTypes,
-} from '@xyflow/react';
+import { useEffect, useMemo, useState } from 'react';
+import { ReactFlowProvider, type EdgeTypes, type NodeTypes } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { hasModules, moduleOfStage } from '../../data/modules';
 import { useFrameSize } from '../../hooks/useFrameSize';
@@ -15,32 +10,14 @@ import { useProcessMap } from '../../hooks/useProcessMap';
 import { ru } from '../../i18n/ru';
 import { useProcessStore } from '../../store/useProcessStore';
 import { Breadcrumbs } from '../Breadcrumbs';
-import {
-  DataEdge,
-  DetailLinkEdge,
-  EdgeMarkers,
-  IntegrationEdge,
-  ProcessEdge,
-  ProcessInnerEdge,
-} from '../edges';
+import { DataEdge, DetailLinkEdge, IntegrationEdge, ProcessEdge, ProcessInnerEdge } from '../edges';
 import { Legend } from '../Legend';
-import { NodeDrawer } from '../NodeDrawer';
 import { DataNode } from '../nodes/DataNode';
 import { DetailNode } from '../nodes/DetailNode';
 import { GroupNode } from '../nodes/GroupNode';
 import { StepNode } from '../nodes/StepNode';
 import { WarningNode } from '../nodes/WarningNode';
-import { Toolbar } from '../Toolbar';
-import {
-  buildStageGraph,
-  GRID_DOT_SIZE,
-  GRID_GAP,
-  MAX_ZOOM,
-  MIN_ZOOM,
-  TOOLBAR_FIT_VIEW_OPTIONS,
-  type StageEdgeType,
-} from './stageGraph';
-import { StartViewport } from './StartViewport';
+import { buildStageGraph, type StageEdgeType } from './stageGraph';
 import styles from './StageDetail.module.css';
 
 // Объекты объявлены на уровне модуля: React Flow предупреждает, если nodeTypes
@@ -88,13 +65,14 @@ const edgeTypes = {
 } satisfies EdgeTypes & Record<StageEdgeType, EdgeTypes[string]>;
 
 /** Убирает ссылку-attribution React Flow — обоснование в Overview.tsx (4hv). */
-const proOptions = { hideAttribution: true };
 
 export function StageDetail() {
   const currentStageId = useProcessStore((state) => state.currentStageId);
   const resetLevel = useProcessStore((state) => state.resetLevel);
   const showIntegrations = useProcessStore((state) => state.showIntegrations);
   const selectedNodeId = useProcessStore((state) => state.selectedNodeId);
+  const mode = useProcessStore((state) => state.mode);
+  const [heights, setHeights] = useState(new Map<string, number>());
 
   // SPEC §4.5: режим решает высота КОНТЕЙНЕРА (приложение в iframe, SPEC §6).
   const { ref: rootRef, compact } = useFrameSize();
@@ -105,8 +83,8 @@ export function StageDetail() {
   const map = useProcessMap();
   const stage = map.stages.find((candidate) => candidate.id === currentStageId);
   const graph = useMemo(
-    () => (stage === undefined ? undefined : buildStageGraph(stage, showIntegrations)),
-    [stage, showIntegrations],
+    () => (stage === undefined ? undefined : buildStageGraph(stage, showIntegrations, heights)),
+    [stage, showIntegrations, heights],
   );
 
   /*
@@ -160,96 +138,61 @@ export function StageDetail() {
   const drawerOpen = visibleNodes.some((node) => node.id === selectedNodeId);
 
   return (
-    <div className={compact ? `${styles.root} ${styles.compact}` : styles.root} ref={rootRef}>
-      {/* module — ВЛАДЕЛЕЦ этапа по документу (moduleOfStage), а не
+    <EditorProvider stage={stage}>
+      <div className={compact ? `${styles.root} ${styles.compact}` : styles.root} ref={rootRef}>
+        {/* module — ВЛАДЕЛЕЦ этапа по документу (moduleOfStage), а не
           currentModuleId из store: этап без модуля в store законен (прямой
           navigateToStage(id); deep-link владельца передаёт сам,
           process-map-9mn.18), а документ владельца знает всегда. На
           двухуровневой карте — undefined, и крошки побайтово прежние
           (process-map-9mn.17). */}
-      <Breadcrumbs
-        stages={map.stages}
-        rootLabel={map.moduleLabel}
-        module={moduleOfStage(map, stage.id)}
-        compact={compact}
-      />
-      {/* role="region", а не "application" — см. комментарий в Overview.tsx.
+        <Breadcrumbs
+          stages={map.stages}
+          rootLabel={map.moduleLabel}
+          module={moduleOfStage(map, stage.id)}
+          compact={compact}
+        />
+        {/* role="region", а не "application" — см. комментарий в Overview.tsx.
           Подпись — настоящий номер экрана на ЭТОЙ карте: на трёхуровневой
           этап — уровень 3 (ru.stageDetail.moduleStageCanvasLabel). */}
-      <div
-        className={styles.canvas}
-        role="region"
-        aria-label={
-          hasModules(map) ? ru.stageDetail.moduleStageCanvasLabel : ru.stageDetail.canvasLabel
-        }
-      >
-        {/* key по этапу на самом провайдере (не только на <ReactFlow> ниже):
+        <div
+          data-editing={mode === 'edit'}
+          className={styles.canvas}
+          role="region"
+          aria-label={
+            hasModules(map) ? ru.stageDetail.moduleStageCanvasLabel : ru.stageDetail.canvasLabel
+          }
+        >
+          {/* key по этапу на самом провайдере (не только на <ReactFlow> ниже):
             смена этапа обязана пересобрать ОБЩИЙ store React Flow целиком,
             иначе Toolbar (сиблинг <ReactFlow>, читает viewport из того же
             store — см. Toolbar.tsx) на миг унаследовал бы масштаб/сдвиг
             предыдущего этапа, пока StartViewport его не перезапишет. Раскладки
             отличаются в разы (3942×1088 у этапа 2 против 3528×296 у этапа 1). */}
-        <ReactFlowProvider key={`${map.id}:${stage.id}`}>
-          <EdgeMarkers>
-            <ReactFlow
-              nodes={graph.nodes}
-              edges={graph.edges}
+          <ReactFlowProvider key={`${map.id}:${stage.id}`}>
+            <StageFlow
+              graph={graph}
               nodeTypes={nodeTypes}
               edgeTypes={edgeTypes}
-              nodesDraggable={false}
-              nodesConnectable={false}
-              elementsSelectable={false}
-              // Фокус несут <button> карточек узлов (см. overviewGraph.ts).
-              nodesFocusable={false}
-              edgesFocusable={false}
-              panOnScroll
-              // fitView намеренно НЕ используется: он опускал масштаб до 0.25…0.53
-              // и делал подписи нечитаемыми. Стартовый вид — StartViewport.
-              // minZoom/maxZoom здесь остаются границами РУЧНОГО зума (колесо,
-              // тулбар): отдалить схему целиком пользователь по-прежнему может.
-              minZoom={MIN_ZOOM}
-              maxZoom={MAX_ZOOM}
-              proOptions={proOptions}
-              /* process-map-9ji: при открытой панели полотно выпадает и из
-                 обхода Tab, и из режима чтения скринридера. Помечено РОВНО
-                 полотно — то, что накрывает затемнение. Крошки и легенда лежат
-                 вне .canvas, затемнение до них не достаёт, и они обязаны
-                 оставаться рабочими (e2e/journey.spec.ts, «открытая панель не
-                 отменяет остальной интерфейс»); тулбар лежит внутри .canvas, но
-                 живёт поверх панели и лишь сдвигается (.shifted).
-                 Атрибут ложится на обёртку полотна: ReactFlowProps наследует
-                 HTMLAttributes<HTMLDivElement>, и лишние пропы спредятся на неё. */
-              inert={drawerOpen ? '' : undefined}
-            >
-              <StartViewport bounds={graph.bounds} anchor={graph.startAnchor} compact={compact} />
-              <Background variant={BackgroundVariant.Dots} gap={GRID_GAP} size={GRID_DOT_SIZE} />
-            </ReactFlow>
-          </EdgeMarkers>
-          {/* Кнопка «Уместить в экран» уважает тот же пол читаемости, что и
-              стартовый вид (SPEC §4.6) — см. комментарий у TOOLBAR_FIT_VIEW_OPTIONS
-              в stageGraph.ts. */}
-          {/* drawerOpen: панель шириной 360 накрывает правый верхний угол
-              полотна вместе со всем тулбаром — см. .shifted в Toolbar.module.css. */}
-          <Toolbar
-            fitViewOptions={TOOLBAR_FIT_VIEW_OPTIONS}
-            drawerOpen={drawerOpen}
-            compact={compact}
-          />
-        </ReactFlowProvider>
-        {/* Боковая панель узла — внутри .canvas, чтобы затемнение начиналось
+              compact={compact}
+              drawerOpen={drawerOpen}
+              setHeights={setHeights}
+            />
+          </ReactFlowProvider>
+          {/* Боковая панель узла — внутри .canvas, чтобы затемнение начиналось
             под шапкой крошек, как в артборде A3 (SPEC §4.3). */}
-        <NodeDrawer nodes={visibleNodes} />
-      </div>
-      {/* Легенда — строка ПОД полотном, не поверх него: раскладка потока
+        </div>
+        {/* Легенда — строка ПОД полотном, не поверх него: раскладка потока
           шагов на реальных данных занимает весь угол/край полотна на всех
           4 этапах (см. Legend.module.css) — плавающая панель гарантированно
           перекрыла бы что-нибудь. Легенде не нужен React Flow, поэтому она
           и не внутри .canvas/<ReactFlowProvider>. */}
-      {/* Компактный режим (SPEC §4.5) ужимает полосу под кнопку-иконку,
+        {/* Компактный режим (SPEC §4.5) ужимает полосу под кнопку-иконку,
           но не возвращает легенду на полотно — см. Legend.tsx. */}
-      <div className={styles.legendStrip}>
-        <Legend compact={compact} />
+        <div className={styles.legendStrip}>
+          <Legend compact={compact} />
+        </div>
       </div>
-    </div>
+    </EditorProvider>
   );
 }

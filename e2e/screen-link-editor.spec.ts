@@ -270,6 +270,7 @@ test('поля и кнопки формы доступны настоящей м
   await expect(input).toHaveValue('Объёмный план');
 
   // Кнопка «Сохранить» тоже не перекрыта.
+  await dialog.getByRole('button', { name: 'Сохранить' }).scrollIntoViewIfNeeded();
   const saveBox = await dialog.getByRole('button', { name: 'Сохранить' }).boundingBox();
   const saveTag = await page.evaluate(
     ({ x, y }) => document.elementFromPoint(x, y)?.textContent ?? null,
@@ -315,7 +316,10 @@ test('«Отмена» закрывает форму и ничего не зап
   await dialog.getByRole('button', { name: 'Добавить' }).click();
   await dialog.getByLabel('Название экрана').fill(LINK.title);
   await dialog.getByLabel('URL', { exact: true }).fill(LINK.url);
-  await dialog.getByRole('button', { name: 'Отмена' }).click();
+  await dialog
+    .getByRole('form', { name: 'Ссылка на экран' })
+    .getByRole('button', { name: 'Отмена' })
+    .click();
 
   await expect(dialog.getByText('Ссылка не задана')).toBeVisible();
   expect(await storedOverrides(page)).toBeNull();

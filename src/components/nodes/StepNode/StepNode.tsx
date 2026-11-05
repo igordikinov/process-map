@@ -1,3 +1,4 @@
+import { useEditor } from '../../../editor/interaction';
 // Узел React Flow для карточки шага уровня 2 (SPEC §4.2).
 // Вся вёрстка — в StepCard; здесь только точки подключения рёбер.
 //
@@ -54,21 +55,27 @@ export const STEP_HANDLE = {
 
 /** Общие для StepNode и WarningNode хэндлы: цели слева/сверху, источники справа/снизу. */
 export function StepHandles() {
+  const editable = useEditor()?.editable ?? false;
   return (
     <>
-      <Handle type="target" position={Position.Left} id={STEP_HANDLE.left} isConnectable={false} />
-      <Handle type="target" position={Position.Top} id={STEP_HANDLE.top} isConnectable={false} />
+      <Handle
+        type="target"
+        position={Position.Left}
+        id={STEP_HANDLE.left}
+        isConnectable={editable}
+      />
+      <Handle type="target" position={Position.Top} id={STEP_HANDLE.top} isConnectable={editable} />
       <Handle
         type="source"
         position={Position.Right}
         id={STEP_HANDLE.right}
-        isConnectable={false}
+        isConnectable={editable}
       />
       <Handle
         type="source"
         position={Position.Bottom}
         id={STEP_HANDLE.bottom}
-        isConnectable={false}
+        isConnectable={editable}
       />
     </>
   );

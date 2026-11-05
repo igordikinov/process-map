@@ -1,3 +1,4 @@
+import { useEditor } from '../../../editor/interaction';
 // Узел данных колонок входов/выходов, уровень 2 (SPEC §4.2, артборд A2 200×56).
 //
 // Подпись-источник (вторая строка макета: «ERP», «Этап 1», «В PS · этап 3»)
@@ -25,6 +26,8 @@ export const DATA_HANDLE = {
 
 export function DataNode({ data }: NodeProps<DataNodeType>) {
   const selectNode = useProcessStore((state) => state.selectNode);
+  const editor = useEditor();
+  const editable = editor?.editable ?? false;
   const node = data.node;
   const isSelected = useProcessStore((state) => state.selectedNodeId === node.id);
 
@@ -32,7 +35,12 @@ export function DataNode({ data }: NodeProps<DataNodeType>) {
     <>
       {/* Рёбер к data-узлам в текущих данных нет (все edge.source/target —
           узлы потока), хэндлы объявлены на случай их появления. */}
-      <Handle type="target" position={Position.Left} id={DATA_HANDLE.left} isConnectable={false} />
+      <Handle
+        type="target"
+        position={Position.Left}
+        id={DATA_HANDLE.left}
+        isConnectable={editable}
+      />
       <button
         type="button"
         className={
@@ -44,7 +52,8 @@ export function DataNode({ data }: NodeProps<DataNodeType>) {
         aria-label={ru.dataNode.ariaLabel(node.label)}
         title={node.description === undefined ? node.label : `${node.label}\n\n${node.description}`}
         onClick={() => {
-          selectNode(node.id);
+          if (editor?.editable) editor.select({ kind: 'node', id: node.id });
+          else selectNode(node.id);
         }}
       >
         <span className={styles.label}>{node.label}</span>
@@ -54,7 +63,7 @@ export function DataNode({ data }: NodeProps<DataNodeType>) {
         type="source"
         position={Position.Right}
         id={DATA_HANDLE.right}
-        isConnectable={false}
+        isConnectable={editable}
       />
     </>
   );

@@ -32,7 +32,7 @@
   display: flex;
   overflow: visible;
   width: var(--pm-detail-node-width);
-  height: var(--pm-detail-node-height);
+  min-height: var(--pm-detail-node-height);
   box-sizing: border-box;
   flex-direction: column;
   justify-content: flex-start;

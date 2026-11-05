@@ -84,7 +84,9 @@ describe.each(maps)('UI-контракт $id', (map) => {
         expect(detail.position.y).toBeGreaterThan(host.position.y + 52);
       }
     }
-    noOverlap(rects);
+    // Рамка теперь охватывает и данные группы. Абсолютные координаты
+    // не меняются: рамки могут пересекаться, сами карточки — нет.
+    noOverlap(rects.filter((rect) => rect.type !== 'groupBox'));
     const layout = layoutStage(stage);
     for (const n of stage.nodes) expect(n.position, n.id).toEqual(layout.get(n.id));
     const hidden = buildStageGraph(stage, false);

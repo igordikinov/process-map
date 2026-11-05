@@ -1,36 +1,12 @@
-// Кнопки тулбара, доступные только в режиме «Редактор» (SPEC §4.4):
-// «Экспорт JSON», «Импорт JSON», «Сбросить правки» — плюс обратная связь для
-// двух действий, которые раньше молчали (process-map-ygd).
-//
-// Что здесь НЕ изобретается заново:
-//   - полная слитая карта для экспорта — loader.ts::getMergedProcessMap();
-//   - формат файла и разбор импорта — utils/processTransfer.ts (там же
-//     разобрано, почему форматы экспорта и импорта в SPEC §3 расходятся и как
-//     это примирено);
-//   - запись и сброс — loader.ts::replaceOverrides()/resetOverrides();
-//   - обновление экрана после записи — commitOverrides() из hooks/useProcessMap.
-//     Писать в localStorage мимо него нельзя: карта не лежит в store, и без
-//     commitOverrides открытые экраны остались бы со старыми данными;
-//   - число применённых ссылок — размер overrides, которые вернул
-//     parseImportedOverrides(); он уже посчитан диффом против базовой карты,
-//     второго прохода по данным здесь нет.
-//
-// ОБРАТНАЯ СВЯЗЬ ИМПОРТА. Раньше непринятый файл уходил в console.warn, и
-// снаружи успешный импорт файла, совпадающего с базовым, был неотличим от
-// отвергнутого — оба ничего не меняли на экране. Теперь у обоих исходов есть
-// видимая строка (тексты — ru.toolbar, даны владельцем дословно), причём у
-// «принят, но расхождений нет» — своя, а не «Применено ссылок: 0».
-//
-// ПОДТВЕРЖДЕНИЕ СБРОСА — ДВУХШАГОВАЯ КНОПКА, А НЕ window.confirm.
-// Приложение живёт в <iframe> вики (README, «Встраивание в In.Plan»). При
-// sandbox без allow-modals браузер подавляет confirm() МОЛЧА — диалог не
-// показывается, вызов возвращает false, и никакой ошибки не происходит. В
-// такой конфигурации confirm-подтверждение либо не спросило бы вообще, либо
-// (при обратном значении по умолчанию) пропустило бы сброс без вопроса. Это
-// ровно тот же тихий отказ, который уже поймали на _top-навигации
-// (process-map-6ap), поэтому modals в этом приложении не используются вовсе.
-// Собственная модалка ради одного вопроса — несоразмерно; владелец выбрал
-// двухшаговую кнопку.
+import { requestEditorAction } from '../../editor/guard';
+import { writeStoredOverrides } from '../../data/loader';
+import { replaceEditedMap } from '../../editor/commands';
+import { readImportedRecovery } from '../../data/editorDraft';
+import { DEFAULT_VERSION_ID } from '../../data/versions';
+import { getImportReport, clearImportReport } from '../../data/activeMap';
+import type { ProcessMap } from '../../data/schema';
+import { downloadTextFile } from '../../utils/download';
+// Экспорт полного документа, импорт, восстановление и явный сброс черновика.
 import {
   useEffect,
   useId,
@@ -43,12 +19,7 @@ import {
 import { isImportedActive, setImportReport } from '../../data/activeMap';
 import { bpmnToProcessMap } from '../../data/bpmn/adapter';
 import { MAX_BPMN_BYTES, parseBpmnDocument } from '../../data/bpmn/xml';
-import {
-  getMergedProcessMap,
-  loadBaseProcessMap,
-  replaceOverrides,
-  resetOverrides,
-} from '../../data/loader';
+import { getMergedProcessMap, loadBaseProcessMap, resetOverrides } from '../../data/loader';
 import { applyImportedMap, revertToBuiltinMap } from '../../data/mapSwitch';
 import { useProcessStore } from '../../store/useProcessStore';
 import { commitOverrides } from '../../hooks/useProcessMap';
@@ -79,20 +50,6 @@ interface Message {
  * синхронно на click(), но моментальный revokeObjectURL() в части браузеров
  * успевает обогнать её.
  */
-function downloadTextFile(fileName: string, text: string): void {
-  const blob = new Blob([text], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = fileName;
-  document.body.append(link);
-  link.click();
-  link.remove();
-  globalThis.setTimeout(() => {
-    URL.revokeObjectURL(url);
-  }, 0);
-}
-
 export function EditorActions() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const bpmnInputRef = useRef<HTMLInputElement>(null);
@@ -108,6 +65,8 @@ export function EditorActions() {
   const returnFocusRef = useRef(false);
   const confirmQuestionId = useId();
 
+  const [pendingMap, setPendingMap] = useState<ProcessMap | null>(null);
+  const recovery = !importedActive ? readImportedRecovery(DEFAULT_VERSION_ID) : null;
   const [message, setMessage] = useState<Message | null>(null);
   const [resetArmed, setResetArmed] = useState(false);
 
@@ -128,6 +87,7 @@ export function EditorActions() {
   /** Любое новое действие снимает предыдущий ответ и взведённое подтверждение. */
   const startAction = (): void => {
     setMessage(null);
+    setPendingMap(null);
     setResetArmed(false);
   };
 
@@ -156,31 +116,46 @@ export function EditorActions() {
 
     void file
       .text()
-      .then((text) => {
-        const result = parseImportedOverrides(text, loadBaseProcessMap());
-        if (result.status === 'rejected') {
-          setMessage({ kind: 'error', text: ru.toolbar.importError });
-          return;
-        }
-        /*
-         * Файл исправной, но ДРУГОЙ карты (process-map-0c5.9). Раньше такого
-         * исхода не было: карты жили на разных адресах. Теперь на одном адресе
-         * две версии, и файл соседней даёт ноль совпадений по id узлов —
-         * пользователь получал бы «файл принят, расхождений нет», то есть ему
-         * сказали бы, что всё в порядке.
-         */
-        if (result.status === 'other-map') {
-          setMessage({ kind: 'error', text: ru.toolbar.importOtherMap(result.mapId) });
-          return;
-        }
-        // Счётчик берётся у уже готового диффа, а не считается заново.
-        const applied = Object.keys(result.overrides).length;
-        commitOverrides(() => replaceOverrides(result.overrides));
-        setMessage({
-          kind: 'success',
-          text: applied === 0 ? ru.toolbar.importNoChanges : ru.toolbar.importApplied(applied),
-        });
-      })
+      .then((text) =>
+        requestEditorAction(() => {
+          const result = parseImportedOverrides(text, loadBaseProcessMap());
+          if (result.status === 'rejected') {
+            setMessage({ kind: 'error', text: ru.toolbar.importError });
+            return;
+          }
+          /*
+           * Файл исправной, но ДРУГОЙ карты (process-map-0c5.9). Раньше такого
+           * исхода не было: карты жили на разных адресах. Теперь на одном адресе
+           * две версии, и файл соседней даёт ноль совпадений по id узлов —
+           * пользователь получал бы «файл принят, расхождений нет», то есть ему
+           * сказали бы, что всё в порядке.
+           */
+          if (result.status === 'other-map') {
+            setPendingMap(result.map);
+            setMessage({
+              kind: 'error',
+              text:
+                result.map.id !== loadBaseProcessMap().id
+                  ? `${ru.toolbar.importOtherMap(result.mapId)}. ${ru.editor.differentMap}`
+                  : ru.editor.differentMap,
+            });
+            return;
+          }
+          // Счётчик берётся у уже готового диффа, а не считается заново.
+          const applied = Object.keys(result.overrides).length;
+          replaceEditedMap(result.map);
+          writeStoredOverrides(result.overrides);
+          setMessage({
+            kind: 'success',
+            text:
+              applied === 0
+                ? serializeProcessMap(result.map) === serializeProcessMap(loadBaseProcessMap())
+                  ? ru.toolbar.importNoChanges
+                  : ru.editor.importApplied
+                : ru.toolbar.importApplied(applied),
+          });
+        }),
+      )
       .catch(() => {
         // Файл не удалось прочитать — для пользователя это то же событие
         // «файл не тот», отдельной строки владелец для него не давал.
@@ -219,40 +194,42 @@ export function EditorActions() {
 
     void file
       .text()
-      .then((text) => {
-        const parsed = parseBpmnDocument(text);
-        if (parsed.status !== 'ok') {
-          // Пять различимых исходов разбора дают одну строку — по образцу
-          // решения владельца для JSON: «для пользователя это одно событие».
-          // Подробности живут в отчёте, а не в строке тулбара.
-          setMessage({ kind: 'error', text: ru.toolbar.importBpmnBadFile });
-          return;
-        }
-        const result = bpmnToProcessMap(parsed.doc, {
-          fileName: file.name,
-          lastModified: file.lastModified,
-        });
-        if (result.status !== 'ok') {
+      .then((text) =>
+        requestEditorAction(() => {
+          const parsed = parseBpmnDocument(text);
+          if (parsed.status !== 'ok') {
+            // Пять различимых исходов разбора дают одну строку — по образцу
+            // решения владельца для JSON: «для пользователя это одно событие».
+            // Подробности живут в отчёте, а не в строке тулбара.
+            setMessage({ kind: 'error', text: ru.toolbar.importBpmnBadFile });
+            return;
+          }
+          const result = bpmnToProcessMap(parsed.doc, {
+            fileName: file.name,
+            lastModified: file.lastModified,
+          });
+          if (result.status !== 'ok') {
+            setImportReport(result.report);
+            setImportReportOpen(true);
+            setMessage({
+              kind: 'error',
+              text: ru.toolbar.importBpmnNoMap(result.report.blockers[0] ?? ''),
+            });
+            return;
+          }
           setImportReport(result.report);
+          applyImportedMap(result.map);
           setImportReportOpen(true);
           setMessage({
-            kind: 'error',
-            text: ru.toolbar.importBpmnNoMap(result.report.blockers[0] ?? ''),
+            kind: 'success',
+            text: ru.toolbar.importBpmnApplied(
+              result.map.stages.length,
+              result.report.shownFlowNodes.shown,
+              result.report.shownFlowNodes.inFile,
+            ),
           });
-          return;
-        }
-        setImportReport(result.report);
-        applyImportedMap(result.map);
-        setImportReportOpen(true);
-        setMessage({
-          kind: 'success',
-          text: ru.toolbar.importBpmnApplied(
-            result.map.stages.length,
-            result.report.shownFlowNodes.shown,
-            result.report.shownFlowNodes.inFile,
-          ),
-        });
-      })
+        }),
+      )
       .catch(() => {
         setMessage({ kind: 'error', text: ru.toolbar.importBpmnBadFile });
       });
@@ -266,6 +243,7 @@ export function EditorActions() {
 
   const handleResetArm = (): void => {
     setMessage(null);
+    setPendingMap(null);
     setResetArmed(true);
   };
 
@@ -322,6 +300,40 @@ export function EditorActions() {
   return (
     <>
       {messageRow}
+      {pendingMap && (
+        <button
+          type="button"
+          className={styles.button}
+          onClick={() =>
+            requestEditorAction(() => {
+              clearImportReport();
+              setImportReportOpen(false);
+              applyImportedMap(pendingMap);
+              startAction();
+              setMessage({ kind: 'success', text: ru.editor.imported });
+            })
+          }
+        >
+          {ru.editor.openSeparate}
+        </button>
+      )}
+      {recovery && (
+        <button
+          type="button"
+          className={styles.button}
+          onClick={() =>
+            requestEditorAction(() => {
+              clearImportReport();
+              setImportReportOpen(false);
+              applyImportedMap(recovery.base);
+              replaceEditedMap(recovery.map);
+              startAction();
+            })
+          }
+        >
+          {ru.editor.restore}
+        </button>
+      )}
 
       {/* ДВЕ ГРУППЫ, А НЕ ОДНА — и это не оформление.
           Сегментированная группа не переносится: у неё фиксированная высота и
@@ -334,17 +346,30 @@ export function EditorActions() {
           Деление вышло по смыслу, а не по счёту: первая группа меняет ПРАВКИ
           текущей карты, вторая — КАКАЯ карта показана. */}
       <div className={styles.group}>
-        <button type="button" className={styles.button} onClick={handleExport}>
+        <button
+          type="button"
+          className={styles.button}
+          onClick={() => requestEditorAction(handleExport)}
+        >
           {ru.toolbar.exportJson}
         </button>
-        <button type="button" className={styles.button} onClick={handleImportClick}>
+        <button
+          type="button"
+          className={styles.button}
+          onClick={() => requestEditorAction(handleImportClick)}
+        >
           {ru.toolbar.importJson}
         </button>
         {/* Взведённое подтверждение — отдельная группа рядом, а не div внутри
             этой: вложенный контейнер сбил бы правило .button:last-of-type,
             которое убирает разделитель у последней кнопки сегмента. */}
         {!resetArmed && (
-          <button ref={resetRef} type="button" className={styles.button} onClick={handleResetArm}>
+          <button
+            ref={resetRef}
+            type="button"
+            className={styles.button}
+            onClick={() => requestEditorAction(handleResetArm)}
+          >
             {ru.toolbar.resetOverrides}
           </button>
         )}
@@ -394,10 +419,14 @@ export function EditorActions() {
           кнопка — остальные две обещали бы действие, которому не к чему
           применяться. */}
       <div className={styles.group}>
-        <button type="button" className={styles.button} onClick={handleImportBpmnClick}>
+        <button
+          type="button"
+          className={styles.button}
+          onClick={() => requestEditorAction(handleImportBpmnClick)}
+        >
           {ru.toolbar.importBpmn}
         </button>
-        {importedActive && (
+        {importedActive && getImportReport() !== null && (
           <button
             type="button"
             className={styles.button}
@@ -410,7 +439,11 @@ export function EditorActions() {
           </button>
         )}
         {importedActive && (
-          <button type="button" className={styles.button} onClick={handleReturnToBuiltin}>
+          <button
+            type="button"
+            className={styles.button}
+            onClick={() => requestEditorAction(handleReturnToBuiltin)}
+          >
             {ru.toolbar.returnToBuiltin}
           </button>
         )}

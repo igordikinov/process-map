@@ -1,3 +1,4 @@
+import { useEditor } from '../../../editor/interaction';
 // Подробность под шагом, уровень 2 (NodeType 'detail', process-map-9mn.32;
 // оформление, клик и выноска — process-map-9mn.36; итоговый размер и место
 // ПОД шагом, а не рангом правее, — process-map-9mn.26).
@@ -39,12 +40,14 @@ export type DetailNodeType = Node<DetailNodeData, 'detail'>;
 
 export function DetailNode({ data }: NodeProps<DetailNodeType>) {
   const selectNode = useProcessStore((state) => state.selectNode);
+  const editor = useEditor();
+  const editable = editor?.editable ?? false;
   const node = data.node;
   const isSelected = useProcessStore((state) => state.selectedNodeId === node.id);
 
   return (
     <>
-      <Handle type="target" position={Position.Top} id={STEP_HANDLE.top} isConnectable={false} />
+      <Handle type="target" position={Position.Top} id={STEP_HANDLE.top} isConnectable={editable} />
       <button
         type="button"
         className={isSelected ? `${styles.card} ${styles.selected}` : styles.card}
@@ -53,7 +56,8 @@ export function DetailNode({ data }: NodeProps<DetailNodeType>) {
         // ещё один шаг процесса (см. ru.detailNode).
         aria-label={ru.detailNode.ariaLabel(node.label)}
         onClick={() => {
-          selectNode(node.id);
+          if (editor?.editable) editor.select({ kind: 'node', id: node.id });
+          else selectNode(node.id);
         }}
       >
         <span className={styles.text}>{node.label}</span>

@@ -9,6 +9,9 @@ import { useProcessStore } from '../store/useProcessStore';
 import { refreshProcessMap } from '../hooks/useProcessMap';
 import { clearImportedMap, setImportedMap } from './activeMap';
 import type { ProcessMap } from './schema';
+import { saveImportedRecovery } from './editorDraft';
+import { DEFAULT_VERSION_ID } from './versions';
+import { loadProcessMap } from './loader';
 
 /**
  * Показать загруженную карту.
@@ -37,6 +40,7 @@ import type { ProcessMap } from './schema';
 export function applyImportedMap(map: ProcessMap): void {
   useProcessStore.getState().resetLevel();
   setImportedMap(map);
+  saveImportedRecovery(DEFAULT_VERSION_ID, map, loadProcessMap());
   refreshProcessMap();
 }
 

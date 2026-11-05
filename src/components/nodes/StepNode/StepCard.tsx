@@ -1,3 +1,4 @@
+import { useEditor } from '../../../editor/interaction';
 // Презентационная карточка узла потока, уровень 2 (SPEC §4.2, артборд A2 318×52).
 //
 // Одна карточка на три варианта — step / integration / warning, — потому что в
@@ -78,6 +79,7 @@ export interface StepCardProps {
 
 export function StepCard({ node, variant }: StepCardProps) {
   const selectNode = useProcessStore((state) => state.selectNode);
+  const editor = useEditor();
   const isSelected = useProcessStore((state) => state.selectedNodeId === node.id);
 
   // Описание в данных многострочное (таблицы «причина → действие»), переносы
@@ -102,7 +104,8 @@ export function StepCard({ node, variant }: StepCardProps) {
         aria-label={ARIA_LABEL[variant](node.label)}
         title={hint}
         onClick={() => {
-          selectNode(node.id);
+          if (editor?.editable) editor.select({ kind: 'node', id: node.id });
+          else selectNode(node.id);
         }}
       >
         <img className={styles.icon} src={iconUrl(TYPE_ICON[variant])} alt="" />

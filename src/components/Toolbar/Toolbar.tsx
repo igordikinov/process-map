@@ -1,3 +1,5 @@
+import { requestEditorAction } from '../../editor/guard';
+import { EditorTools } from '../../editor/EditorTools';
 // Тулбар полотна (SPEC §4.6): toggle «Показать интеграции» + зум −/%/+/fit.
 // Справа сверху на обоих полотнах (артборды A1/A2 в design/*.dc.html).
 //
@@ -89,7 +91,7 @@ export function Toolbar({ fitViewOptions, drawerOpen = false, compact = false }:
           }
           aria-pressed={mode === 'view'}
           onClick={() => {
-            setMode('view');
+            requestEditorAction(() => setMode('view'));
           }}
         >
           {ru.toolbar.modeView}
@@ -113,7 +115,12 @@ export function Toolbar({ fitViewOptions, drawerOpen = false, compact = false }:
           просмотра вовсе (а не прячется disabled'ом): читателю вики нечего
           делать ни с одной из трёх кнопок, а «Сбросить правки» ему ещё и
           опасна. */}
-      {mode === 'edit' && <EditorActions />}
+      {mode === 'edit' && (
+        <>
+          <EditorTools />
+          <EditorActions />
+        </>
+      )}
 
       {/* Роль, aria-checked, aria-label и onClick одинаковы в обоих видах —
           меняется только содержимое. Это и позволяет свернуть кнопку, не

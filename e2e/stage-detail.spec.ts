@@ -210,7 +210,7 @@ test('ссылка-attribution React Flow на полотне детализац
   await expect(page.locator('.react-flow__attribution')).toHaveCount(0);
 });
 
-test('узлы уровня 2 не перетаскиваются (CLAUDE.md, v1)', async ({ page }) => {
+test('в режиме просмотра узлы уровня 2 не перетаскиваются', async ({ page }) => {
   await page.goto('/');
   await openStage(page, 0);
 
