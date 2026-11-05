@@ -1,0 +1,130 @@
+/*
+ * Фирменный слой In.Plan из datamodel-viewer, решение пользователя 05.11.2026.
+ * Источник: web/src/assets/brand/brand.css (dmv-kip4).
+ * Исходные SCP-токены в tokens.css сохранены; этот файл подключается после них.
+ * Имена --dmv-brand-* адаптированы к приложению как --pm-brand-*.
+ * Палитра ошибок, предупреждений и успешных состояний сохраняется.
+ */
+:root {
+  --pm-brand-primary: #4769ff;
+  /* Slightly deeper primary for small white button labels (WCAG >= 4.5:1). */
+  --pm-brand-primary-fill: #4264f5;
+  --pm-brand-dark: #04143a;
+  --pm-brand-background: #f4f6fa;
+  --pm-brand-accent: #ff8c00;
+  --pm-brand-hover: #e3e9ff;
+  --scp-font-family: 'Manrope', sans-serif;
+  --scp-font-display-font-family: var(--scp-font-family);
+  --scp-font-families-open-sans: var(--scp-font-family);
+  --scp-color-brand-50: #f0f3ff;
+  --scp-color-brand-100: #e3e9ff;
+  --scp-color-brand-200: #c8d3ff;
+  --scp-color-brand-300: #a7b8ff;
+  --scp-color-brand-400: #91a6ff;
+  --scp-color-brand-500: #6f8aff;
+  --scp-color-brand-600: #5777ff;
+  --scp-color-brand-700: #4769ff;
+  --scp-color-brand-800: #3452d5;
+  --scp-color-brand-900: #243ea8;
+  --scp-color-brand-950: #04143a;
+  --scp-accent-primary: #4769ff;
+  --scp-accent-sub-primary: #6f8aff;
+  --scp-accent-secondary: #91a6ff;
+  --scp-accent-disabled: #c9cfda;
+  --scp-accent-border: #c8d3ff;
+  --scp-accent-background: #e3e9ff;
+  --scp-accent-hover: #3452d5;
+  --scp-accent-active: #243ea8;
+  --scp-background-action-brand-primary-default: var(--pm-brand-primary-fill);
+  --scp-background-action-brand-primary-hover: #3452d5;
+  --scp-background-action-brand-primary-active: #243ea8;
+  --scp-background-action-brand-tertiary-hover: #f0f3ff;
+  --scp-background-action-brand-tertiary-active: #e3e9ff;
+  --scp-background-action-brand-outline-hover: #f0f3ff;
+  --scp-background-action-brand-outline-active: #e3e9ff;
+  --scp-text-brand-primary: #4769ff;
+  --scp-text-brand-secondary: #3452d5;
+  --scp-text-brand-disable: #c8d3ff;
+  --scp-graphic-brand-primary: #4769ff;
+  --scp-graphic-brand-secondary: #a7b8ff;
+  --scp-graphic-brand-disable: #e3e9ff;
+  --scp-border-brand-default: #4769ff;
+  --scp-border-brand-hover: #3452d5;
+  --scp-border-brand-active: #243ea8;
+  --scp-primary-color: #4769ff;
+  --scp-active-btn-color: #4769ff;
+  --scp-radio-disabled-color: #c9cfda;
+  --scp-widget-color-default: #c9cfdaba;
+  --scp-grid-selected-cell-border-color: #4769ff;
+  --scp-grid-resizer-color: #4769ff;
+  --scp-badge-color: var(--pm-brand-dark);
+  --scp-note-icon-color-info: #4769ff;
+  --scp-font-display-xl: 700 56px/64px var(--scp-font-family);
+  --scp-font-display-l: 700 48px/54px var(--scp-font-family);
+  --scp-font-display-m: 700 40px/48px var(--scp-font-family);
+  --scp-font-display-s: 700 32px/40px var(--scp-font-family);
+  --scp-font-heading-h1: 700 28px/36px var(--scp-font-family);
+  --scp-font-heading-h2: 700 26px/34px var(--scp-font-family);
+  --scp-font-heading-h3: 700 24px/32px var(--scp-font-family);
+  --scp-font-heading-h4: 700 22px/30px var(--scp-font-family);
+  --scp-font-heading-h5: 700 20px/30px var(--scp-font-family);
+  --scp-font-body-xl: 400 18px/26px var(--scp-font-family);
+  --scp-font-body-l: 400 16px/26px var(--scp-font-family);
+  --scp-font-body-m: 400 14px/18px var(--scp-font-family);
+  --scp-font-body-s: 400 12px/16px var(--scp-font-family);
+  --scp-h1-bold: 700 52px/64px var(--scp-font-family);
+  --scp-h1-semibold: 600 52px/64px var(--scp-font-family);
+  --scp-h1-regular: 400 52px/64px var(--scp-font-family);
+  --scp-h2-bold: 700 48px/60px var(--scp-font-family);
+  --scp-h2-semibold: 600 48px/60px var(--scp-font-family);
+  --scp-h2-regular: 400 48px/60px var(--scp-font-family);
+  --scp-h3-bold: 700 40px/48px var(--scp-font-family);
+  --scp-h3-semibold: 600 40px/48px var(--scp-font-family);
+  --scp-h3-regular: 400 40px/48px var(--scp-font-family);
+  --scp-h4-bold: 700 32px/40px var(--scp-font-family);
+  --scp-h4-semibold: 600 32px/40px var(--scp-font-family);
+  --scp-h4-regular: 400 32px/40px var(--scp-font-family);
+  --scp-h5-bold: 700 24px/30px var(--scp-font-family);
+  --scp-h5-semibold: 600 24px/30px var(--scp-font-family);
+  --scp-h5-regular: 400 24px/30px var(--scp-font-family);
+  --scp-h6-bold: 700 20px/28px var(--scp-font-family);
+  --scp-h6-semibold: 600 20px/28px var(--scp-font-family);
+  --scp-h6-regular: 400 20px/28px var(--scp-font-family);
+  --scp-h7-bold: 700 18px/24px var(--scp-font-family);
+  --scp-h7-semibold: 600 18px/24px var(--scp-font-family);
+  --scp-h7-regular: 400 18px/24px var(--scp-font-family);
+  --scp-sm-bold: 700 16px/24px var(--scp-font-family);
+  --scp-sm-semibold: 600 16px/24px var(--scp-font-family);
+  --scp-sm-regular: 400 16px/24px var(--scp-font-family);
+  --scp-body-bold: 700 14px/20px var(--scp-font-family);
+  --scp-body-semibold: 600 14px/20px var(--scp-font-family);
+  --scp-body-regular: 400 14px/20px var(--scp-font-family);
+  --scp-xs-bold: 700 12px/16px var(--scp-font-family);
+  --scp-xs-semibold: 600 12px/16px var(--scp-font-family);
+  --scp-xs-regular: 400 12px/16px var(--scp-font-family);
+  --scp-form-field-font: 400 12px/16px var(--scp-font-family);
+  --scp-badge-font: 700 16px/24px var(--scp-font-family);
+  --scp-content-primary: var(--pm-brand-dark);
+  --scp-main-font-color: var(--pm-brand-dark);
+  --scp-text-neutral-primary: var(--pm-brand-dark);
+  --scp-graphic-neutral-primary: var(--pm-brand-dark);
+  --scp-background-secondary: var(--pm-brand-background);
+  --scp-color-neutral-50: var(--pm-brand-background);
+  --scp-bg-canvas: var(--pm-brand-background);
+  --scp-bg-menu: var(--pm-brand-dark);
+  --scp-common-second-background: var(--pm-brand-background);
+  --scp-content-secondary-bg: var(--pm-brand-background);
+  --scp-background-action-neutral-secondary-default: var(--pm-brand-background);
+  --scp-background-action-brand-secondary-default: var(--pm-brand-background);
+  --scp-background-action-brand-primary-disable: var(--pm-brand-background);
+  --scp-badge-bg: var(--pm-brand-background);
+  --scp-link-text-color: var(--pm-brand-primary);
+  --scp-tooltip-bgcolor: var(--pm-brand-dark);
+  --scp-radio-inactive-border: var(--pm-brand-dark);
+
+  /* Эффекты карты используют ту же палитру, что и контролы. */
+  --pm-node-focus-ring: rgb(71 105 255 / 14%);
+  --pm-canvas-dim: rgb(4 20 58 / 10%);
+  --pm-control-focus-width: 2px;
+  --pm-control-focus-offset: -3px;
+}

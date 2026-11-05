@@ -123,6 +123,10 @@
   font-weight: var(--scp-font-weight-semi-bold);
 }
 
+.version:active {
+  background: var(--scp-background-action-brand-tertiary-active);
+}
+
 /* Живая область объявляет смену версии, но занимать место не должна: она
    дублирует то, что и так видно на экране. Не display:none и не hidden —
    скрытый так узел скринридеры не читают вовсе. */

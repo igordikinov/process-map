@@ -110,16 +110,19 @@ dist/assets/index-*.js       # ~712 KB, ~201 KB gzip  (корень: две ве
 dist/assets/index-*.css      # ~70 KB, ~11 KB gzip
 #   в dist/mrp/ версия одна: ~539 KB, ~171 KB gzip
 #   бюджет PRD §6 — 400 KB gzip; карта из модели стоит ~27 KB gzip
-dist/assets/open-sans-*.woff2  # 9 файлов Open Sans (latin / cyrillic / cyrillic-ext × 400/600/700)
+dist/assets/manrope-*.woff2  # 10 файлов Manrope (latin / cyrillic × 400/500/600/700/800)
 ```
 
 Что здесь важно и что стоит перепроверять при обновлении зависимостей:
 
 - В `dist/index.html` ссылки на ассеты относительные — `./assets/...`, без ведущего слэша.
-- Шрифт Open Sans поставляется пакетом `@fontsource/open-sans` и собирается в `dist/assets/`.
+- Шрифт Manrope поставляется локально в `src/assets/fonts/manrope/` и собирается в `dist/assets/`.
+  Лицензия SIL OFL находится рядом в `OFL.txt`.
+  Копия `public/licenses/Manrope-OFL.txt` включается в каждую собранную карту.
   Ссылок на `fonts.googleapis.com` / `fonts.gstatic.com` в сборке нет — это принципиально:
   корпоративный контур может не иметь доступа к внешним CDN, а CSP родительской страницы
   почти наверняка их не разрешит.
+
 - Иконки (`src/assets/icons/*.svg`, 14 штук) не выкладываются отдельными файлами, а
   инлайнятся в JS как `data:image/svg+xml` — все они меньше лимита Vite
   `build.assetsInlineLimit` (4096 байт). Самая большая, `recalculation.svg`, весит 3815 байт,
@@ -127,6 +130,18 @@ dist/assets/open-sans-*.woff2  # 9 файлов Open Sans (latin / cyrillic / cy
   превратится в отдельный сетевой запрос `dist/assets/*.svg`. Это не сломает приложение,
   но добавит запрос, который может не пройти CSP родительской страницы. Проверка:
   `find dist -name '*.svg'` должен ничего не находить.
+
+Оформление соответствует фирменному слою `datamodel-viewer` от 20.10.2026:
+Manrope, синий акцент `#4769ff`, тёмный текст `#04143a`, фон `#f4f6fa`.
+Источник переноса — `web/src/assets/brand/brand.css` и
+`web/src/assets/ds/tokens/fonts.css` проекта `datamodel-viewer`
+(коммит `aff22da639bc482cd18719dc913a1bf3367b4826`, локальная копия на 05.11.2026).
+`src/theme/brand.css` подключается после исходных SCP-токенов и заменяет палитру
+и шрифт без изменения данных карты. Для белой подписи основной кнопки используется
+фон `#4264f5`, как в источнике. Состояния кнопок и полей учитывают
+`web/src/app/ui/dmv-button-theme.css` и `ds-field.css` того же проекта.
+Цвета ошибок, предупреждений и успешных состояний сохраняют свой смысл.
+Логотип и оболочка платформы в карту для iframe не добавляются.
 
 Быстрая проверка сборки:
 
